@@ -1,156 +1,98 @@
 #include "whas/physics/fluid_movement_system.h"
-
 #include "whas/constants.h"
-#include "whas/physics/erosion_system.h"
 #include "whas/physics/movement_system.h"
+#include "whas/physics/erosion_system.h"
 #include "whas/physics/pressure_system.h"
-
 #include <algorithm>
 #include <cmath>
 
 namespace FluidMovementSystem {
 
-namespace {
-
-bool IsPassable(const Cell &target, const LiquidProperties &properties) {
-  return target.element == Element::AIR ||
-         (properties.canDisplaceGas && target.element == Element::STEAM);
-}
-
-void IntegrateVelocity(Cell &cell, const LiquidProperties &properties) {
-  cell.velocityY += GRAVITY;
-
+void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &properties,
+                  ElementContext &ctx) {
+  // 1. Gravity and Velocity Integration
+  cell.velocityY += ctx.config.world.gravity;
   cell.velocityY = std::min(cell.velocityY, properties.maxFallSpeed);
-
   cell.velocityX = std::clamp(cell.velocityX, -properties.maxHorizontalSpeed,
                               properties.maxHorizontalSpeed);
-}
 
-bool TryFall(int x, int y, Cell &cell, const LiquidProperties &properties,
-             ElementContext &ctx) {
-  const int maxSteps = std::max(1, static_cast<int>(std::abs(cell.velocityY)));
+  bool moved = false;
 
+  // 2. Multi-step Falling
+  int steps = std::max(1, (int)std::abs(cell.velocityY));
   int furthestY = y;
 
-  for (int step = 1; step <= maxSteps; ++step) {
-    const int nextY = y + step;
-
+  for (int s = 1; s <= steps; ++s) {
+    int nextY = y + s;
     if (!ctx.currentGrid.InBounds(x, nextY)) {
-      cell.velocityY = 0.0f;
+      cell.velocityY = 0;
       break;
     }
 
     const Cell &target = ctx.currentGrid.GetCurrent(x, nextY);
-
-    if (IsPassable(target, properties)) {
+    if (target.element == Element::AIR ||
+        (properties.canDisplaceGas && target.element == Element::STEAM)) {
       furthestY = nextY;
-      continue;
-    }
-
-    if (properties.canErodeTerrain && target.element == Element::EARTH) {
-
+    } else if (properties.canErodeTerrain && target.element == Element::EARTH) {
       if (ErosionSystem::TryErode(x, y, x, nextY, ctx)) {
-        return true;
+        moved = true;
+      } else {
+        cell.velocityY = 0;
+      }
+      break;
+    } else {
+      cell.velocityY = 0;
+      break;
+    }
+  }
+
+  if (!moved && furthestY != y) {
+    moved = MovementSystem::TryMove(x, y, x, furthestY, ctx);
+  }
+
+  // 3. Sideways Spreading
+  if (!moved) {
+    float pressure = PressureSystem::GetPressure(x, y, ctx.currentGrid);
+    float spreadPower = (1.0f + pressure * properties.spreadFactor) * (1.0f - properties.viscosity);
+    int spreadSteps = std::max(1, (int)std::round(spreadPower));
+
+    int dirs[2] = {-1, 1};
+    if (ctx.rng() % 2)
+      std::swap(dirs[0], dirs[1]);
+
+    for (int dir : dirs) {
+      int furthestX = x;
+      for (int s = 1; s <= spreadSteps; ++s) {
+        int nextX = x + s * dir;
+        if (!ctx.currentGrid.InBounds(nextX, y)) break;
+
+        const Cell &side = ctx.currentGrid.GetCurrent(nextX, y);
+        if (side.element == Element::AIR || (properties.canDisplaceGas && side.element == Element::STEAM)) {
+          furthestX = nextX;
+        } else if (properties.canErodeTerrain && side.element == Element::EARTH) {
+          if (ErosionSystem::TryErode(x, y, nextX, y, ctx)) {
+             moved = true;
+          }
+          break;
+        } else {
+          break;
+        }
       }
 
-      cell.velocityY = 0.0f;
-      break;
+      if (!moved && furthestX != x) {
+        cell.velocityX = dir * spreadPower;
+        moved = MovementSystem::TryMove(x, y, furthestX, y, ctx);
+        if (moved) break;
+      }
     }
+  }
 
+  // 4. Final State Update
+  if (!moved) {
+    cell.velocityX *= properties.friction; 
     cell.velocityY = 0.0f;
-    break;
+    MovementSystem::SetNext(x, y, cell, ctx);
   }
-
-  if (furthestY == y)
-    return false;
-
-  return MovementSystem::TryMove(x, y, x, furthestY, ctx);
-}
-
-int ComputeSpreadSteps(int x, int y, const LiquidProperties &properties,
-                       ElementContext &ctx) {
-  const float pressure = PressureSystem::GetPressure(x, y, ctx.currentGrid);
-
-  const float spreadPower = (1.0f + pressure * properties.spreadFactor) *
-                            (1.0f - properties.viscosity);
-
-  return std::max(1, static_cast<int>(std::round(spreadPower)));
-}
-
-bool TrySpreadDirection(int x, int y, int dir, int spreadSteps, Cell &cell,
-                        const LiquidProperties &properties,
-                        ElementContext &ctx) {
-  int furthestX = x;
-
-  for (int step = 1; step <= spreadSteps; ++step) {
-    const int nextX = x + dir * step;
-
-    if (!ctx.currentGrid.InBounds(nextX, y))
-      break;
-
-    const Cell &target = ctx.currentGrid.GetCurrent(nextX, y);
-
-    if (IsPassable(target, properties)) {
-      furthestX = nextX;
-      continue;
-    }
-
-    if (properties.canErodeTerrain && target.element == Element::EARTH) {
-
-      return ErosionSystem::TryErode(x, y, nextX, y, ctx);
-    }
-
-    break;
-  }
-
-  if (furthestX == x)
-    return false;
-
-  cell.velocityX = static_cast<float>(dir * spreadSteps);
-
-  return MovementSystem::TryMove(x, y, furthestX, y, ctx);
-}
-
-bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &properties,
-               ElementContext &ctx) {
-  const int spreadSteps = ComputeSpreadSteps(x, y, properties, ctx);
-
-  int directions[2] = {-1, 1};
-
-  if (ctx.rng() % 2)
-    std::swap(directions[0], directions[1]);
-
-  for (int dir : directions) {
-    if (TrySpreadDirection(x, y, dir, spreadSteps, cell, properties, ctx)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-void ApplyRestingState(int x, int y, Cell &cell, ElementContext &ctx) {
-  cell.velocityX *= WATER_FRICTION;
-  cell.velocityY = 0.0f;
-
-  MovementSystem::SetNext(x, y, cell, ctx);
-}
-
-} // namespace
-
-void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &properties,
-                  ElementContext &ctx) {
-  IntegrateVelocity(cell, properties);
-
-  if (TryFall(x, y, cell, properties, ctx)) {
-    return;
-  }
-
-  if (TrySpread(x, y, cell, properties, ctx)) {
-    return;
-  }
-
-  ApplyRestingState(x, y, cell, ctx);
 }
 
 } // namespace FluidMovementSystem

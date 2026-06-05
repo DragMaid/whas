@@ -14,7 +14,10 @@ void Simulation::Update(float dt) {
   m_grid.ClearNext();
   m_chunks.BeginFrame();
 
-  ElementContext ctx{m_grid, m_chunks, m_rng};
+  // Per-frame snapshotting for determinism and hot-reload safety
+  m_frameConfig = m_config;
+
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
   PressureSystem::Update(ctx);
 
   UpdateElements();
@@ -26,12 +29,9 @@ void Simulation::Update(float dt) {
 }
 
 void Simulation::UpdateElements() {
-  ElementContext ctx{m_grid, m_chunks, m_rng};
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
 
   // Shuffling the chunk indicies
-  // The idea is to make sure that the chunk updating
-  // doesn't become biased, which can lead to patterns
-  // arising (Example: faster updates on left)
   std::vector<int> chunkOrder;
   const std::vector<Chunk> &allChunks = m_chunks.GetChunks();
   for (int i = 0; i < (int)allChunks.size(); ++i)
@@ -40,20 +40,15 @@ void Simulation::UpdateElements() {
   std::shuffle(chunkOrder.begin(), chunkOrder.end(), m_rng);
 
   for (int i : chunkOrder) {
-    // Convert indicies to column and row
     int chunkCol = i % CHUNK_COLS;
     int chunkRow = i / CHUNK_COLS;
 
     int x0 = chunkCol * CHUNK_SIZE;
     int y0 = chunkRow * CHUNK_SIZE;
 
-    // Make sure the chunk from this point do not go out of bound
     int x1 = std::min(x0 + CHUNK_SIZE, GRID_W);
     int y1 = std::min(y0 + CHUNK_SIZE, GRID_H);
 
-    // NOTE: push_backs create a new copy of the vector with
-    // the new element added to the end while emplace_back
-    // insert it directly to current vecotr (faster)
     std::vector<std::pair<int, int>> cells;
     for (int y = y0; y < y1; ++y)
       for (int x = x0; x < x1; ++x)
@@ -71,7 +66,6 @@ void Simulation::UpdateElements() {
         ElementUpdateRegistry::Update(source.element, x, y, ctx);
     }
 
-    // Set the number of active cells in the chunk
     int count = 0;
     for (int y = y0; y < y1; y++)
       for (int x = x0; x < x1; ++x)
@@ -80,15 +74,13 @@ void Simulation::UpdateElements() {
     m_chunks.SetActiveCount(chunkCol, chunkRow, count);
   }
 
-  // Check for all other cells that haven't been updated
-  // and carry the last state over
   for (int i = 0; i < GRID_W * GRID_H; ++i)
     if (!m_grid.GetNextBuffer()[i].updated)
       m_grid.GetNextBuffer()[i] = m_grid.GetCurrentBuffer()[i];
 }
 
 void Simulation::UpdatePhysics() {
-  ElementContext ctx{m_grid, m_chunks, m_rng};
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
       const Cell &source = m_grid.GetCurrent(x, y);

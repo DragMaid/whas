@@ -6,20 +6,12 @@
 
 namespace ElementsImpl {
 
-struct IceProps {
-    float meltPoint = 0.0f;
-    int meltChance = 10;
-    float fireHeatGain = 2.0f;
-};
-
-static const IceProps LocalIceProps;
-
 void UpdateIce(int x, int y, ElementContext &ctx) {
+  const auto& iConfig = ctx.config.ice;
   Cell src = ctx.currentGrid.GetCurrent(x, y);
 
-  // Melting logic
-  if (src.temperature > LocalIceProps.meltPoint) {
-    if (std::rand() % LocalIceProps.meltChance == 0) {
+  if (src.temperature > iConfig.meltPoint) {
+    if (std::rand() % iConfig.meltChance == 0) {
       Cell water = ElementFactory::Create(Element::WATER);
       water.temperature = src.temperature;
       MovementSystem::SetNext(x, y, water, ctx);
@@ -27,7 +19,6 @@ void UpdateIce(int x, int y, ElementContext &ctx) {
     }
   }
 
-  // Ice absorbs heat from surrounding Fire
   const int dx4[] = {0, 0, -1, 1};
   const int dy4[] = {-1, 1, 0, 0};
   for (int i = 0; i < 4; ++i) {
@@ -37,7 +28,7 @@ void UpdateIce(int x, int y, ElementContext &ctx) {
     
     const Cell &nb = ctx.currentGrid.GetCurrent(nx, ny);
     if (nb.element == Element::FIRE) {
-      src.temperature += LocalIceProps.fireHeatGain;
+      src.temperature += iConfig.fireHeatGain;
     }
   }
 

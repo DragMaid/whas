@@ -6,40 +6,23 @@
 
 namespace ElementsImpl {
 
-struct CloudProps {
-  float coolingRate = 0.1f;
-  float freezingPoint = 0.0f;
-  float minMoisture = 0.0f;
-  float windJitter = 0.05f;
-  float maxDrift = 0.5f;
-  float moveThreshold = 0.1f;
-  int rainChance = 120;
-  int rainBurstChance = 8;
-  float rainMoistureCost = 0.1f;
-  float rainVelocity = 2.0f;
-  float rainBurstVelocity = 1.0f;
-};
-
-static const CloudProps LocalCloudProps;
-
 void UpdateCloud(int x, int y, ElementContext &ctx) {
+  const auto &cConfig = ctx.config.cloud;
   Cell src = ctx.currentGrid.GetCurrent(x, y);
 
   // 1. Cloud Dissipation / Heavy Rain Burst
-  // Triggered if the cloud gets too cold or runs completely out of moisture
-  if (src.temperature <= LocalCloudProps.freezingPoint ||
-      src.moisture <= LocalCloudProps.minMoisture) {
-    if (std::rand() % LocalCloudProps.rainBurstChance == 0 &&
-        src.moisture > LocalCloudProps.minMoisture) {
+  if (src.temperature <= cConfig.freezingPoint ||
+      src.moisture <= cConfig.minMoisture) {
+    if (std::rand() % cConfig.rainBurstChance == 0 &&
+        src.moisture > cConfig.minMoisture) {
       int ry = y + 1;
       if (ctx.currentGrid.InBounds(x, ry) &&
           ctx.currentGrid.GetCurrent(x, ry).element == Element::AIR) {
         Cell rain = ElementFactory::Create(Element::WATER);
-        rain.velocityY = LocalCloudProps.rainBurstVelocity;
+        rain.velocityY = cConfig.rainBurstVelocity;
         MovementSystem::SetNext(x, ry, rain, ctx);
       }
     }
-    // Dissipate into air
     MovementSystem::SetNext(x, y, ElementFactory::Create(Element::AIR), ctx);
     return;
   }
@@ -48,27 +31,25 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
   float randomJitter =
       (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) * 2.0f -
       1.0f;
-  src.velocityX += randomJitter * LocalCloudProps.windJitter;
-  src.velocityX = std::clamp(src.velocityX, -LocalCloudProps.maxDrift,
-                             LocalCloudProps.maxDrift);
+  src.velocityX += randomJitter * cConfig.windJitter;
+  src.velocityX =
+      std::clamp(src.velocityX, -cConfig.maxDrift, cConfig.maxDrift);
 
   // 3. Ambient Rain Generation
-  if (std::rand() % LocalCloudProps.rainChance == 0) {
+  if (std::rand() % cConfig.rainChance == 0) {
     int ry = y + 1;
     if (ctx.currentGrid.InBounds(x, ry) &&
         ctx.currentGrid.GetCurrent(x, ry).element == Element::AIR) {
       Cell rain = ElementFactory::Create(Element::WATER);
-      rain.velocityY = LocalCloudProps.rainVelocity;
+      rain.velocityY = cConfig.rainVelocity;
       MovementSystem::SetNext(x, ry, rain, ctx);
-
-      // Consume moisture for every raindrop
-      src.moisture -= LocalCloudProps.rainMoistureCost;
+      src.moisture -= cConfig.rainMoistureCost;
     }
   }
 
   // 4. Execution of Drift Movement
   bool moved = false;
-  if (std::abs(src.velocityX) >= LocalCloudProps.moveThreshold) {
+  if (std::abs(src.velocityX) >= cConfig.moveThreshold) {
     int dir = (src.velocityX > 0.0f) ? 1 : -1;
     int tx = x + dir;
 
