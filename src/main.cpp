@@ -48,7 +48,7 @@ int main() {
     if (uiState.debugOverlay)
       renderer.DrawDebugOverlay(sim);
 
-    ui.Draw(uiState);
+    ui.Draw(uiState, sim);
     EndDrawing();
   }
 

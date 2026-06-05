@@ -9,15 +9,16 @@ namespace ElementsImpl {
 void UpdateIce(int x, int y, ElementContext &ctx) {
   const auto& iConfig = ctx.config.ice;
   Cell src = ctx.currentGrid.GetCurrent(x, y);
-
-  if (src.temperature > iConfig.meltPoint) {
-    if (std::rand() % iConfig.meltChance == 0) {
-      Cell water = ElementFactory::Create(Element::WATER);
-      water.temperature = src.temperature;
-      MovementSystem::SetNext(x, y, water, ctx);
-      return;
-    }
+// Melting logic
+if (src.temperature > iConfig.meltPoint) {
+  if (std::rand() % iConfig.meltChance == 0) {
+    Cell water = ElementFactory::Create(Element::WATER, ctx.config);
+    water.temperature = src.temperature;
+    MovementSystem::SetNext(x, y, water, ctx);
+    return;
   }
+}
+
 
   const int dx4[] = {0, 0, -1, 1};
   const int dy4[] = {-1, 1, 0, 0};

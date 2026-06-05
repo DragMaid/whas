@@ -1,6 +1,6 @@
 #include "whas/physics/erosion_system.h"
 #include "whas/element/base/factory.h"
-#include "whas/element/base/properties.h"
+#include "whas/core/config.h"
 #include "whas/physics/movement_system.h"
 #include <cmath>
 
@@ -8,15 +8,15 @@
  * @param wx, wy: coordinates of the supposed water cell
  * @param ex, ey: coordinates of the supposed unpassable cell
  */
-bool ErosionSystem::TryErode(int wx, int wy, int ex, int ey,
+bool ErosionSystem::TryErode(int wx, int wy, int ex, int ey, Cell &supposed_w,
                              ElementContext &ctx) {
   if (!ctx.currentGrid.InBounds(ex, ey))
     return false;
 
-  Cell &supposed_w = ctx.currentGrid.GetCurrent(wx, wy);
-  Cell &supposed_e = ctx.currentGrid.GetCurrent(ex, ey);
+  const Cell &supposed_e = ctx.currentGrid.GetCurrent(ex, ey);
 
-  if (ElementRegistry::GetProperties(supposed_e.element).passable)
+  const auto &props = ctx.config.elements[static_cast<size_t>(supposed_e.element)];
+  if (props.passable)
     return false;
 
   float speed = std::sqrt(supposed_w.velocityX * supposed_w.velocityX +
@@ -26,18 +26,17 @@ bool ErosionSystem::TryErode(int wx, int wy, int ex, int ey,
 
   if (kineticEnergy >= supposed_e.hardness) {
     // Update the breaking of earth block
-    Cell air = ElementFactory::Create(Element::AIR);
+    Cell air = ElementFactory::Create(Element::AIR, ctx.config);
     air.updated = true;
     ctx.currentGrid.GetNext(ex, ey) = air;
 
-    // TODO: Update the new speed given the first break
     float remainingEnergy = kineticEnergy - supposed_e.hardness;
     float newSpeed = std::sqrt((2.0f * remainingEnergy) / supposed_w.mass);
-    float scale = newSpeed / speed;
+    float scale = (speed > 0.001f) ? newSpeed / speed : 0.0f;
     supposed_w.velocityX *= scale;
     supposed_w.velocityY *= scale;
 
-    return MovementSystem::TryMove(wx, wy, ex, ey, ctx);
+    return MovementSystem::TryMove(wx, wy, ex, ey, supposed_w, ctx);
   }
 
   return false;

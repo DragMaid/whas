@@ -13,6 +13,21 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(raylib)
 
+# ImGui and rlImGui dependencies
+FetchContent_Declare(
+    imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG v1.92.8
+)
+FetchContent_MakeAvailable(imgui)
+
+FetchContent_Declare(
+    rlImGui
+    GIT_REPOSITORY https://github.com/raylib-extras/rlImGui.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(rlImGui)
+
 set(SOURCES
     src/element/base/factory.cpp
     src/element/base/properties.cpp
@@ -40,16 +55,34 @@ set(SOURCES
     src/ui/ui.cpp
 )
 
+set(IMGUI_DIR ${imgui_SOURCE_DIR})
+set(RLIMGUI_DIR ${rlimgui_SOURCE_DIR})
+
+add_library(imgui STATIC
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+)
+target_include_directories(imgui PUBLIC ${IMGUI_DIR})
+
+add_library(rlimgui STATIC ${RLIMGUI_DIR}/rlImGui.cpp)
+target_include_directories(rlimgui PUBLIC ${RLIMGUI_DIR})
+target_link_libraries(rlimgui PUBLIC imgui raylib)
+
 add_library(whas ${SOURCES})
 target_compile_features(whas PUBLIC cxx_std_20)
 target_include_directories(whas
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
+    ${IMGUI_DIR}
+    ${RLIMGUI_DIR}
 )
 
 add_executable(whasg src/main.cpp)
-target_link_libraries(whasg PRIVATE whas)
-target_link_libraries(whasg PRIVATE raylib)
+# target_link_libraries(whasg PRIVATE whas)
+# target_link_libraries(whasg PRIVATE raylib rlimgui imgui)
+target_link_libraries(whasg PRIVATE whas raylib rlimgui imgui)
 
 install(TARGETS whasg DESTINATION bin)

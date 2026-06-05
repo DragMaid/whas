@@ -3,12 +3,17 @@
 #include <array>
 #include <cstddef>
 
+struct ThermalProperties {
+  float heatCapacity = 1.0f;  // how much energy required to heat
+  float conductivity = 0.1f;  // how fast heat spreads
+  float coolingRate = 0.05f;  // heat lost to ambient
+};
+
 struct ElementProperties {
   bool mobile;
   bool solid;
   bool passable;
 
-  float density;
   float defaultTemperature;
   float defaultMass;
   float defaultHardness;
@@ -16,15 +21,15 @@ struct ElementProperties {
   float defaultLifetime = 0.0f;
   float lifetimeDecay = 0.0f;
   float defaultMoisture = 0.0f;
+
+  ThermalProperties thermal;
+
+  // TODO: not sure about these ones
+  float density = 0.0f;
+  int velocityX = 0.0f;
+  int velocityY = 0.0f;
+  float pressure = 0.0f;
 };
 
 using PropertiesArray =
     std::array<ElementProperties, static_cast<size_t>(Element::COUNT)>;
-
-class ElementRegistry {
-public:
-  static const ElementProperties &GetProperties(Element element);
-
-private:
-  static PropertiesArray s_properties;
-};

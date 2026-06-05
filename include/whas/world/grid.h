@@ -1,10 +1,11 @@
 #pragma once
 #include "whas/core/cell.h"
+#include "whas/core/config.h"
 #include <vector>
 
 class Grid {
 public:
-  Grid();
+  Grid(const SimulationConfig& config);
 
   void Swap();
   void ClearNext();

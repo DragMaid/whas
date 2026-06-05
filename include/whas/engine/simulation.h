@@ -23,22 +23,22 @@ public:
   float GetAvgTemp() const { return m_avgTemp; }
 
   // Runtime Tuning
-  SimulationConfig& GetConfig() { return m_config; }
+  SimulationConfig &GetConfig() { return m_config; }
 
 private:
-  Grid m_grid;
-  ChunkManager m_chunks;
+  SimulationConfig m_config;      // Editable source
+  SimulationConfig m_frameConfig; // Per-frame snapshot
 
   std::mt19937 m_rng;
 
-  SimulationConfig m_config;       // Editable source
-  SimulationConfig m_frameConfig;  // Per-frame snapshot
+  Grid m_grid;
+  ChunkManager m_chunks;
 
   int m_particleCount = 0;
   float m_avgPressure = 0.0f;
   float m_avgTemp = 0.0f;
 
   void UpdateElements();
-  void UpdatePhysics();
+  void UpdatePhysics(float dt);
   void CollectStatistics();
 };

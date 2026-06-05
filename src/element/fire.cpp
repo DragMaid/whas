@@ -2,7 +2,6 @@
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
 #include "whas/physics/movement_system.h"
-#include <algorithm>
 
 namespace ElementsImpl {
 
@@ -10,14 +9,19 @@ void UpdateFire(int x, int y, ElementContext &ctx) {
   const auto& fConfig = ctx.config.fire;
   Cell src = ctx.currentGrid.GetCurrent(x, y);
 
-  src.temperature = std::max(fConfig.minTemp, src.temperature - fConfig.coolingRate);
+  // If the fire gets too cold, it dies and turns into air
+  if (src.temperature < fConfig.minTemp) {
+    Cell air = ElementFactory::Create(Element::AIR, ctx.config);
+    MovementSystem::SetNext(x, y, air, ctx);
+    return;
+  }
 
   // Spontaneous Sparking
   if (std::rand() % fConfig.sparkChance == 0) {
     int uy = y - 1;
     if (ctx.currentGrid.InBounds(x, uy) &&
         ctx.currentGrid.GetCurrent(x, uy).element == Element::AIR) {
-      Cell spark = ElementFactory::Create(Element::FIRE);
+      Cell spark = ElementFactory::Create(Element::FIRE, ctx.config);
       spark.temperature = src.temperature * fConfig.sparkTempScale;
       spark.lifetime = src.lifetime * fConfig.sparkLifetimeScale;
       MovementSystem::SetNext(x, uy, spark, ctx);

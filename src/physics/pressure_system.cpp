@@ -33,7 +33,7 @@ float PressureSystem::GetPressure(int x, int y, Grid &grid) {
 }
 
 void PressureSystem::Propagate(int x, int y, ElementContext &ctx) {
-  Cell &source = ctx.currentGrid.GetCurrent(x, y);
+  Cell &source = ctx.currentGrid.GetNext(x, y);
   if (source.element != Element::WATER)
     return;
 

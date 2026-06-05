@@ -10,24 +10,14 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
   const auto &cConfig = ctx.config.cloud;
   Cell src = ctx.currentGrid.GetCurrent(x, y);
 
-  // 1. Cloud Dissipation / Heavy Rain Burst
-  if (src.temperature <= cConfig.freezingPoint ||
-      src.moisture <= cConfig.minMoisture) {
-    if (std::rand() % cConfig.rainBurstChance == 0 &&
-        src.moisture > cConfig.minMoisture) {
-      int ry = y + 1;
-      if (ctx.currentGrid.InBounds(x, ry) &&
-          ctx.currentGrid.GetCurrent(x, ry).element == Element::AIR) {
-        Cell rain = ElementFactory::Create(Element::WATER);
-        rain.velocityY = cConfig.rainBurstVelocity;
-        MovementSystem::SetNext(x, ry, rain, ctx);
-      }
-    }
-    MovementSystem::SetNext(x, y, ElementFactory::Create(Element::AIR), ctx);
+  // Cloud disperse
+  if (src.moisture <= cConfig.minMoisture) {
+    Cell air = ElementFactory::Create(Element::AIR, ctx.config);
+    MovementSystem::SetNext(x, y, air, ctx);
     return;
   }
 
-  // 2. Wind Jitter & Horizontal Drift
+  // Wind Jitter & Horizontal Drift
   float randomJitter =
       (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) * 2.0f -
       1.0f;
@@ -35,27 +25,41 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
   src.velocityX =
       std::clamp(src.velocityX, -cConfig.maxDrift, cConfig.maxDrift);
 
-  // 3. Ambient Rain Generation
+  // Ambient Rain Generation
   if (std::rand() % cConfig.rainChance == 0) {
     int ry = y + 1;
     if (ctx.currentGrid.InBounds(x, ry) &&
         ctx.currentGrid.GetCurrent(x, ry).element == Element::AIR) {
-      Cell rain = ElementFactory::Create(Element::WATER);
+      Cell rain = ElementFactory::Create(Element::WATER, ctx.config);
       rain.velocityY = cConfig.rainVelocity;
       MovementSystem::SetNext(x, ry, rain, ctx);
       src.moisture -= cConfig.rainMoistureCost;
     }
   }
 
-  // 4. Execution of Drift Movement
+  // Execution of Drift Movement
   bool moved = false;
-  if (std::abs(src.velocityX) >= cConfig.moveThreshold) {
+  float absVX = std::abs(src.velocityX);
+  if (absVX >= cConfig.moveThreshold) {
     int dir = (src.velocityX > 0.0f) ? 1 : -1;
-    int tx = x + dir;
+    int steps = std::max(1, static_cast<int>(absVX));
+    int furthestX = x;
 
-    if (ctx.currentGrid.InBounds(tx, y) &&
-        ctx.currentGrid.GetCurrent(tx, y).element == Element::AIR) {
-      moved = MovementSystem::TryMove(x, y, tx, y, ctx);
+    for (int s = 1; s <= steps; ++s) {
+      int tx = x + s * dir;
+      if (!ctx.currentGrid.InBounds(tx, y))
+        break;
+
+      const Cell &target = ctx.currentGrid.GetCurrent(tx, y);
+      if (target.element == Element::AIR) {
+        furthestX = tx;
+      } else {
+        break;
+      }
+    }
+
+    if (furthestX != x) {
+      moved = MovementSystem::TryMove(x, y, furthestX, y, src, ctx);
     }
   }
 

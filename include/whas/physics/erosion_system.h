@@ -4,5 +4,5 @@
 
 class ErosionSystem {
 public:
-  static bool TryErode(int wx, int wy, int ex, int ey, ElementContext &ctx);
+  static bool TryErode(int wx, int wy, int ex, int ey, Cell &w, ElementContext &ctx);
 };

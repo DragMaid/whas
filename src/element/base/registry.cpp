@@ -1,7 +1,6 @@
 #include "whas/element/base/registry.h"
-#include "whas/element/base/factory.h"
 #include "whas/element/base/implementations.h"
-#include "whas/element/base/properties.h"
+#include "whas/element/base/factory.h"
 #include "whas/physics/movement_system.h"
 
 ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
@@ -17,14 +16,14 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
 void ElementUpdateRegistry::Update(Element element, int x, int y,
                                    ElementContext &ctx) {
   Cell &cell = ctx.currentGrid.GetCurrent(x, y);
-  const auto &props = ElementRegistry::GetProperties(element);
+  const auto &props = ctx.config.elements[static_cast<size_t>(element)];
 
   // Standardized Lifetime System
-  if (props.lifetimeDecay > 0.0f && cell.lifetime > 0.0f) {
+  if (props.lifetimeDecay > 0.0f && cell.lifetime >= 0.0f) {
     cell.lifetime -= props.lifetimeDecay;
     if (cell.lifetime <= 0.0f) {
-      Cell air = ElementFactory::Create(Element::AIR);
-      // Retain some heat to simulate dissipation
+      Cell air = ElementFactory::Create(Element::AIR, ctx.config);
+      // TODO: move this to config also
       air.temperature = cell.temperature * 0.5f;
       MovementSystem::SetNext(x, y, air, ctx);
       return;

@@ -3,5 +3,5 @@
 
 class HeatSystem {
 public:
-  static void Propagate(int x, int y, ElementContext &ctx);
+  static void Propagate(int x, int y, ElementContext &ctx, float dt);
 };

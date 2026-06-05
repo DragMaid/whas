@@ -8,57 +8,109 @@
 
 namespace ElementsImpl {
 
-void UpdateSteam(int x, int y, ElementContext &ctx) {
-  const auto& sConfig = ctx.config.steam;
-  Cell src = ctx.currentGrid.GetCurrent(x, y);
-
-  // Condensation
+static bool HandleCondensation(int x, int y, Cell &src, const SteamConfig &sConfig, ElementContext &ctx) {
+  // We use a bit of hysteresis here: boiling is 100, condensation is 90.
+  // This prevents rapid oscillation if the temperature is hovering around 100.
   if (src.temperature <= sConfig.condensationTemp) {
-    Cell water = ElementFactory::Create(Element::WATER);
+    Cell water = ElementFactory::Create(Element::WATER, ctx.config);
     water.temperature = src.temperature;
     MovementSystem::SetNext(x, y, water, ctx);
-    return;
+    return true;
   }
+  return false;
+}
 
-  // Cloud Formation
-  if (y < GRID_H * sConfig.cloudFormationHeightRatio && 
+static bool HandleCloudFormation(int x, int y, Cell &src, const SteamConfig &sConfig, ElementContext &ctx) {
+  if (y < GRID_H * sConfig.cloudFormationHeightRatio &&
       src.temperature > sConfig.cloudFormationTemp) {
-    Cell cloud = ElementFactory::Create(Element::CLOUD);
+    Cell cloud = ElementFactory::Create(Element::CLOUD, ctx.config);
     cloud.temperature = src.temperature - sConfig.cloudTempLoss;
     MovementSystem::SetNext(x, y, cloud, ctx);
-    return;
+    return true;
   }
+  return false;
+}
 
-  // Physics: Buoyancy and Drift
+static void UpdateVelocity(Cell &src, const SteamConfig &sConfig) {
+  // Buoyancy: hotter steam rises faster
   src.velocityY = sConfig.buoyancyBase - (src.temperature - sConfig.condensationTemp) * sConfig.buoyancyTempScale;
+  
+  // Drift: random horizontal movement
   src.velocityX += (static_cast<float>(std::rand() % 100) / 100.0f - 0.5f) * sConfig.driftStrength;
   src.velocityX = std::clamp(src.velocityX, -sConfig.maxDrift, sConfig.maxDrift);
+}
 
-  bool moved = false;
-  
-  int uy = y - 1;
-  if (ctx.currentGrid.InBounds(x, uy)) {
-    const auto &props = ElementRegistry::GetProperties(ctx.currentGrid.GetCurrent(x, uy).element);
-    if (props.passable)
-      moved = MovementSystem::TryMove(x, y, x, uy, ctx);
-  }
+static bool TryBuoyancyMove(int x, int y, Cell &src, ElementContext &ctx) {
+  float absVY = std::abs(src.velocityY);
+  if (absVY < 0.1f) return false;
 
-  if (!moved) {
-    int dirs[2] = {-1, 1};
-    if (std::rand() % 2) std::swap(dirs[0], dirs[1]);
-    for (int dir : dirs) {
-      int tx = x + dir;
-      if (ctx.currentGrid.InBounds(tx, y)) {
-        const auto &props = ElementRegistry::GetProperties(ctx.currentGrid.GetCurrent(tx, y).element);
-        if (props.passable) {
-          moved = MovementSystem::TryMove(x, y, tx, y, ctx);
-          if (moved) break;
-        }
-      }
+  int dir = (src.velocityY > 0.0f) ? 1 : -1;
+  int steps = std::max(1, static_cast<int>(absVY));
+  int furthestY = y;
+
+  for (int s = 1; s <= steps; ++s) {
+    int ty = y + s * dir;
+    if (!ctx.currentGrid.InBounds(x, ty)) break;
+    
+    const Cell &target = ctx.currentGrid.GetCurrent(x, ty);
+    const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
+    if (props.passable) {
+      furthestY = ty;
+    } else {
+      break;
     }
   }
 
-  if (!moved)
-    MovementSystem::SetNext(x, y, src, ctx);
+  if (furthestY != y) {
+    return MovementSystem::TryMove(x, y, x, furthestY, src, ctx);
+  }
+  return false;
 }
+
+static bool TryDriftMove(int x, int y, Cell &src, ElementContext &ctx) {
+  float absVX = std::abs(src.velocityX);
+  if (absVX < 0.1f) return false;
+
+  int dir = (src.velocityX > 0.0f) ? 1 : -1;
+  int steps = std::max(1, static_cast<int>(absVX));
+  int furthestX = x;
+
+  for (int s = 1; s <= steps; ++s) {
+    int tx = x + s * dir;
+    if (!ctx.currentGrid.InBounds(tx, y)) break;
+
+    const Cell &target = ctx.currentGrid.GetCurrent(tx, y);
+    const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
+    if (props.passable) {
+      furthestX = tx;
+    } else {
+      break;
+    }
+  }
+
+  if (furthestX != x) {
+    return MovementSystem::TryMove(x, y, furthestX, y, src, ctx);
+  }
+  return false;
+}
+
+void UpdateSteam(int x, int y, ElementContext &ctx) {
+  const auto &sConfig = ctx.config.steam;
+  Cell src = ctx.currentGrid.GetCurrent(x, y);
+
+  // if (HandleCondensation(x, y, src, sConfig, ctx)) return;
+  if (HandleCloudFormation(x, y, src, sConfig, ctx)) return;
+
+  UpdateVelocity(src, sConfig);
+
+  bool moved = TryBuoyancyMove(x, y, src, ctx);
+  if (!moved) {
+    moved = TryDriftMove(x, y, src, ctx);
+  }
+
+  if (!moved) {
+    MovementSystem::SetNext(x, y, src, ctx);
+  }
+}
+
 } // namespace ElementsImpl

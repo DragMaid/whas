@@ -12,14 +12,14 @@ void UpdateWater(int x, int y, ElementContext &ctx) {
   Cell water = ctx.currentGrid.GetCurrent(x, y);
 
   if (water.temperature >= WATER_BOILING_POINT) {
-    Cell steam = ElementFactory::Create(Element::STEAM);
+    Cell steam = ElementFactory::Create(Element::STEAM, ctx.config);
     steam.temperature = water.temperature;
     MovementSystem::SetNext(x, y, steam, ctx);
     return;
   }
 
   if (water.temperature <= WATER_FREEZING_POINT) {
-    Cell ice = ElementFactory::Create(Element::ICE);
+    Cell ice = ElementFactory::Create(Element::ICE, ctx.config);
     ice.temperature = water.temperature;
     MovementSystem::SetNext(x, y, ice, ctx);
     return;

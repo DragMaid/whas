@@ -1,10 +1,14 @@
 #include "whas/ui/ui.h"
+#include "imgui.h"
 #include "raylib.h"
+#include "rlImGui.h"
 #include "whas/constants.h"
 #include <algorithm>
 #include <cmath>
 
 UI::UI() {
+  rlImGuiSetup(true);
+
   m_buttons[0] = {{8 + 0 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
                   Element::WATER,
                   "WATER",
@@ -36,8 +40,12 @@ UI::UI() {
                   {60, 60, 60, 255}};
 }
 
+UI::~UI() { rlImGuiShutdown(); }
+
 void UI::HandleInput(UIState &state) {
-  // Keyboard shortcuts for materials
+  if (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard)
+    return;
+
   if (IsKeyPressed(KEY_ONE))
     state.selectedMaterial = Element::WATER;
   if (IsKeyPressed(KEY_TWO))
@@ -55,14 +63,14 @@ void UI::HandleInput(UIState &state) {
 
   if (IsKeyPressed(KEY_F3))
     state.debugOverlay = !state.debugOverlay;
+  if (IsKeyPressed(KEY_F4))
+    state.showConfigEditor = !state.showConfigEditor;
 
-  // Brush size
   float wheel = GetMouseWheelMove();
   if (wheel != 0) {
     state.brushRadius = std::clamp(state.brushRadius + (int)wheel, 1, 20);
   }
 
-  // Mouse clicks on buttons
   if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
     Vector2 m = GetMousePosition();
     for (const auto &btn : m_buttons) {
@@ -73,7 +81,7 @@ void UI::HandleInput(UIState &state) {
   }
 }
 
-void UI::Draw(const UIState &state) {
+void UI::Draw(UIState &state, Simulation &sim) {
   // Panel background
   DrawRectangle(0, PANEL_Y, WINDOW_WIDTH, PANEL_HEIGHT, Color{30, 30, 40, 255});
   DrawLine(0, PANEL_Y, WINDOW_WIDTH, PANEL_Y, DARKGRAY);
@@ -89,9 +97,151 @@ void UI::Draw(const UIState &state) {
     DrawText(btn.label, textX, textY, 14, selected ? BLACK : WHITE);
   }
 
-  // Current selection info
   DrawText(TextFormat("Brush: %d", state.brushRadius), WINDOW_WIDTH - 120,
            PANEL_Y + 20, 16, RAYWHITE);
+
+  // ImGui Windows
+  rlImGuiBegin();
+
+  if (state.showConfigEditor) {
+    DrawPropertyEditor(sim.GetConfig());
+  }
+
+  DrawInspector(sim);
+
+  rlImGuiEnd();
+}
+
+void UI::DrawInspector(Simulation &sim) {
+  if (IsMouseOverPanel()) return;
+
+  Vector2 cellPos = GetMouseCell();
+  int cx = (int)cellPos.x;
+  int cy = (int)cellPos.y;
+
+  if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) return;
+
+  const Cell &cell = sim.GetCell(cx, cy);
+
+  ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always, ImVec2(-0.1f, 1.1f));
+  ImGui::Begin("Inspector", nullptr, 
+               ImGuiWindowFlags_NoTitleBar | 
+               ImGuiWindowFlags_NoResize | 
+               ImGuiWindowFlags_NoMove | 
+               ImGuiWindowFlags_NoScrollbar | 
+               ImGuiWindowFlags_NoSavedSettings | 
+               ImGuiWindowFlags_AlwaysAutoResize |
+               ImGuiWindowFlags_NoInputs |
+               ImGuiWindowFlags_NoFocusOnAppearing |
+               ImGuiWindowFlags_NoNav);
+
+  ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "Cell [%d, %d]", cx, cy);
+  ImGui::Separator();
+  ImGui::Text("Type: %s", GetElementName(cell.element));
+  ImGui::Text("Temp: %.1f C", cell.temperature);
+  ImGui::Text("Pressure: %.2f", cell.pressure);
+  ImGui::Text("Velocity: (%.2f, %.2f)", cell.velocityX, cell.velocityY);
+  ImGui::Text("Mass: %.2f g", cell.mass);
+  ImGui::Text("Density: %.2f g/cm3", cell.density);
+  if (cell.lifetime > 0) ImGui::Text("Lifetime: %.2f s", cell.lifetime);
+  if (cell.moisture > 0) ImGui::Text("Moisture: %.2f", cell.moisture);
+
+  ImGui::End();
+}
+
+const char* UI::GetElementName(Element element) const {
+  switch (element) {
+    case Element::AIR: return "AIR";
+    case Element::WATER: return "WATER";
+    case Element::EARTH: return "EARTH";
+    case Element::FIRE: return "FIRE";
+    case Element::STEAM: return "STEAM";
+    case Element::CLOUD: return "CLOUD";
+    case Element::ICE: return "ICE";
+    default: return "UNKNOWN";
+  }
+}
+
+void UI::DrawPropertyEditor(SimulationConfig &config) {
+  ImGui::Begin("Simulation Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+  if (ImGui::CollapsingHeader("World")) {
+    ImGui::SliderFloat("Gravity", &config.world.gravity, -1.0f, 1.0f);
+    ImGui::SliderFloat("Pressure Eq", &config.world.pressureEq, 0.0f, 1.0f);
+    ImGui::SliderFloat("Ambient Temp", &config.world.ambientTemp, -50.0f, 100.0f);
+  }
+
+  if (ImGui::CollapsingHeader("Fluid Physics")) {
+    ImGui::SliderInt("Pressure Scan Depth", &config.fluid.pressureScanDepth, 1, 50);
+    ImGui::SliderFloat("Pressure Weight", &config.fluid.pressureWeight, 0.0f, 2.0f);
+    ImGui::SliderFloat("Gas Displacement Chance", &config.fluid.gasDisplacementChance, 0.0f, 1.0f);
+
+    if (ImGui::TreeNode("Water Specific")) {
+      ImGui::SliderFloat("Density", &config.fluid.water.density, 0.1f, 10.0f);
+      ImGui::SliderFloat("Viscosity", &config.fluid.water.viscosity, 0.0f, 1.0f);
+      ImGui::SliderFloat("Max Fall Speed", &config.fluid.water.maxFallSpeed, 0.0f, 20.0f);
+      ImGui::SliderFloat("Max Horizontal Speed", &config.fluid.water.maxHorizontalSpeed, 0.0f, 20.0f);
+      ImGui::SliderFloat("Spread Factor", &config.fluid.water.spreadFactor, 0.0f, 1.0f);
+      ImGui::SliderFloat("Friction", &config.fluid.water.friction, 0.0f, 1.0f);
+      ImGui::Checkbox("Can Displace Gas", &config.fluid.water.canDisplaceGas);
+      ImGui::Checkbox("Can Erode Terrain", &config.fluid.water.canErodeTerrain);
+      ImGui::TreePop();
+    }
+  }
+
+  if (ImGui::CollapsingHeader("Element Properties")) {
+    DrawElementPropertyEditor(config);
+  }
+
+  if (ImGui::CollapsingHeader("Element Specifics")) {
+    if (ImGui::TreeNode("Cloud")) {
+      ImGui::SliderFloat("Freezing Point", &config.cloud.freezingPoint, -20.0f,
+                         20.0f);
+      ImGui::SliderFloat("Min Moisture", &config.cloud.minMoisture, 0.0f, 1.0f);
+      ImGui::SliderFloat("Wind Jitter", &config.cloud.windJitter, 0.0f, 0.5f);
+      ImGui::SliderFloat("Max Drift", &config.cloud.maxDrift, 0.0f, 5.0f);
+      ImGui::SliderInt("Rain Chance", &config.cloud.rainChance, 1, 500);
+      ImGui::TreePop();
+    }
+    if (ImGui::TreeNode("Fire")) {
+      ImGui::SliderFloat("Min Temp", &config.fire.minTemp, 0.0f, 1000.0f);
+      ImGui::SliderInt("Spark Chance", &config.fire.sparkChance, 1, 50);
+      ImGui::TreePop();
+    }
+  }
+
+  ImGui::End();
+}
+
+void UI::DrawElementPropertyEditor(SimulationConfig &config) {
+  const char *elementNames[] = {"AIR",   "WATER", "EARTH", "FIRE",
+                                "STEAM", "CLOUD", "ICE"};
+  static int selectedElement = 0;
+
+  ImGui::Combo("Select Element", &selectedElement, elementNames,
+               IM_ARRAYSIZE(elementNames));
+
+  ElementProperties &props = config.elements[selectedElement];
+
+  ImGui::Separator();
+  ImGui::Checkbox("Mobile", &props.mobile);
+  ImGui::Checkbox("Solid", &props.solid);
+  ImGui::Checkbox("Passable", &props.passable);
+
+  ImGui::SliderFloat("Density", &props.density, 0.0f, 5000.0f);
+  ImGui::SliderFloat("Default Temp", &props.defaultTemperature, -100.0f, 2000.0f);
+  ImGui::SliderFloat("Default Mass", &props.defaultMass, 0.0f, 10.0f);
+  ImGui::SliderFloat("Default Hardness", &props.defaultHardness, 0.0f, 1000.0f);
+  ImGui::SliderFloat("Default Lifetime", &props.defaultLifetime, 0.0f, 60.0f);
+  ImGui::SliderFloat("Lifetime Decay", &props.lifetimeDecay, 0.0f, 1.0f);
+  ImGui::SliderFloat("Default Moisture", &props.defaultMoisture, 0.0f, 10.0f);
+
+  if (ImGui::TreeNode("Thermal Properties")) {
+    ImGui::SliderFloat("Heat Capacity", &props.thermal.heatCapacity, 0.01f, 10.0f);
+    ImGui::SliderFloat("Conductivity", &props.thermal.conductivity, 0.0f, 1.0f);
+    ImGui::SliderFloat("Cooling Rate", &props.thermal.coolingRate, 0.0f, 1.0f);
+    ImGui::TreePop();
+  }
 }
 
 Vector2 UI::GetMouseCell() const {
@@ -99,4 +249,6 @@ Vector2 UI::GetMouseCell() const {
   return {std::floor(m.x / CELL_SIZE), std::floor(m.y / CELL_SIZE)};
 }
 
-bool UI::IsMouseOverPanel() const { return GetMouseY() >= PANEL_Y; }
+bool UI::IsMouseOverPanel() const {
+  return GetMouseY() >= PANEL_Y || ImGui::GetIO().WantCaptureMouse;
+}

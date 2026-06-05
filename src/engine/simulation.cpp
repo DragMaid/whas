@@ -8,9 +8,16 @@
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
 
-Simulation::Simulation() : m_rng(42) {}
+Simulation::Simulation()
+    : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config) {}
 
 void Simulation::Update(float dt) {
+
+  // TODO: disable all chunk activation later
+  std::vector<Chunk> &allChunks = m_chunks.GetChunks();
+  for (Chunk &c : allChunks)
+    c.Wake();
+
   m_grid.ClearNext();
   m_chunks.BeginFrame();
 
@@ -20,8 +27,10 @@ void Simulation::Update(float dt) {
   ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
   PressureSystem::Update(ctx);
 
+  // TODO: if the element perform multitep then the the further
+  // processing will hence be skipped
   UpdateElements();
-  UpdatePhysics();
+  UpdatePhysics(dt);
 
   // Swap next state with current state
   m_grid.Swap();
@@ -79,20 +88,31 @@ void Simulation::UpdateElements() {
       m_grid.GetNextBuffer()[i] = m_grid.GetCurrentBuffer()[i];
 }
 
-void Simulation::UpdatePhysics() {
+void Simulation::UpdatePhysics(float dt) {
   ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
       const Cell &source = m_grid.GetCurrent(x, y);
-      if (source.element != Element::AIR) {
-        HeatSystem::Propagate(x, y, ctx);
-        PressureSystem::Propagate(x, y, ctx);
-      }
+      HeatSystem::Propagate(x, y, ctx, dt);
+      PressureSystem::Propagate(x, y, ctx);
     }
   }
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
+
+  // TODO: set the debug mode to invoke the singular paint here
+  bool debug = false;
+  if (debug) {
+    int x = cx;
+    int y = cy;
+    Cell c = ElementFactory::Create(element, m_config);
+    m_grid.GetCurrent(x, y) = c;
+    m_grid.GetNext(x, y) = c;
+    m_chunks.WakeChunkAt(x, y);
+    return;
+  }
+
   for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
     for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
       if (dx * dx + dy * dy > brushRadius * brushRadius)
@@ -104,7 +124,7 @@ void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
       if (!m_grid.InBounds(x, y))
         continue;
 
-      Cell c = ElementFactory::Create(element);
+      Cell c = ElementFactory::Create(element, m_config);
       m_grid.GetCurrent(x, y) = c;
       m_grid.GetNext(x, y) = c;
       m_chunks.WakeChunkAt(x, y);
