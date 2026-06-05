@@ -21,9 +21,9 @@ const Cell &Grid::GetCurrent(int x, int y) const {
   return m_current[y * GRID_W + x];
 }
 
-Cell &Grid::GetNext(int x, int y) { return m_current[y * GRID_W + x]; }
+Cell &Grid::GetNext(int x, int y) { return m_next[y * GRID_W + x]; }
 const Cell &Grid::GetNext(int x, int y) const {
-  return m_current[y * GRID_W + x];
+  return m_next[y * GRID_W + x];
 }
 
 bool Grid::InBounds(int x, int y) const {

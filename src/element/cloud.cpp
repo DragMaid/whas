@@ -28,9 +28,6 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
 
   Cell src = ctx.currentGrid.GetCurrent(x, y);
 
-  // Cooling down over time
-  src.temperature -= COOLING_RATE;
-
   //  Cloud Dissipation / Heavy Rain Burst Condensation
   // Triggered if the cloud gets too cold or runs completely out of water vapor
   if (src.temperature <= TEMP_FREEZING_POINT || src.moisture <= MIN_MOISTURE) {

@@ -16,7 +16,6 @@ void Simulation::Update(float dt) {
 
   UpdateElements();
   UpdatePhysics();
-  // UpdateGameplay(dt);
 
   // Swap next state with current state
   m_grid.Swap();
@@ -40,7 +39,7 @@ void Simulation::UpdateElements() {
   for (int i : chunkOrder) {
     // Convert indicies to column and row
     int chunkCol = i % CHUNK_COLS;
-    int chunkRow = i / CHUNK_ROWS;
+    int chunkRow = i / CHUNK_COLS;
 
     int x0 = chunkCol * CHUNK_SIZE;
     int y0 = chunkRow * CHUNK_SIZE;
@@ -81,7 +80,7 @@ void Simulation::UpdateElements() {
   // Check for all other cells that haven't been updated
   // and carry the last state over
   for (int i = 0; i < GRID_W * GRID_H; ++i)
-    if (!m_grid.GetCurrentBuffer()[i].updated)
+    if (!m_grid.GetNextBuffer()[i].updated)
       m_grid.GetNextBuffer()[i] = m_grid.GetCurrentBuffer()[i];
 }
 

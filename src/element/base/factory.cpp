@@ -1,6 +1,5 @@
 #include "whas/element/base/factory.h"
 #include "whas/element/base/properties.h"
-#include <cstdlib>
 
 Cell ElementFactory::Create(Element element) {
   const ElementProperties &props = ElementRegistry::GetProperties(element);
@@ -17,8 +16,7 @@ Cell ElementFactory::Create(Element element) {
   // Handle additional attribute if needed
   switch (element) {
   case Element::FIRE:
-    // TODO: change to a more dedicated logic later
-    c.lifetime = 3.0f + static_cast<float>(std::rand() % 200) / 100.0f;
+    c.lifetime = 3.0f;
     break;
   case Element::STEAM:
     // TODO: we should have a setting for this instead

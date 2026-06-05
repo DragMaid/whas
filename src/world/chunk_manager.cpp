@@ -1,5 +1,6 @@
 #include "whas/world/chunk_manager.h"
 #include "whas/constants.h"
+#include <cassert>
 
 ChunkManager::ChunkManager() : m_chunks(CHUNK_COLS * CHUNK_ROWS) {
   for (Chunk &c : m_chunks)
@@ -43,9 +44,11 @@ void ChunkManager::WakeNeighbourChunks(int cx, int cy) {
 }
 
 Chunk &ChunkManager::GetChunk(int cx, int cy) {
+  assert(cx >= 0 && cx < CHUNK_COLS && cy >= 0 && cy < CHUNK_ROWS);
   return m_chunks[cy * CHUNK_COLS + cx];
 }
 
 void ChunkManager::SetActiveCount(int cx, int cy, int count) {
+  assert(cx >= 0 && cx < CHUNK_COLS && cy >= 0 && cy < CHUNK_ROWS);
   m_chunks[cy * CHUNK_COLS + cx].activeCount = count;
 }

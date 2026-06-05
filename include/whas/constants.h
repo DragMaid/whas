@@ -16,5 +16,6 @@ constexpr int CHUNK_ROWS      = (GRID_H + CHUNK_SIZE - 1) / CHUNK_SIZE;
 constexpr float GRAVITY       = 0.3f;
 constexpr float HEAT_DIFFUSE  = 0.02f;
 constexpr float PRESSURE_EQ   = 0.15f;
+constexpr float COOLING_RATE  = 5.0f;
 
 // TODO: find out if theres any more way to write config in cpp ?

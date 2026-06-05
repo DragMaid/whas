@@ -17,8 +17,10 @@ void HeatSystem::Propagate(int x, int y, ElementContext &ctx) {
     // TODO: problem with transferring heat back
     // TODO: I dont think temperature goes down eventually
     // TODO: water doesn't also cool down stuff
+    source.temperature -= COOLING_RATE;
     Cell& target = ctx.currentGrid.GetNext(nx, ny);
     float diff = source.temperature - target.temperature;
+    // Only transfer if the source is hotter than the target
     if (diff > 0.1f) { 
         float transfer = diff * HEAT_DIFFUSE;
         target.temperature += transfer;

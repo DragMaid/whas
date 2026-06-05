@@ -46,6 +46,7 @@ void UpdateWater(int x, int y, ElementContext &ctx) {
   bool moved = false;
   int steps = std::max(1, (int)std::abs(src.velocityY));
 
+  // TODO: refactor this for multistep
   for (int s = 0; s < steps && !moved; ++s) {
     int ny = y + 1;
     if (ctx.currentGrid.InBounds(x, ny)) {

@@ -29,18 +29,18 @@ void UpdateFire(int x, int y, ElementContext &ctx) {
     // TODO: remove all these magic numbers also
     // TODO: make use of the temperature system, it doesn't just get put off
     // faster because its ice
-    if (nb.element == Element::WATER) {
-      float cooling = 300.0f;
-      if (cooling >= src.temperature) {
-        MovementSystem::SetNext(x, y, ElementFactory::Create(Element::AIR),
-                                ctx);
-        return;
-      } else {
-        src.temperature -= 50.0f;
-      }
-    } else if (nb.element == Element::ICE) {
-      src.temperature -= 100.0f; // Ice cools fire a lot
-    }
+    // if (nb.element == Element::WATER) {
+    //   float cooling = 300.0f;
+    //   if (cooling >= src.temperature) {
+    //     MovementSystem::SetNext(x, y, ElementFactory::Create(Element::AIR),
+    //                             ctx);
+    //     return;
+    //   } else {
+    //     src.temperature -= 50.0f;
+    //   }
+    // } else if (nb.element == Element::ICE) {
+    //   src.temperature -= 100.0f; // Ice cools fire a lot
+    // }
   }
 
   if (std::rand() % 4 == 0) {

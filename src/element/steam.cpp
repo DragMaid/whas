@@ -9,9 +9,9 @@
 namespace ElementsImpl {
 void UpdateSteam(int x, int y, ElementContext &ctx) {
   Cell src = ctx.currentGrid.GetCurrent(x, y);
-  src.temperature -= 0.5f;
   src.lifetime -= 0.016f;
 
+  // TODO: fix this to not
   if (src.temperature <= 90.0f || src.lifetime <= 0.0f) {
     Cell water = ElementFactory::Create(Element::WATER);
     water.temperature = src.temperature;

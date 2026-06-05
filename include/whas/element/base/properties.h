@@ -11,8 +11,6 @@ struct ElementProperties {
   float density;
   float defaultTemperature;
   float defaultMass;
-
-  bool affectedByGravity;
   float defaultHardness;
 };
 
