@@ -12,6 +12,10 @@ struct ElementProperties {
   float defaultTemperature;
   float defaultMass;
   float defaultHardness;
+
+  float defaultLifetime = 0.0f;
+  float lifetimeDecay = 0.0f;
+  float defaultMoisture = 0.0f;
 };
 
 using PropertiesArray =

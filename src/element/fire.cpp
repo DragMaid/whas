@@ -5,55 +5,36 @@
 #include <algorithm>
 
 namespace ElementsImpl {
+
+struct FireProps {
+    float coolingRate = 2.0f;
+    float minTemp = 200.0f;
+    int sparkChance = 4;
+    float sparkTempScale = 0.6f;
+    float sparkLifetimeScale = 0.5f;
+};
+
+static const FireProps LocalFireProps;
+
 void UpdateFire(int x, int y, ElementContext &ctx) {
   Cell src = ctx.currentGrid.GetCurrent(x, y);
-  src.lifetime -= 0.016f;
 
-  if (src.lifetime <= 0.0f) {
-    Cell hot = ElementFactory::Create(Element::AIR);
-    hot.temperature = src.temperature * 0.3f;
-    MovementSystem::SetNext(x, y, hot, ctx);
-    return;
-  }
+  // Note: Lifetime decay is now handled by the registry
 
-  src.temperature = std::max(200.0f, src.temperature - 2.0f);
+  src.temperature = std::max(LocalFireProps.minTemp, src.temperature - LocalFireProps.coolingRate);
 
-  const int dx4[] = {0, 0, -1, 1};
-  const int dy4[] = {-1, 1, 0, 0};
-  for (int i = 0; i < 4; ++i) {
-    int nx = x + dx4[i], ny = y + dy4[i];
-    if (!ctx.currentGrid.InBounds(nx, ny))
-      continue;
-    const Cell &nb = ctx.currentGrid.GetCurrent(nx, ny);
-
-    // TODO: remove all these magic numbers also
-    // TODO: make use of the temperature system, it doesn't just get put off
-    // faster because its ice
-    // if (nb.element == Element::WATER) {
-    //   float cooling = 300.0f;
-    //   if (cooling >= src.temperature) {
-    //     MovementSystem::SetNext(x, y, ElementFactory::Create(Element::AIR),
-    //                             ctx);
-    //     return;
-    //   } else {
-    //     src.temperature -= 50.0f;
-    //   }
-    // } else if (nb.element == Element::ICE) {
-    //   src.temperature -= 100.0f; // Ice cools fire a lot
-    // }
-  }
-
-  if (std::rand() % 4 == 0) {
+  // Spontaneous Sparking
+  if (std::rand() % LocalFireProps.sparkChance == 0) {
     int uy = y - 1;
     if (ctx.currentGrid.InBounds(x, uy) &&
         ctx.currentGrid.GetCurrent(x, uy).element == Element::AIR) {
       Cell spark = ElementFactory::Create(Element::FIRE);
-      spark.temperature = src.temperature * 0.6f;
-      spark.lifetime = src.lifetime * 0.5f;
+      spark.temperature = src.temperature * LocalFireProps.sparkTempScale;
+      spark.lifetime = src.lifetime * LocalFireProps.sparkLifetimeScale;
       MovementSystem::SetNext(x, uy, spark, ctx);
     }
   }
 
   MovementSystem::SetNext(x, y, src, ctx);
 }
-} // namespace Materials
+} // namespace ElementsImpl

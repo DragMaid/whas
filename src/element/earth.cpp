@@ -4,6 +4,13 @@
 #include <algorithm>
 
 namespace ElementsImpl {
+
+struct EarthProps {
+    float fireHardnessLoss = 0.5f;
+};
+
+static const EarthProps LocalEarthProps;
+
 void UpdateEarth(int x, int y, ElementContext &ctx) {
   Cell src = ctx.currentGrid.GetCurrent(x, y);
 
@@ -13,14 +20,13 @@ void UpdateEarth(int x, int y, ElementContext &ctx) {
     int nx = x + dx4[i], ny = y + dy4[i];
     if (!ctx.currentGrid.InBounds(nx, ny))
       continue;
-    // TODO: re-consider this weird way of handling it
-    // TODO: rather than making fire affects it, make anything with
-    // hot temperature be able to affect earth better
+    
+    // Earth softens when exposed to extreme heat (Fire)
     if (ctx.currentGrid.GetCurrent(nx, ny).element == Element::FIRE) {
-      src.hardness = std::max(0.0f, src.hardness - 0.5f);
+      src.hardness = std::max(0.0f, src.hardness - LocalEarthProps.fireHardnessLoss);
     }
   }
 
   MovementSystem::SetNext(x, y, src, ctx);
 }
-} // namespace Materials
+} // namespace ElementsImpl

@@ -10,21 +10,14 @@ Cell ElementFactory::Create(Element element) {
   c.hardness = props.defaultHardness;
   c.density = props.density;
   c.mass = props.defaultMass;
+  c.lifetime = props.defaultLifetime;
+  c.moisture = props.defaultMoisture;
 
-  // TODO: can make a more abstraction layer in case we want to assign
-  // attributes for a spell
   // Handle additional attribute if needed
   switch (element) {
-  case Element::FIRE:
-    c.lifetime = 3.0f;
-    break;
   case Element::STEAM:
-    // TODO: we should have a setting for this instead
+    // TODO: move this to property also
     c.velocityY = -1.0f;
-    c.lifetime = 8.0f;
-    break;
-  case Element::CLOUD:
-    c.moisture = 1.0f;
     break;
   }
 

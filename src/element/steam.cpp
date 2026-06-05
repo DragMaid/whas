@@ -7,52 +7,68 @@
 #include <algorithm>
 
 namespace ElementsImpl {
+
+struct SteamProps {
+    float condensationTemp = 90.0f;
+    float cloudFormationHeightRatio = 0.25f; // GRID_H / 4
+    float cloudFormationTemp = 95.0f;
+    float cloudTempLoss = 50.0f;
+    float buoyancyBase = -1.5f;
+    float buoyancyTempScale = 0.01f;
+    float driftStrength = 0.1f;
+    float maxDrift = 1.0f;
+};
+
+static const SteamProps LocalSteamProps;
+
 void UpdateSteam(int x, int y, ElementContext &ctx) {
   Cell src = ctx.currentGrid.GetCurrent(x, y);
-  src.lifetime -= 0.016f;
 
-  // TODO: fix this to not
-  if (src.temperature <= 90.0f || src.lifetime <= 0.0f) {
+  // Note: Lifetime decay is now handled by the registry
+  
+  // Condensation
+  if (src.temperature <= LocalSteamProps.condensationTemp) {
     Cell water = ElementFactory::Create(Element::WATER);
     water.temperature = src.temperature;
     MovementSystem::SetNext(x, y, water, ctx);
     return;
   }
 
-  if (y < GRID_H / 4 && src.temperature > 95.0f) {
+  // Cloud Formation
+  if (y < GRID_H * LocalSteamProps.cloudFormationHeightRatio && 
+      src.temperature > LocalSteamProps.cloudFormationTemp) {
     Cell cloud = ElementFactory::Create(Element::CLOUD);
-    cloud.temperature = src.temperature - 50.0f;
+    cloud.temperature = src.temperature - LocalSteamProps.cloudTempLoss;
     MovementSystem::SetNext(x, y, cloud, ctx);
     return;
   }
 
-  src.velocityY = -1.5f - (src.temperature - 90.0f) * 0.01f;
-  src.velocityX +=
-      (static_cast<float>(std::rand() % 100) / 100.0f - 0.5f) * 0.1f;
-  src.velocityX = std::clamp(src.velocityX, -1.0f, 1.0f);
+  // Physics: Buoyancy and Drift
+  src.velocityY = LocalSteamProps.buoyancyBase - (src.temperature - LocalSteamProps.condensationTemp) * LocalSteamProps.buoyancyTempScale;
+  src.velocityX += (static_cast<float>(std::rand() % 100) / 100.0f - 0.5f) * LocalSteamProps.driftStrength;
+  src.velocityX = std::clamp(src.velocityX, -LocalSteamProps.maxDrift, LocalSteamProps.maxDrift);
 
   bool moved = false;
+  
+  // Attempt upward movement
   int uy = y - 1;
   if (ctx.currentGrid.InBounds(x, uy)) {
-    const auto &props = ElementRegistry::GetProperties(
-        ctx.currentGrid.GetCurrent(x, uy).element);
+    const auto &props = ElementRegistry::GetProperties(ctx.currentGrid.GetCurrent(x, uy).element);
     if (props.passable)
       moved = MovementSystem::TryMove(x, y, x, uy, ctx);
   }
 
+  // Attempt sideways movement if upward fails
   if (!moved) {
     int dirs[2] = {-1, 1};
-    if (std::rand() % 2)
-      std::swap(dirs[0], dirs[1]);
+    if (std::rand() % 2) std::swap(dirs[0], dirs[1]);
     for (int dir : dirs) {
       int tx = x + dir;
       if (ctx.currentGrid.InBounds(tx, y)) {
-        const auto &props = ElementRegistry::GetProperties(
-            ctx.currentGrid.GetCurrent(tx, y).element);
+        const auto &props = ElementRegistry::GetProperties(ctx.currentGrid.GetCurrent(tx, y).element);
         if (props.passable) {
           moved = MovementSystem::TryMove(x, y, tx, y, ctx);
-          if (moved)
-            break;
+          if (moved) break;
         }
       }
     }
@@ -61,4 +77,4 @@ void UpdateSteam(int x, int y, ElementContext &ctx) {
   if (!moved)
     MovementSystem::SetNext(x, y, src, ctx);
 }
-} // namespace Materials
+} // namespace ElementsImpl
