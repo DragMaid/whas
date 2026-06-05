@@ -21,8 +21,10 @@ public:
 
   std::vector<Cell>& GetCurrentBuffer() { return m_current; }
   std::vector<Cell>& GetNextBuffer() { return m_next; }
+  std::vector<float>& GetPressureBuffer() { return m_pressure; }
 
 private:
   std::vector<Cell> m_current;
   std::vector<Cell> m_next;
+  std::vector<float> m_pressure;
 };

@@ -6,7 +6,8 @@
 // Fill the entire grid with air on init
 Grid::Grid()
     : m_current(GRID_W * GRID_H, ElementFactory::Create(Element::AIR)),
-      m_next(GRID_W * GRID_H, ElementFactory::Create(Element::AIR)) {}
+      m_next(GRID_W * GRID_H, ElementFactory::Create(Element::AIR)),
+      m_pressure(GRID_W * GRID_H, 0.0f) {}
 
 void Grid::Swap() { std::swap(m_current, m_next); }
 

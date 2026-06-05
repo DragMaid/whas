@@ -14,6 +14,9 @@ void Simulation::Update(float dt) {
   m_grid.ClearNext();
   m_chunks.BeginFrame();
 
+  ElementContext ctx{m_grid, m_chunks, m_rng};
+  PressureSystem::Update(ctx);
+
   UpdateElements();
   UpdatePhysics();
 

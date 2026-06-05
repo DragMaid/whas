@@ -25,6 +25,7 @@ set(SOURCES
     src/physics/erosion_system.cpp
     src/physics/heat_system.cpp
     src/physics/pressure_system.cpp
+    src/physics/fluid_movement_system.cpp
 
     src/element/fire.cpp
     src/element/water.cpp
