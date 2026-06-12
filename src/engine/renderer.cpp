@@ -60,10 +60,22 @@ Color Renderer::CellColor(const Cell &c) const {
   switch (c.element) {
   case Element::AIR: {
     // High pressure air looks compressed and heavy
-    float t = Clamp01(c.pressure / 20.0f);
+    float pT = Clamp01(c.pressure / 20.0f);
     Color lowPress = Color{200, 230, 255, 40};  // Faint, transparent sky
     Color highPress = Color{40, 100, 160, 180}; // Dense, heavy atmosphere
-    return LerpColor(lowPress, highPress, t);
+    Color baseCol = LerpColor(lowPress, highPress, pT);
+
+    // Temperature visualization: distinct from fire/magma
+    if (c.temperature < 15.0f) {
+      // Cold air: Frosty cyan tint
+      float tT = Clamp01((15.0f - c.temperature) / 50.0f); // 15C to -35C
+      return LerpColor(baseCol, Color{130, 255, 255, 255}, tT * 0.4f);
+    } else if (c.temperature > 35.0f) {
+      // Hot air: Warm purple/magenta haze (avoids looking like fire)
+      float tT = Clamp01((c.temperature - 35.0f) / 400.0f); // 35C to 435C
+      return LerpColor(baseCol, Color{255, 120, 255, 255}, tT * 0.4f);
+    }
+    return baseCol;
   }
   case Element::WATER: {
     // High pressure water (deep/compressed) turns dark oceanic blue

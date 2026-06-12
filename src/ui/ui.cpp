@@ -123,7 +123,14 @@ void UI::DrawInspector(Simulation &sim) {
 
   const Cell &cell = sim.GetCell(cx, cy);
 
-  ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always, ImVec2(-0.1f, 1.1f));
+  Vector2 mousePos = GetMousePosition();
+  ImVec2 pivot = ImVec2(-0.1f, 1.1f); // Default: Above-Right of cursor
+
+  // Adjust pivot if near screen edges to keep inspector visible
+  if (mousePos.y < 160) pivot.y = -0.1f;               // Too high -> Render below cursor
+  if (mousePos.x > WINDOW_WIDTH - 200) pivot.x = 1.1f; // Too far right -> Render left of cursor
+
+  ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always, pivot);
   ImGui::Begin("Inspector", nullptr, 
                ImGuiWindowFlags_NoTitleBar | 
                ImGuiWindowFlags_NoResize | 
