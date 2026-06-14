@@ -1,6 +1,7 @@
 #pragma once
 #include "whas/element/base/properties.h"
 #include "whas/physics/fluid_properties.h"
+
 struct WorldConfig {
   float gravity = 1.0f;
   float pressureEq = 0.15f;

@@ -25,28 +25,28 @@ void IntegrateVelocity(Cell &cell, const LiquidProperties &props,
   // TODO: the impelementation of gravity for such small scale pixel
   // simulation can lead to super weird interaction, such as some droplets
   // falling way faster than others
-  cell.velocityY = ctx.config.world.gravity;
+  cell.vy = ctx.config.world.gravity;
 
-  cell.velocityY = std::min(cell.velocityY, props.maxFallSpeed);
+  cell.vy = std::min(cell.vy, props.maxFallSpeed);
 
-  cell.velocityX = std::clamp(cell.velocityX, -props.maxHorizontalSpeed,
+  cell.vx = std::clamp(cell.vx, -props.maxHorizontalSpeed,
                               props.maxHorizontalSpeed);
 }
 
 bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
              ElementContext &ctx) {
-  int steps = std::max(1, (int)std::round(cell.velocityY));
+  int steps = std::max(1, (int)std::round(cell.vy));
   int furthestY = y;
 
   for (int s = 1; s <= steps; ++s) {
     int nextY = y + s;
 
-    if (!ctx.currentGrid.InBounds(x, nextY)) {
-      cell.velocityY = 0.0f;
+    if (!ctx.grid.InBounds(x, nextY)) {
+      cell.vy = 0.0f;
       break;
     }
 
-    const Cell &target = ctx.currentGrid.GetCurrent(x, nextY);
+    const Cell &target = ctx.grid.Get(x, nextY);
 
     if (IsPassableForLiquid(target, props)) {
       furthestY = nextY;
@@ -58,7 +58,7 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
       if (ErosionSystem::TryErode(x, y, x, nextY, cell, ctx))
         return true;
 
-      cell.velocityY = 0.0f;
+      cell.vy = 0.0f;
     }
 
     break;
@@ -70,26 +70,34 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
   return MovementSystem::TryMove(x, y, x, furthestY, cell, ctx);
 }
 
-float ComputeSpreadPower(int x, int y, const LiquidProperties &props,
-                         ElementContext &ctx) {
-  float pressure = PressureSystem::GetPressure(x, y, ctx.currentGrid);
+float ComputeSpreadPower(int x, int y, const Cell &cell,
+                         const LiquidProperties &props, ElementContext &ctx) {
+  float pressure = PressureSystem::GetPressure(x, y, ctx.grid);
 
-  return (1.0f + pressure * props.spreadFactor) * (1.0f - props.viscosity);
+  // Combine pressure and existing speed
+  float drivingForce = pressure * props.spreadFactor + std::abs(cell.vx);
+
+  // If there's no pressure/speed, give it a baseline of 1.0 so it can at least
+  // flow sideways to flatten a pile.
+  if (drivingForce < 1.0f) {
+    drivingForce = 1.0f;
+  }
+
+  return drivingForce * (1.0f - props.viscosity);
 }
 
 bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
                         const LiquidProperties &props, ElementContext &ctx) {
   int spreadSteps = std::max(1, (int)std::round(spreadPower));
-
   int furthestX = x;
 
   for (int s = 1; s <= spreadSteps; ++s) {
     int nextX = x + dir * s;
 
-    if (!ctx.currentGrid.InBounds(nextX, y))
+    if (!ctx.grid.InBounds(nextX, y))
       break;
 
-    const Cell &target = ctx.currentGrid.GetCurrent(nextX, y);
+    const Cell &target = ctx.grid.Get(nextX, y);
 
     if (IsPassableForLiquid(target, props)) {
       furthestX = nextX;
@@ -97,7 +105,6 @@ bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
     }
 
     if (props.canErodeTerrain && target.element == Element::EARTH) {
-
       return ErosionSystem::TryErode(x, y, nextX, y, cell, ctx);
     }
 
@@ -107,14 +114,20 @@ bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
   if (furthestX == x)
     return false;
 
-  cell.velocityX *= props.friction;
+  // Apply friction
+  cell.vx *= props.friction;
+
+  // Give it a tiny push in the direction it's flowing to encourage leveling out
+  if (std::abs(cell.vx) < 0.2f) {
+    cell.vx = dir * 0.5f;
+  }
 
   return MovementSystem::TryMove(x, y, furthestX, y, cell, ctx);
 }
 
 bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
                ElementContext &ctx) {
-  float spreadPower = ComputeSpreadPower(x, y, props, ctx);
+  float spreadPower = ComputeSpreadPower(x, y, cell, props, ctx);
 
   int dirs[2] = {-1, 1};
 
@@ -131,8 +144,13 @@ bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
 
 void Settle(int x, int y, Cell &cell, const LiquidProperties &props,
             ElementContext &ctx) {
-  cell.velocityX *= props.friction;
-  cell.velocityY = 0.0f;
+  // If can't fall and can't spread, quickly decay its horizontal velocity to 0
+  cell.vx *= (props.friction * 0.5f);
+  if (std::abs(cell.vx) < 0.1f) {
+    cell.vx = 0.0f;
+  }
+
+  cell.vy = 0.0f;
 
   MovementSystem::SetNext(x, y, cell, ctx);
 }

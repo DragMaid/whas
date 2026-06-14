@@ -24,11 +24,10 @@ struct ElementProperties {
 
   ThermalProperties thermal;
 
-  // TODO: not sure about these ones
+  // Physical traits
   float density = 0.0f;
-  int velocityX = 0.0f;
-  int velocityY = 0.0f;
-  float pressure = 0.0f;
+  float initialVx = 0.0f;
+  float initialVy = 0.0f;
 };
 
 using PropertiesArray =

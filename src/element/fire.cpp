@@ -7,7 +7,7 @@ namespace ElementsImpl {
 
 void UpdateFire(int x, int y, ElementContext &ctx) {
   const auto& fConfig = ctx.config.fire;
-  Cell src = ctx.currentGrid.GetCurrent(x, y);
+  Cell src = ctx.grid.Get(x, y);
 
   // If the fire gets too cold, it dies and turns into air
   if (src.temperature < fConfig.minTemp) {
@@ -19,8 +19,8 @@ void UpdateFire(int x, int y, ElementContext &ctx) {
   // Spontaneous Sparking
   if (std::rand() % fConfig.sparkChance == 0) {
     int uy = y - 1;
-    if (ctx.currentGrid.InBounds(x, uy) &&
-        ctx.currentGrid.GetCurrent(x, uy).element == Element::AIR) {
+    if (ctx.grid.InBounds(x, uy) &&
+        ctx.grid.Get(x, uy).element == Element::AIR) {
       Cell spark = ElementFactory::Create(Element::FIRE, ctx.config);
       spark.temperature = src.temperature * fConfig.sparkTempScale;
       spark.lifetime = src.lifetime * fConfig.sparkLifetimeScale;

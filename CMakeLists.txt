@@ -48,6 +48,7 @@ set(SOURCES
     src/element/steam.cpp
     src/element/cloud.cpp
     src/element/ice.cpp
+    src/element/sand.cpp
 
     src/engine/simulation.cpp
     src/engine/renderer.cpp

@@ -10,31 +10,31 @@
  */
 bool ErosionSystem::TryErode(int wx, int wy, int ex, int ey, Cell &supposed_w,
                              ElementContext &ctx) {
-  if (!ctx.currentGrid.InBounds(ex, ey))
+  if (!ctx.grid.InBounds(ex, ey))
     return false;
 
-  const Cell &supposed_e = ctx.currentGrid.GetCurrent(ex, ey);
+  const Cell &supposed_e = ctx.grid.Get(ex, ey);
 
   const auto &props = ctx.config.elements[static_cast<size_t>(supposed_e.element)];
   if (props.passable)
     return false;
 
-  float speed = std::sqrt(supposed_w.velocityX * supposed_w.velocityX +
-                          supposed_w.velocityY * supposed_w.velocityY);
+  float speed = std::sqrt(supposed_w.vx * supposed_w.vx +
+                          supposed_w.vy * supposed_w.vy);
 
   float kineticEnergy = 0.5f * supposed_w.mass * speed * speed;
 
   if (kineticEnergy >= supposed_e.hardness) {
     // Update the breaking of earth block
     Cell air = ElementFactory::Create(Element::AIR, ctx.config);
-    air.updated = true;
-    ctx.currentGrid.GetNext(ex, ey) = air;
+    air.lastUpdateFrame = ctx.frameIndex;
+    ctx.grid.Get(ex, ey) = air;
 
     float remainingEnergy = kineticEnergy - supposed_e.hardness;
     float newSpeed = std::sqrt((2.0f * remainingEnergy) / supposed_w.mass);
     float scale = (speed > 0.001f) ? newSpeed / speed : 0.0f;
-    supposed_w.velocityX *= scale;
-    supposed_w.velocityY *= scale;
+    supposed_w.vx *= scale;
+    supposed_w.vy *= scale;
 
     return MovementSystem::TryMove(wx, wy, ex, ey, supposed_w, ctx);
   }

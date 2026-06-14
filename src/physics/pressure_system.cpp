@@ -2,13 +2,13 @@
 #include "whas/constants.h"
 
 void PressureSystem::Update(ElementContext &ctx) {
-  auto &pressureBuffer = ctx.currentGrid.GetPressureBuffer();
+  auto &pressureBuffer = ctx.grid.GetPressureBuffer();
   const auto &fConfig = ctx.config.fluid;
 
   for (int x = 0; x < GRID_W; ++x) {
     float currentPressure = 0.0f;
     for (int y = 0; y < GRID_H; ++y) {
-      const Cell &cell = ctx.currentGrid.GetCurrent(x, y);
+      const Cell &cell = ctx.grid.Get(x, y);
 
       if (cell.element == Element::WATER) {
         pressureBuffer[y * GRID_W + x] = currentPressure;
@@ -33,20 +33,20 @@ float PressureSystem::GetPressure(int x, int y, Grid &grid) {
 }
 
 void PressureSystem::Propagate(int x, int y, ElementContext &ctx) {
-  Cell &source = ctx.currentGrid.GetNext(x, y);
+  Cell &source = ctx.grid.Get(x, y);
   if (source.element != Element::WATER)
     return;
 
   const int dx[2] = {-1, 1};
   for (int direction : dx) {
     int nx = x + direction;
-    if (!ctx.currentGrid.InBounds(nx, y))
+    if (!ctx.grid.InBounds(nx, y))
       continue;
 
-    Cell &target = ctx.currentGrid.GetNext(nx, y);
+    Cell &target = ctx.grid.Get(nx, y);
     if (target.element == Element::WATER) {
-      float sourceP = GetPressure(x, y, ctx.currentGrid);
-      float targetP = GetPressure(nx, y, ctx.currentGrid);
+      float sourceP = GetPressure(x, y, ctx.grid);
+      float targetP = GetPressure(nx, y, ctx.grid);
       float diff = sourceP - targetP;
       target.pressure += diff * ctx.config.world.pressureEq;
       source.pressure -= diff * ctx.config.world.pressureEq;

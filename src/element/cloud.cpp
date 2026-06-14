@@ -8,7 +8,7 @@ namespace ElementsImpl {
 
 void UpdateCloud(int x, int y, ElementContext &ctx) {
   const auto &cConfig = ctx.config.cloud;
-  Cell src = ctx.currentGrid.GetCurrent(x, y);
+  Cell src = ctx.grid.Get(x, y);
 
   // Cloud disperse
   if (src.moisture <= cConfig.minMoisture) {
@@ -21,17 +21,17 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
   float randomJitter =
       (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) * 2.0f -
       1.0f;
-  src.velocityX += randomJitter * cConfig.windJitter;
-  src.velocityX =
-      std::clamp(src.velocityX, -cConfig.maxDrift, cConfig.maxDrift);
+  src.vx += randomJitter * cConfig.windJitter;
+  src.vx =
+      std::clamp(src.vx, -cConfig.maxDrift, cConfig.maxDrift);
 
   // Ambient Rain Generation
   if (std::rand() % cConfig.rainChance == 0) {
     int ry = y + 1;
-    if (ctx.currentGrid.InBounds(x, ry) &&
-        ctx.currentGrid.GetCurrent(x, ry).element == Element::AIR) {
+    if (ctx.grid.InBounds(x, ry) &&
+        ctx.grid.Get(x, ry).element == Element::AIR) {
       Cell rain = ElementFactory::Create(Element::WATER, ctx.config);
-      rain.velocityY = cConfig.rainVelocity;
+      rain.vy = cConfig.rainVelocity;
       MovementSystem::SetNext(x, ry, rain, ctx);
       src.moisture -= cConfig.rainMoistureCost;
     }
@@ -39,18 +39,18 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
 
   // Execution of Drift Movement
   bool moved = false;
-  float absVX = std::abs(src.velocityX);
+  float absVX = std::abs(src.vx);
   if (absVX >= cConfig.moveThreshold) {
-    int dir = (src.velocityX > 0.0f) ? 1 : -1;
+    int dir = (src.vx > 0.0f) ? 1 : -1;
     int steps = std::max(1, static_cast<int>(absVX));
     int furthestX = x;
 
     for (int s = 1; s <= steps; ++s) {
       int tx = x + s * dir;
-      if (!ctx.currentGrid.InBounds(tx, y))
+      if (!ctx.grid.InBounds(tx, y))
         break;
 
-      const Cell &target = ctx.currentGrid.GetCurrent(tx, y);
+      const Cell &target = ctx.grid.Get(tx, y);
       if (target.element == Element::AIR) {
         furthestX = tx;
       } else {

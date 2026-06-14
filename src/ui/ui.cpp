@@ -147,7 +147,7 @@ void UI::DrawInspector(Simulation &sim) {
   ImGui::Text("Type: %s", GetElementName(cell.element));
   ImGui::Text("Temp: %.1f C", cell.temperature);
   ImGui::Text("Pressure: %.2f", cell.pressure);
-  ImGui::Text("Velocity: (%.2f, %.2f)", cell.velocityX, cell.velocityY);
+  ImGui::Text("Velocity: (%.2f, %.2f)", cell.vx, cell.vy);
   ImGui::Text("Mass: %.2f g", cell.mass);
   ImGui::Text("Density: %.2f g/cm3", cell.density);
   if (cell.lifetime > 0) ImGui::Text("Lifetime: %.2f s", cell.lifetime);

@@ -9,7 +9,7 @@
 namespace ElementsImpl {
 
 void UpdateWater(int x, int y, ElementContext &ctx) {
-  Cell water = ctx.currentGrid.GetCurrent(x, y);
+  Cell water = ctx.grid.Get(x, y);
 
   if (water.temperature >= WATER_BOILING_POINT) {
     Cell steam = ElementFactory::Create(Element::STEAM, ctx.config);
@@ -25,7 +25,7 @@ void UpdateWater(int x, int y, ElementContext &ctx) {
     return;
   }
 
-  water.pressure = PressureSystem::GetPressure(x, y, ctx.currentGrid);
+  water.pressure = PressureSystem::GetPressure(x, y, ctx.grid);
 
   FluidMovementSystem::UpdateLiquid(x, y, water, ctx.config.fluid.water, ctx);
 }

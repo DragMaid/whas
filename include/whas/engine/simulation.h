@@ -15,7 +15,7 @@ public:
   void Paint(int cx, int cy, Element element, int brushRadius);
   void Erase(int cx, int cy, int brushRadius);
 
-  const Cell &GetCell(int x, int y) const { return m_grid.GetCurrent(x, y); }
+  const Cell &GetCell(int x, int y) const { return m_grid.Get(x, y); }
 
   int GetActiveChunks() const { return m_chunks.GetActiveChunksCount(); }
   int GetParticleCount() const { return m_particleCount; }
@@ -28,6 +28,7 @@ public:
 private:
   SimulationConfig m_config;      // Editable source
   SimulationConfig m_frameConfig; // Per-frame snapshot
+  uint32_t m_frameCounter = 0;
 
   std::mt19937 m_rng;
 

@@ -105,6 +105,21 @@ constexpr ElementProperties MakeIce() {
           .density = 917.0f};
 }
 
+// Sand
+constexpr ElementProperties MakeSand() {
+  return {.mobile = true,
+          .solid = true,
+          .passable = false,
+          .defaultTemperature = 25.0f,
+          .defaultMass = 1.6f,
+          .defaultHardness = 50.0f,
+          .defaultLifetime = 0.0f,
+          .lifetimeDecay = 0.0f,
+          .defaultMoisture = 0.0f,
+          .thermal = {0.8f, 0.27f, 0.02f},
+          .density = 1600.0f};
+}
+
 SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::AIR)] = MakeAir();
   elements[static_cast<std::size_t>(Element::WATER)] = MakeWater();
@@ -113,4 +128,5 @@ SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::STEAM)] = MakeSteam();
   elements[static_cast<std::size_t>(Element::CLOUD)] = MakeCloud();
   elements[static_cast<std::size_t>(Element::ICE)] = MakeIce();
+  elements[static_cast<std::size_t>(Element::SAND)] = MakeSand();
 }

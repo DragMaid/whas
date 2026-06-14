@@ -12,35 +12,25 @@ Simulation::Simulation()
     : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config) {}
 
 void Simulation::Update(float dt) {
-
-  // TODO: disable all chunk activation later
-  std::vector<Chunk> &allChunks = m_chunks.GetChunks();
-  for (Chunk &c : allChunks)
-    c.Wake();
-
-  m_grid.ClearNext();
+  m_frameCounter++;
   m_chunks.BeginFrame();
 
   // Per-frame snapshotting for determinism and hot-reload safety
   m_frameConfig = m_config;
 
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
   PressureSystem::Update(ctx);
 
-  // TODO: if the element perform multitep then the the further
-  // processing will hence be skipped
   UpdateElements();
   UpdatePhysics(dt);
 
-  // Swap next state with current state
-  m_grid.Swap();
   CollectStatistics();
 }
 
 void Simulation::UpdateElements() {
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
 
-  // Shuffling the chunk indicies
+  // Shuffling the chunk indices
   std::vector<int> chunkOrder;
   const std::vector<Chunk> &allChunks = m_chunks.GetChunks();
   for (int i = 0; i < (int)allChunks.size(); ++i)
@@ -65,34 +55,29 @@ void Simulation::UpdateElements() {
     std::shuffle(cells.begin(), cells.end(), m_rng);
 
     for (const auto &[x, y] : cells) {
-      if (m_grid.GetNext(x, y).updated)
+      Cell &c = m_grid.Get(x, y);
+      if (c.lastUpdateFrame == m_frameCounter)
         continue;
 
-      const Cell &source = m_grid.GetCurrent(x, y);
-      if (source.element == Element::AIR)
+      if (c.element == Element::AIR)
         MovementSystem::Carry(x, y, ctx);
       else
-        ElementUpdateRegistry::Update(source.element, x, y, ctx);
+        ElementUpdateRegistry::Update(c.element, x, y, ctx);
     }
 
     int count = 0;
     for (int y = y0; y < y1; y++)
       for (int x = x0; x < x1; ++x)
-        if (m_grid.GetNext(x, y).element != Element::AIR)
+        if (m_grid.Get(x, y).element != Element::AIR)
           ++count;
     m_chunks.SetActiveCount(chunkCol, chunkRow, count);
   }
-
-  for (int i = 0; i < GRID_W * GRID_H; ++i)
-    if (!m_grid.GetNextBuffer()[i].updated)
-      m_grid.GetNextBuffer()[i] = m_grid.GetCurrentBuffer()[i];
 }
 
 void Simulation::UpdatePhysics(float dt) {
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
-      const Cell &source = m_grid.GetCurrent(x, y);
       HeatSystem::Propagate(x, y, ctx, dt);
       PressureSystem::Propagate(x, y, ctx);
     }
@@ -100,19 +85,6 @@ void Simulation::UpdatePhysics(float dt) {
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
-
-  // TODO: set the debug mode to invoke the singular paint here
-  bool debug = false;
-  if (debug) {
-    int x = cx;
-    int y = cy;
-    Cell c = ElementFactory::Create(element, m_config);
-    m_grid.GetCurrent(x, y) = c;
-    m_grid.GetNext(x, y) = c;
-    m_chunks.WakeChunkAt(x, y);
-    return;
-  }
-
   for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
     for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
       if (dx * dx + dy * dy > brushRadius * brushRadius)
@@ -125,8 +97,9 @@ void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
         continue;
 
       Cell c = ElementFactory::Create(element, m_config);
-      m_grid.GetCurrent(x, y) = c;
-      m_grid.GetNext(x, y) = c;
+      // Ensure painted particles aren't immediately updated this frame if we are mid-update
+      // though Paint usually happens outside Update.
+      m_grid.Get(x, y) = c;
       m_chunks.WakeChunkAt(x, y);
     }
   }
@@ -139,7 +112,7 @@ void Simulation::Erase(int cx, int cy, int brushRadius) {
 void Simulation::CollectStatistics() {
   m_particleCount = 0;
   double pSum = 0.0, tSum = 0.0;
-  for (const auto &c : m_grid.GetCurrentBuffer()) {
+  for (const auto &c : m_grid.GetBuffer()) {
     if (c.element != Element::AIR) {
       ++m_particleCount;
       pSum += c.pressure;

@@ -5,8 +5,9 @@
 #include <random>
 
 struct ElementContext {
-  Grid &currentGrid;
+  Grid &grid;
   ChunkManager &chunks;
   std::mt19937 &rng;
   const SimulationConfig &config;
+  uint32_t frameIndex;
 };

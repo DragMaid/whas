@@ -11,11 +11,12 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
     ElementsImpl::UpdateSteam,
     ElementsImpl::UpdateCloud,
     ElementsImpl::UpdateIce,
+    ElementsImpl::UpdateSand,
 };
 
 void ElementUpdateRegistry::Update(Element element, int x, int y,
                                    ElementContext &ctx) {
-  Cell &cell = ctx.currentGrid.GetCurrent(x, y);
+  Cell &cell = ctx.grid.Get(x, y);
   const auto &props = ctx.config.elements[static_cast<size_t>(element)];
 
   // Standardized Lifetime System
