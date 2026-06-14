@@ -10,6 +10,7 @@ enum class Element : uint8_t {
   CLOUD = 5,
   ICE = 6,
   SAND = 7,
+  ROCK = 8,
 
   COUNT
 };

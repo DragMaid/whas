@@ -13,6 +13,7 @@ struct ElementProperties {
   bool mobile;
   bool solid;
   bool passable;
+  bool rigidBody;
 
   float defaultTemperature;
   float defaultMass;

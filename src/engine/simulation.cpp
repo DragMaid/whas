@@ -4,7 +4,6 @@
 #include "whas/element/base/factory.h"
 #include "whas/element/base/registry.h"
 #include "whas/physics/heat_system.h"
-#include "whas/physics/movement_system.h"
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
 
@@ -30,11 +29,9 @@ void Simulation::Update(float dt) {
   m_chunks.BeginFrame();
   m_frameConfig = m_config;
 
-  // 1. Update Pressure (sequential for now as it's global-ish)
   ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
   PressureSystem::Update(ctx);
 
-  // 2. Parallel Element Update (4 passes)
   m_currentPass = 0;
   {
     std::lock_guard<std::mutex> lock(m_wakeMutex);
@@ -45,6 +42,8 @@ void Simulation::Update(float dt) {
   for (int p = 0; p < 5; ++p) {
     m_syncBarrier.arrive_and_wait();
   }
+
+  UpdatePhysics(dt);
 
   CollectStatistics();
 }
@@ -64,7 +63,6 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
     std::mt19937 threadRng(currentFrame + threadIdx);
     ElementContext ctx{m_grid, m_chunks, threadRng, m_frameConfig, currentFrame};
 
-    // 4 Checkerboard Passes
     for (int pass = 0; pass < 4; ++pass) {
       int passX = pass % 2;
       int passY = pass / 2;
@@ -82,7 +80,6 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
       m_syncBarrier.arrive_and_wait();
     }
 
-    // Finish Frame sync
     m_syncBarrier.arrive_and_wait();
     lastFrame = currentFrame;
   }
@@ -97,25 +94,17 @@ void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
   int x1 = std::min(x0 + CHUNK_SIZE, GRID_W);
   int y1 = std::min(y0 + CHUNK_SIZE, GRID_H);
 
-  // For better visual behavior, we can shuffle cell updates within chunk
-  // but for performance, a simple scan might be better. 
-  // Let's do a simple scan for now to minimize overhead.
-  
-  // Actually, Noita updates bottom-to-top for better falling behavior.
   for (int y = y1 - 1; y >= y0; --y) {
     for (int x = x0; x < x1; ++x) {
       Cell &c = m_grid.Get(x, y);
+
       if (c.lastUpdateFrame == ctx.frameIndex) continue;
-      if (c.element == Element::AIR) {
-        MovementSystem::Carry(x, y, ctx);
-        continue;
-      }
+      if (c.element == Element::AIR) continue;
 
       ElementUpdateRegistry::Update(c.element, x, y, ctx);
     }
   }
 
-  // Update Statistics for chunk
   int count = 0;
   for (int y = y0; y < y1; y++)
     for (int x = x0; x < x1; ++x)
@@ -125,12 +114,20 @@ void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
 }
 
 void Simulation::UpdateElements() {
-    // This is now handled by WorkerLoop
 }
 
 void Simulation::UpdatePhysics(float dt) {
-    // We should ideally move Heat/Pressure propagation into UpdateChunk too
-    // but for now let's keep it simple.
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
+  
+  m_rigidBodies.ExtractBodies(m_grid, ctx);
+  m_rigidBodies.Update(m_grid, dt);
+
+  for (int y = 0; y < GRID_H; ++y) {
+    for (int x = 0; x < GRID_W; ++x) {
+      HeatSystem::Propagate(x, y, ctx, dt);
+      PressureSystem::Propagate(x, y, ctx);
+    }
+  }
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {

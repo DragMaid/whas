@@ -13,7 +13,6 @@ UI::UI() {
                   Element::WATER,
                   "WATER",
                   {64, 164, 223, 255}};
-
   m_buttons[1] = {{8 + 1 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
                   Element::EARTH,
                   "EARTH",
@@ -35,6 +34,14 @@ UI::UI() {
                   "ICE",
                   {150, 240, 255, 255}};
   m_buttons[6] = {{8 + 6 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
+                  Element::SAND,
+                  "SAND",
+                  {220, 180, 100, 255}};
+  m_buttons[7] = {{8 + 7 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
+                  Element::ROCK,
+                  "ROCK",
+                  {80, 80, 80, 255}};
+  m_buttons[8] = {{8 + 8 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
                   Element::AIR,
                   "Eraser",
                   {60, 60, 60, 255}};
@@ -59,6 +66,10 @@ void UI::HandleInput(UIState &state) {
   if (IsKeyPressed(KEY_SIX))
     state.selectedMaterial = Element::ICE;
   if (IsKeyPressed(KEY_SEVEN))
+    state.selectedMaterial = Element::SAND;
+  if (IsKeyPressed(KEY_EIGHT))
+    state.selectedMaterial = Element::ROCK;
+  if (IsKeyPressed(KEY_NINE))
     state.selectedMaterial = Element::AIR;
 
   if (IsKeyPressed(KEY_F3))
@@ -82,11 +93,9 @@ void UI::HandleInput(UIState &state) {
 }
 
 void UI::Draw(UIState &state, Simulation &sim) {
-  // Panel background
   DrawRectangle(0, PANEL_Y, WINDOW_WIDTH, PANEL_HEIGHT, Color{30, 30, 40, 255});
   DrawLine(0, PANEL_Y, WINDOW_WIDTH, PANEL_Y, DARKGRAY);
 
-  // Buttons
   for (const auto &btn : m_buttons) {
     bool selected = (state.selectedMaterial == btn.element);
     DrawRectangleRec(btn.rect, selected ? WHITE : btn.col);
@@ -100,7 +109,6 @@ void UI::Draw(UIState &state, Simulation &sim) {
   DrawText(TextFormat("Brush: %d", state.brushRadius), WINDOW_WIDTH - 120,
            PANEL_Y + 20, 16, RAYWHITE);
 
-  // ImGui Windows
   rlImGuiBegin();
 
   if (state.showConfigEditor) {
@@ -124,11 +132,10 @@ void UI::DrawInspector(Simulation &sim) {
   const Cell &cell = sim.GetCell(cx, cy);
 
   Vector2 mousePos = GetMousePosition();
-  ImVec2 pivot = ImVec2(-0.1f, 1.1f); // Default: Above-Right of cursor
+  ImVec2 pivot = ImVec2(-0.1f, 1.1f);
 
-  // Adjust pivot if near screen edges to keep inspector visible
-  if (mousePos.y < 160) pivot.y = -0.1f;               // Too high -> Render below cursor
-  if (mousePos.x > WINDOW_WIDTH - 200) pivot.x = 1.1f; // Too far right -> Render left of cursor
+  if (mousePos.y < 160) pivot.y = -0.1f;
+  if (mousePos.x > WINDOW_WIDTH - 200) pivot.x = 1.1f;
 
   ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always, pivot);
   ImGui::Begin("Inspector", nullptr, 
@@ -165,6 +172,8 @@ const char* UI::GetElementName(Element element) const {
     case Element::STEAM: return "STEAM";
     case Element::CLOUD: return "CLOUD";
     case Element::ICE: return "ICE";
+    case Element::SAND: return "SAND";
+    case Element::ROCK: return "ROCK";
     default: return "UNKNOWN";
   }
 }
@@ -222,7 +231,7 @@ void UI::DrawPropertyEditor(SimulationConfig &config) {
 
 void UI::DrawElementPropertyEditor(SimulationConfig &config) {
   const char *elementNames[] = {"AIR",   "WATER", "EARTH", "FIRE",
-                                "STEAM", "CLOUD", "ICE"};
+                                "STEAM", "CLOUD", "ICE", "SAND", "ROCK"};
   static int selectedElement = 0;
 
   ImGui::Combo("Select Element", &selectedElement, elementNames,

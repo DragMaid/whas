@@ -12,6 +12,7 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
     ElementsImpl::UpdateCloud,
     ElementsImpl::UpdateIce,
     ElementsImpl::UpdateSand,
+    nullptr, // Rock
 };
 
 void ElementUpdateRegistry::Update(Element element, int x, int y,

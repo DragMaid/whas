@@ -39,5 +39,5 @@ private:
     Color col;
   };
 
-  Button m_buttons[7];
+  Button m_buttons[9];
 };

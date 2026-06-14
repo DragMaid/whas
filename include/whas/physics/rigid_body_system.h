@@ -21,7 +21,8 @@ private:
   
   struct BodyData {
       b2BodyId bodyId;
-      std::vector<std::pair<int, int>> originalPixels;
+      std::vector<std::pair<float, float>> originalPixels;
+      std::vector<Element> elements;
   };
   
   std::vector<BodyData> m_bodies;
