@@ -4,11 +4,22 @@
 #include "whas/core/element.h"
 #include "whas/world/chunk_manager.h"
 #include "whas/world/grid.h"
+#include "whas/physics/rigid_body_system.h"
 #include <random>
+#include <thread>
+#include <vector>
+#include <barrier>
+#include <atomic>
+#include <functional>
+#include <mutex>
+#include <condition_variable>
+
+struct ElementContext;
 
 class Simulation {
 public:
   Simulation();
+  ~Simulation();
 
   void Update(float dt);
 
@@ -34,6 +45,7 @@ private:
 
   Grid m_grid;
   ChunkManager m_chunks;
+  RigidBodySystem m_rigidBodies;
 
   int m_particleCount = 0;
   float m_avgPressure = 0.0f;
@@ -42,4 +54,18 @@ private:
   void UpdateElements();
   void UpdatePhysics(float dt);
   void CollectStatistics();
+
+  // Parallel Workers
+  std::vector<std::jthread> m_workers;
+  std::barrier<std::function<void()>> m_syncBarrier;
+  std::atomic<bool> m_running{true};
+  std::atomic<int> m_currentPass{0};
+  float m_lastDt = 0.0f;
+  
+  std::mutex m_wakeMutex;
+  std::condition_variable m_wakeCv;
+  std::atomic<uint32_t> m_workerFrame{0};
+
+  void WorkerLoop(int threadIdx, std::stop_token stopToken);
+  void UpdateChunk(int chunkIdx, ElementContext &ctx);
 };
