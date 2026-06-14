@@ -28,6 +28,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(rlImGui)
 
+FetchContent_Declare(
+    box2d
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    GIT_TAG main
+)
+FetchContent_MakeAvailable(box2d)
+
 set(SOURCES
     src/element/base/factory.cpp
     src/element/base/properties.cpp
@@ -41,6 +48,7 @@ set(SOURCES
     src/physics/heat_system.cpp
     src/physics/pressure_system.cpp
     src/physics/fluid_movement_system.cpp
+    src/physics/rigid_body_system.cpp
 
     src/element/fire.cpp
     src/element/water.cpp
@@ -80,10 +88,11 @@ target_include_directories(whas
     ${IMGUI_DIR}
     ${RLIMGUI_DIR}
 )
+target_link_libraries(whas PUBLIC box2d)
 
 add_executable(whasg src/main.cpp)
 # target_link_libraries(whasg PRIVATE whas)
 # target_link_libraries(whasg PRIVATE raylib rlimgui imgui)
-target_link_libraries(whasg PRIVATE whas raylib rlimgui imgui)
+target_link_libraries(whasg PRIVATE whas raylib rlimgui imgui box2d)
 
 install(TARGETS whasg DESTINATION bin)

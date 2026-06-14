@@ -3,18 +3,42 @@
 #include "whas/physics/movement_system.h"
 #include <algorithm>
 #include <vector>
+#include <cmath>
 
 namespace ElementsImpl {
 
 void UpdateSand(int x, int y, ElementContext &ctx) {
   Cell sand = ctx.grid.Get(x, y);
 
-  // Try move down
-  if (MovementSystem::TryMove(x, y, x, y + 1, sand, ctx)) {
-    return;
+  // Apply Gravity
+  sand.vy += ctx.config.world.gravity;
+  sand.vy = std::min(sand.vy, 10.0f); // Max fall speed
+
+  int steps = std::max(1, (int)std::round(sand.vy));
+  int furthestY = y;
+  
+  for (int s = 1; s <= steps; ++s) {
+    int nextY = y + s;
+    if (!ctx.grid.InBounds(x, nextY)) {
+        sand.vy = 0.0f;
+        break;
+    }
+    
+    const Cell &target = ctx.grid.Get(x, nextY);
+    if (target.element == Element::AIR) {
+        furthestY = nextY;
+    } else {
+        sand.vy = 0.0f;
+        break;
+    }
   }
 
-  // Try move diagonal down
+  if (furthestY > y) {
+      MovementSystem::TryMove(x, y, x, furthestY, sand, ctx);
+      return;
+  }
+
+  // Try move diagonal down (sliding)
   std::vector<int> dirs = {-1, 1};
   std::shuffle(dirs.begin(), dirs.end(), ctx.rng);
 
@@ -24,8 +48,9 @@ void UpdateSand(int x, int y, ElementContext &ctx) {
     }
   }
 
-  // If not moved, mark as updated to prevent re-processing
-  MovementSystem::Carry(x, y, ctx);
+  // If not moved, mark as updated and dampen velocity
+  sand.vy *= 0.5f;
+  MovementSystem::SetNext(x, y, sand, ctx);
 }
 
 } // namespace ElementsImpl
