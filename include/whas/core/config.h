@@ -63,7 +63,6 @@ struct EarthConfig {
 struct IceConfig {
   float meltPoint = 0.0f;
   int meltChance = 10;
-  float fireHeatGain = 2.0f;
 };
 
 struct SimulationConfig {

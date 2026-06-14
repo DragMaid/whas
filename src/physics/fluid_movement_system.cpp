@@ -27,8 +27,8 @@ void IntegrateVelocity(Cell &cell, const LiquidProperties &props,
   cell.vy = std::min(cell.vy, props.maxFallSpeed);
 
   // Horizontal velocity clamp
-  cell.vx = std::clamp(cell.vx, -props.maxHorizontalSpeed,
-                        props.maxHorizontalSpeed);
+  cell.vx =
+      std::clamp(cell.vx, -props.maxHorizontalSpeed, props.maxHorizontalSpeed);
 }
 
 bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
@@ -54,6 +54,27 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
     if (props.canErodeTerrain && target.element == Element::EARTH) {
       if (ErosionSystem::TryErode(x, y, x, nextY, cell, ctx))
         return true;
+    }
+
+    // Hit something solid: convert vertical momentum into horizontal,
+    // biased toward existing vx (or random if vx is ~0).
+    float impactSpeed = cell.vy;
+
+    if (impactSpeed > 0.1f) {
+      int dir;
+      if (std::abs(cell.vx) >= 0.1f) {
+        dir = (cell.vx >= 0.0f) ? 1 : -1;
+      } else {
+        dir = (ctx.rng() % 2) ? 1 : -1;
+      }
+
+      // Only a portion of the vertical speed becomes horizontal speed,
+      // and friction immediately bleeds it down so it doesn't sustain
+      // an infinite horizontal slide.
+      float converted = impactSpeed * (1.0f - props.viscosity) * props.friction;
+      cell.vx += dir * converted;
+      cell.vx = std::clamp(cell.vx, -props.maxHorizontalSpeed,
+                           props.maxHorizontalSpeed);
     }
 
     cell.vy = 0.0f;
@@ -82,7 +103,7 @@ float ComputeSpreadPower(int x, int y, const Cell &cell,
 
 bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
                         const LiquidProperties &props, ElementContext &ctx) {
-  int spreadSteps = std::max(1, (int)std::round(spreadPower));
+  int spreadSteps = std::clamp((int)std::round(spreadPower), 1, 3);
   int furthestX = x;
 
   for (int s = 1; s <= spreadSteps; ++s) {
@@ -111,16 +132,13 @@ bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
   // Apply friction
   cell.vx *= props.friction;
 
-  // Maintain momentum in the direction we moved
-  if (std::abs(cell.vx) < 0.5f) {
-    cell.vx = dir * 0.5f;
-  }
-
   return MovementSystem::TryMove(x, y, furthestX, y, cell, ctx);
 }
 
 bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
                ElementContext &ctx) {
+  if (cell.pressure < 0.05f && std::abs(cell.vx) < 0.1f)
+    return false;
   float spreadPower = ComputeSpreadPower(x, y, cell, props, ctx);
 
   // Bias direction based on existing vx
@@ -129,7 +147,8 @@ bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
 
   // If vx is near zero, randomize
   if (std::abs(cell.vx) < 0.1f) {
-    if (ctx.rng() % 2) std::swap(dirs[0], dirs[1]);
+    if (ctx.rng() % 2)
+      std::swap(dirs[0], dirs[1]);
   }
 
   for (int dir : dirs) {
@@ -157,6 +176,13 @@ void Settle(int x, int y, Cell &cell, const LiquidProperties &props,
 void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &props,
                   ElementContext &ctx) {
   IntegrateVelocity(cell, props, ctx);
+
+  // Special behavior: If on FIRE, try falling through it aggressively
+  if (ctx.grid.InBounds(x, y + 1) &&
+      ctx.grid.Get(x, y + 1).element == Element::FIRE) {
+    if (TryFall(x, y, cell, props, ctx))
+      return;
+  }
 
   if (TryFall(x, y, cell, props, ctx))
     return;

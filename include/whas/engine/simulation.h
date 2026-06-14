@@ -21,7 +21,7 @@ public:
   Simulation();
   ~Simulation();
 
-  void Update(float dt);
+  void Update(float dt, bool isPainting = false);
 
   void Paint(int cx, int cy, Element element, int brushRadius);
   void Erase(int cx, int cy, int brushRadius);
@@ -35,6 +35,7 @@ public:
 
   // Runtime Tuning
   SimulationConfig &GetConfig() { return m_config; }
+  RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
 
 private:
   SimulationConfig m_config;      // Editable source
@@ -52,7 +53,7 @@ private:
   float m_avgTemp = 0.0f;
 
   void UpdateElements();
-  void UpdatePhysics(float dt);
+  void UpdatePhysics(float dt, bool isPainting);
   void CollectStatistics();
 
   // Parallel Workers

@@ -23,7 +23,7 @@ Simulation::~Simulation() {
   m_wakeCv.notify_all();
 }
 
-void Simulation::Update(float dt) {
+void Simulation::Update(float dt, bool isPainting) {
   m_lastDt = dt;
   m_frameCounter++;
   m_chunks.BeginFrame();
@@ -43,7 +43,7 @@ void Simulation::Update(float dt) {
     m_syncBarrier.arrive_and_wait();
   }
 
-  UpdatePhysics(dt);
+  UpdatePhysics(dt, isPainting);
 
   CollectStatistics();
 }
@@ -116,10 +116,12 @@ void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
 void Simulation::UpdateElements() {
 }
 
-void Simulation::UpdatePhysics(float dt) {
+void Simulation::UpdatePhysics(float dt, bool isPainting) {
   ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
   
-  m_rigidBodies.ExtractBodies(m_grid, ctx);
+  if (!isPainting) {
+    m_rigidBodies.ExtractBodies(m_grid, ctx);
+  }
   m_rigidBodies.Update(m_grid, dt);
 
   for (int y = 0; y < GRID_H; ++y) {

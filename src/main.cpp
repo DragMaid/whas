@@ -33,7 +33,8 @@ int main() {
     }
 
     // Simulation tick.
-    sim.Update(dt);
+    bool isPainting = IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !ui.IsMouseOverPanel();
+    sim.Update(dt, isPainting);
 
     // Rendering
     BeginDrawing();

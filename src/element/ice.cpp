@@ -2,7 +2,6 @@
 #include "whas/element/base/factory.h"
 #include "whas/element/base/implementations.h"
 #include "whas/physics/movement_system.h"
-#include <algorithm>
 
 namespace ElementsImpl {
 
@@ -26,11 +25,6 @@ if (src.temperature > iConfig.meltPoint) {
     int nx = x + dx4[i], ny = y + dy4[i];
     if (!ctx.grid.InBounds(nx, ny))
       continue;
-    
-    const Cell &nb = ctx.grid.Get(nx, ny);
-    if (nb.element == Element::FIRE) {
-      src.temperature += iConfig.fireHeatGain;
-    }
   }
 
   MovementSystem::SetNext(x, y, src, ctx);

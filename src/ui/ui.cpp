@@ -93,6 +93,10 @@ void UI::HandleInput(UIState &state) {
 }
 
 void UI::Draw(UIState &state, Simulation &sim) {
+  if (state.debugOverlay) {
+    sim.GetRigidBodySystem().DrawDebug();
+  }
+
   DrawRectangle(0, PANEL_Y, WINDOW_WIDTH, PANEL_HEIGHT, Color{30, 30, 40, 255});
   DrawLine(0, PANEL_Y, WINDOW_WIDTH, PANEL_Y, DARKGRAY);
 
