@@ -27,6 +27,7 @@ struct ElementProperties {
 
   // Physical traits
   float density = 0.0f;
+  float restitution = 0.0f;
   float initialVx = 0.0f;
   float initialVy = 0.0f;
 };

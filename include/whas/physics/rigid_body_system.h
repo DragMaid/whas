@@ -3,6 +3,7 @@
 #include <box2d/box2d.h>
 #include <vector>
 #include <cstdint>
+#include <map>
 
 struct ElementContext;
 
@@ -11,15 +12,23 @@ public:
   RigidBodySystem();
   ~RigidBodySystem();
 
-  void Update(Grid &grid, float dt);
+  // New Noita-style update flow
+  void PreUpdate(Grid &grid, ElementContext &ctx);
+  void PostUpdate(Grid &grid, ElementContext &ctx, float dt);
+  
   void DrawDebug();
   
-  // Extract rigid bodies from the grid
-  void ExtractBodies(Grid &grid, ElementContext &ctx);
+  // Extract rigid bodies from the grid (for initial or new dynamic bodies)
+  void ExtractDynamicBodies(Grid &grid, ElementContext &ctx);
 
 private:
-  void AddGreedyShapes(b2BodyId bodyId, const std::vector<std::pair<int, int>>& pixels, 
-                      float centerX, float centerY, float density);
+  void UpdateWorldMeshes(Grid &grid, ElementContext &ctx);
+  void ProcessDisplacement(Grid &grid, ElementContext &ctx);
+  void SyncBackToGrid(Grid &grid, ElementContext &ctx);
+
+  void AddTriangulatedShapes(b2BodyId bodyId, const std::vector<bool>& mask, 
+                           int width, int height, float centerX, float centerY, 
+                           float density, float restitution);
 
   b2WorldId m_worldId;
   
@@ -32,8 +41,16 @@ private:
       int minX, maxX, minY, maxY;
       std::vector<bool> pixelMask;
       std::vector<Element> localElements;
+
+      bool shouldBreak = false;
   };
   
   std::vector<BodyData> m_bodies;
-  std::vector<b2BodyId> m_staticBodies;
+  
+  // Chunk-based world meshes
+  struct ChunkMesh {
+      b2BodyId bodyId;
+      uint32_t lastChangeFrame;
+  };
+  std::map<int, ChunkMesh> m_chunkMeshes;
 };

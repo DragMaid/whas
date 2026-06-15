@@ -34,8 +34,8 @@ bool MovementSystem::TryMove(int x, int y, int tx, int ty, Cell &moved,
   }
 
   target = moved;
-  ctx.chunks.WakeChunkAt(tx, ty);
-  ctx.chunks.WakeChunkAt(x, y);
+  ctx.chunks.WakeChunkAt(tx, ty, ctx.frameIndex);
+  ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex);
   return true;
 }
 
@@ -43,7 +43,7 @@ void MovementSystem::SetNext(int x, int y, const Cell &c, ElementContext &ctx) {
   Cell &destination = ctx.grid.Get(x, y);
   destination = c;
   destination.lastUpdateFrame = ctx.frameIndex;
-  ctx.chunks.WakeChunkAt(x, y);
+  ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex);
 }
 
 void MovementSystem::Carry(int x, int y, ElementContext &ctx) {

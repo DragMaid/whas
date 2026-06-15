@@ -30,20 +30,33 @@ void Simulation::Update(float dt, bool isPainting) {
   m_frameConfig = m_config;
 
   ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
+  
+  // 1. Inject RigidBody pixels into grid before simulation
+  m_rigidBodies.PreUpdate(m_grid, ctx);
+
   PressureSystem::Update(ctx);
 
-  m_currentPass = 0;
-  {
-    std::lock_guard<std::mutex> lock(m_wakeMutex);
-    m_workerFrame = m_frameCounter;
-  }
+  m_workerFrame = m_frameCounter;
   m_wakeCv.notify_all();
 
+  // Wait for worker threads to finish falling sand simulation
   for (int p = 0; p < 5; ++p) {
     m_syncBarrier.arrive_and_wait();
   }
 
-  UpdatePhysics(dt, isPainting);
+  // 2. Extract and Step Physics (Post simulation)
+  if (!isPainting) {
+    m_rigidBodies.ExtractDynamicBodies(m_grid, ctx);
+  }
+  m_rigidBodies.PostUpdate(m_grid, ctx, dt);
+
+  // Heat and Pressure propagation
+  for (int y = 0; y < GRID_H; ++y) {
+    for (int x = 0; x < GRID_W; ++x) {
+      HeatSystem::Propagate(x, y, ctx, dt);
+      PressureSystem::Propagate(x, y, ctx);
+    }
+  }
 
   CollectStatistics();
 }
@@ -116,23 +129,8 @@ void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
 void Simulation::UpdateElements() {
 }
 
-void Simulation::UpdatePhysics(float dt, bool isPainting) {
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
-  
-  if (!isPainting) {
-    m_rigidBodies.ExtractBodies(m_grid, ctx);
-  }
-  m_rigidBodies.Update(m_grid, dt);
-
-  for (int y = 0; y < GRID_H; ++y) {
-    for (int x = 0; x < GRID_W; ++x) {
-      HeatSystem::Propagate(x, y, ctx, dt);
-      PressureSystem::Propagate(x, y, ctx);
-    }
-  }
-}
-
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
+
   for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
     for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
       if (dx * dx + dy * dy > brushRadius * brushRadius)
@@ -146,7 +144,7 @@ void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
 
       Cell c = ElementFactory::Create(element, m_config);
       m_grid.Get(x, y) = c;
-      m_chunks.WakeChunkAt(x, y);
+      m_chunks.WakeChunkAt(x, y, m_frameCounter);
     }
   }
 }

@@ -3,14 +3,12 @@
 #include "whas/constants.h"
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
+#include "whas/physics/geometry_utils.h"
 #include <algorithm>
 #include <cmath>
 #include <queue>
 
 namespace {
-// Combines index1 and generation into a single 32-bit ID so that reused
-// Box2D body slots (same index1, new generation) don't alias old grid
-// markers left behind after b2DestroyBody.
 inline int32_t MakeBodyID(b2BodyId id) {
   return (static_cast<int32_t>(id.index1) << 16) |
          (static_cast<int32_t>(id.generation) & 0xFFFF);
@@ -21,92 +19,158 @@ RigidBodySystem::RigidBodySystem() {
   b2WorldDef worldDef = b2DefaultWorldDef();
   worldDef.gravity = {0.0f, 9.8f};
   m_worldId = b2CreateWorld(&worldDef);
-
-  // Create a static floor at the bottom
-  b2BodyDef groundBodyDef = b2DefaultBodyDef();
-  groundBodyDef.position = {(float)GRID_W / 2.0f, (float)GRID_H};
-  b2BodyId groundId = b2CreateBody(m_worldId, &groundBodyDef);
-
-  b2Polygon groundBox = b2MakeBox((float)GRID_W / 2.0f, 1.0f);
-  b2ShapeDef groundShapeDef = b2DefaultShapeDef();
-  b2CreatePolygonShape(groundId, &groundShapeDef, &groundBox);
 }
 
 RigidBodySystem::~RigidBodySystem() { b2DestroyWorld(m_worldId); }
 
-void RigidBodySystem::Update(Grid &grid, float dt) {
-  SimulationConfig defaultConfig;
+void RigidBodySystem::PreUpdate(Grid &grid, ElementContext &ctx) {
+    SimulationConfig defaultConfig;
+    // Inject RigidBody pixels into the grid as solid
+    for (auto &bodyData : m_bodies) {
+        b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
+        b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
+        const int32_t selfID = MakeBodyID(bodyData.bodyId);
 
-  // 1. Clear old pixels and handle "damage"
-  for (auto it = m_bodies.begin(); it != m_bodies.end();) {
-    auto &bodyData = *it;
-    b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
-    b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
+        for (size_t i = 0; i < bodyData.originalPixels.size(); ++i) {
+            auto &p = bodyData.originalPixels[i];
+            int tx = static_cast<int>(std::round(pos.x + p.first * rot.c - p.second * rot.s));
+            int ty = static_cast<int>(std::round(pos.y + p.first * rot.s + p.second * rot.c));
 
-    bool bodyBroken = false;
-    const int32_t selfID = MakeBodyID(bodyData.bodyId);
-
-    // Check if any pixels were removed/changed
-    for (size_t i = 0; i < bodyData.originalPixels.size(); ++i) {
-      auto &p = bodyData.originalPixels[i];
-      int tx = static_cast<int>(
-          std::round(pos.x + p.first * rot.c - p.second * rot.s));
-      int ty = static_cast<int>(
-          std::round(pos.y + p.first * rot.s + p.second * rot.c));
-
-      if (grid.InBounds(tx, ty)) {
-        Cell &c = grid.Get(tx, ty);
-        if (c.bodyID != selfID || c.element != bodyData.elements[i]) {
-          bodyBroken = true;
-          break;
+            if (grid.InBounds(tx, ty)) {
+                Cell &c = grid.Get(tx, ty);
+                // Temporarily mark as solid for the pixel simulation
+                c.element = bodyData.elements[i];
+                c.bodyID = selfID;
+            }
         }
-      } else {
-        bodyBroken = true;
-        break;
-      }
     }
+}
 
-    if (bodyBroken) {
-      for (size_t i = 0; i < bodyData.originalPixels.size(); ++i) {
-        auto &p = bodyData.originalPixels[i];
-        int tx = static_cast<int>(
-            std::round(pos.x + p.first * rot.c - p.second * rot.s));
-        int ty = static_cast<int>(
-            std::round(pos.y + p.first * rot.s + p.second * rot.c));
-        if (grid.InBounds(tx, ty)) {
-          Cell &c = grid.Get(tx, ty);
-          if (c.bodyID == selfID)
-            c.bodyID = -1;
+void RigidBodySystem::PostUpdate(Grid &grid, ElementContext &ctx, float dt) {
+    // 1. Remove RigidBody pixels from grid (they will be synced back at new positions)
+    SimulationConfig defaultConfig;
+    for (auto &bodyData : m_bodies) {
+        b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
+        b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
+        const int32_t selfID = MakeBodyID(bodyData.bodyId);
+
+        for (size_t i = 0; i < bodyData.originalPixels.size(); ++i) {
+            auto &p = bodyData.originalPixels[i];
+            int tx = static_cast<int>(std::round(pos.x + p.first * rot.c - p.second * rot.s));
+            int ty = static_cast<int>(std::round(pos.y + p.first * rot.s + p.second * rot.c));
+
+            if (grid.InBounds(tx, ty)) {
+                Cell &c = grid.Get(tx, ty);
+                if (c.bodyID == selfID) {
+                    c = ElementFactory::Create(Element::AIR, ctx.config);
+                }
+            }
         }
-      }
-      b2DestroyBody(bodyData.bodyId);
-      it = m_bodies.erase(it);
-      continue;
     }
 
-    // Clear for movement
-    for (size_t i = 0; i < bodyData.originalPixels.size(); ++i) {
-      auto &p = bodyData.originalPixels[i];
-      int tx = static_cast<int>(
-          std::round(pos.x + p.first * rot.c - p.second * rot.s));
-      int ty = static_cast<int>(
-          std::round(pos.y + p.first * rot.s + p.second * rot.c));
-      if (grid.InBounds(tx, ty)) {
-        grid.Get(tx, ty) = ElementFactory::Create(Element::AIR, defaultConfig);
-      }
+    // 2. Update World Meshes (Chunk-based static collision)
+    UpdateWorldMeshes(grid, ctx);
+
+    // 3. Step Physics
+    b2World_Step(m_worldId, dt, 4);
+
+    // 4. Process Displacement & Drag
+    ProcessDisplacement(grid, ctx);
+
+    // 5. Sync back to grid
+    SyncBackToGrid(grid, ctx);
+}
+
+void RigidBodySystem::UpdateWorldMeshes(Grid &grid, ElementContext &ctx) {
+    // For each chunk near a rigid body, regenerate mesh if changed
+    // For simplicity in this refactor, we'll check all active chunks
+    for (int cy = 0; cy < CHUNK_ROWS; ++cy) {
+        for (int cx = 0; cx < CHUNK_COLS; ++cx) {
+            int chunkIdx = cy * CHUNK_COLS + cx;
+            auto& chunk = ctx.chunks.GetChunk(cx, cy);
+            
+            bool needsRegen = (m_chunkMeshes.find(chunkIdx) == m_chunkMeshes.end()) || 
+                              (m_chunkMeshes[chunkIdx].lastChangeFrame < chunk.lastChangeFrame);
+
+            if (needsRegen) {
+                if (m_chunkMeshes.count(chunkIdx)) {
+                    b2DestroyBody(m_chunkMeshes[chunkIdx].bodyId);
+                }
+
+                // Generate mask for EARTH/Solid pixels in this chunk
+                int x0 = cx * CHUNK_SIZE, y0 = cy * CHUNK_SIZE;
+                std::vector<bool> mask(CHUNK_SIZE * CHUNK_SIZE, false);
+                bool hasSolid = false;
+                for (int ly = 0; ly < CHUNK_SIZE; ++ly) {
+                    for (int lx = 0; lx < CHUNK_SIZE; ++lx) {
+                        if (grid.InBounds(x0 + lx, y0 + ly)) {
+                            const Cell& c = grid.Get(x0 + lx, y0 + ly);
+                            if (c.element == Element::EARTH) {
+                                mask[ly * CHUNK_SIZE + lx] = true;
+                                hasSolid = true;
+                            }
+                        }
+                    }
+                }
+
+                if (hasSolid) {
+                    b2BodyDef bodyDef = b2DefaultBodyDef();
+                    bodyDef.type = b2_staticBody;
+                    bodyDef.position = {(float)x0, (float)y0};
+                    b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
+                    
+                    const auto& props = ctx.config.elements[static_cast<size_t>(Element::EARTH)];
+                    AddTriangulatedShapes(bodyId, mask, CHUNK_SIZE, CHUNK_SIZE, 0, 0, props.density, props.restitution);
+                    m_chunkMeshes[chunkIdx] = {bodyId, chunk.lastChangeFrame};
+                } else {
+                    m_chunkMeshes.erase(chunkIdx);
+                }
+            }
+        }
     }
-    ++it;
-  }
+}
 
-  // 2. Step physics
-  b2World_Step(m_worldId, dt, 4);
+void RigidBodySystem::ProcessDisplacement(Grid &grid, ElementContext &ctx) {
+    for (auto &bodyData : m_bodies) {
+        b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
+        b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
+        b2Vec2 vel = b2Body_GetLinearVelocity(bodyData.bodyId);
+        float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
 
-  // 3. Sync bodies back to grid (Hole-free rendering)
+        float dragForce = 0.0f;
+
+        for (size_t i = 0; i < bodyData.originalPixels.size(); ++i) {
+            auto &p = bodyData.originalPixels[i];
+            int tx = static_cast<int>(std::round(pos.x + p.first * rot.c - p.second * rot.s));
+            int ty = static_cast<int>(std::round(pos.y + p.first * rot.s + p.second * rot.c));
+
+            if (grid.InBounds(tx, ty)) {
+                Cell &c = grid.Get(tx, ty);
+                const auto& props = ctx.config.elements[static_cast<size_t>(c.element)];
+                
+                // If it's sand or liquid and not a rigid body
+                if (c.bodyID == -1 && (c.element == Element::WATER || c.element == Element::SAND)) {
+                    // Displace: Move to AIR (in a real game, spawn particles)
+                    c = ElementFactory::Create(Element::AIR, ctx.config);
+                    dragForce += props.density * 0.001f; // Simple drag based on density
+                }
+            }
+        }
+
+        if (dragForce > 0.0f && speed > 0.1f) {
+            b2Vec2 drag = {-vel.x / speed * dragForce, -vel.y / speed * dragForce};
+            b2Body_ApplyForceToCenter(bodyData.bodyId, drag, true);
+        }
+    }
+}
+
+void RigidBodySystem::SyncBackToGrid(Grid &grid, ElementContext &ctx) {
   for (auto &bodyData : m_bodies) {
     b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
     b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
     const int32_t selfID = MakeBodyID(bodyData.bodyId);
 
+    // Use the hole-free rendering approach
     float lxmin = bodyData.minX - 0.5f, lxmax = bodyData.maxX + 0.5f;
     float lymin = bodyData.minY - 0.5f, lymax = bodyData.maxY + 0.5f;
 
@@ -135,26 +199,33 @@ void RigidBodySystem::Update(Grid &grid, float dt) {
 
     for (int ty = wMinY; ty <= wMaxY; ++ty) {
       for (int tx = wMinX; tx <= wMaxX; ++tx) {
-        float dx = tx - pos.x;
-        float dy = ty - pos.y;
+        float dx = (float)tx - pos.x;
+        float dy = (float)ty - pos.y;
         float lx = dx * rot.c + dy * rot.s;
         float ly = -dx * rot.s + dy * rot.c;
 
-        int ilx = (int)std::round(lx);
-        int ily = (int)std::round(ly);
+        int ilx = (int)std::floor(lx + 0.5f);
+        int ily = (int)std::floor(ly + 0.5f);
 
         if (ilx >= bodyData.minX && ilx <= bodyData.maxX &&
             ily >= bodyData.minY && ily <= bodyData.maxY) {
           int idx = (ily - bodyData.minY) * maskW + (ilx - bodyData.minX);
-
-          // Defensive bounds check: guards against any future
-          // mismatch between min/max bounds and mask dimensions.
-          if (idx < 0 || idx >= maskSize)
-            continue;
-
-          if (bodyData.pixelMask[idx]) {
+          if (idx >= 0 && idx < maskSize && bodyData.pixelMask[idx]) {
             Cell &c = grid.Get(tx, ty);
-            if (c.element == Element::AIR || c.bodyID == selfID) {
+
+            // Splash effect: If we are moving fast and hit water
+            if (c.element == Element::WATER && c.bodyID == -1) {
+                b2Vec2 vel = b2Body_GetLinearVelocity(bodyData.bodyId);
+                float speedSq = vel.x * vel.x + vel.y * vel.y;
+                if (speedSq > 25.0f) { // Speed threshold for splash
+                    c.vy += vel.y * 0.1f;
+                    c.vx += vel.x * 0.1f;
+                    // Wake up the water
+                    ctx.chunks.WakeChunkAt(tx, ty, ctx.frameIndex);
+                }
+            }
+
+            if (c.bodyID == -1 || c.bodyID == selfID) {
               c.element = bodyData.localElements[idx];
               c.bodyID = selfID;
             }
@@ -165,245 +236,119 @@ void RigidBodySystem::Update(Grid &grid, float dt) {
   }
 }
 
-void RigidBodySystem::DrawDebug() {
-  for (auto &bodyData : m_bodies) {
-    b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
-    b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
-
-    int width = bodyData.maxX - bodyData.minX + 1;
-    int height = bodyData.maxY - bodyData.minY + 1;
-
-    // Draw pixel mask
-    for (int ly = 0; ly < height; ++ly) {
-      for (int lx = 0; lx < width; ++lx) {
-        if (bodyData.pixelMask[ly * width + lx]) {
-          float localX = bodyData.minX + lx;
-          float localY = bodyData.minY + ly;
-          float tx = pos.x + localX * rot.c - localY * rot.s;
-          float ty = pos.y + localX * rot.s + localY * rot.c;
-          DrawPixel((int)(tx * CELL_SIZE), (int)(ty * CELL_SIZE),
-                    Fade(GREEN, 0.4f));
-        }
-      }
-    }
-
-    // Draw hitboxes
-    int shapeCount = b2Body_GetShapeCount(bodyData.bodyId);
-    if (shapeCount > 0) {
-      std::vector<b2ShapeId> shapes(shapeCount);
-      b2Body_GetShapes(bodyData.bodyId, shapes.data(), shapeCount);
-
-      for (auto shapeId : shapes) {
-        b2Polygon poly = b2Shape_GetPolygon(shapeId);
-        for (int i = 0; i < poly.count; ++i) {
-          int next = (i + 1) % poly.count;
-          b2Vec2 p1 = b2TransformPoint({pos, rot}, poly.vertices[i]);
-          b2Vec2 p2 = b2TransformPoint({pos, rot}, poly.vertices[next]);
-          DrawLine((int)(p1.x * CELL_SIZE), (int)(p1.y * CELL_SIZE),
-                   (int)(p2.x * CELL_SIZE), (int)(p2.y * CELL_SIZE), RED);
-        }
-      }
-    }
-  }
-}
-
-void RigidBodySystem::ExtractBodies(Grid &grid, ElementContext &ctx) {
-  for (auto bodyId : m_staticBodies)
-    b2DestroyBody(bodyId);
-  m_staticBodies.clear();
-
+void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx) {
   std::vector<bool> visited(GRID_W * GRID_H, false);
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
-      Cell &c = grid.Get(x, y);
-      if (c.element == Element::EARTH)
-        c.bodyID = -1;
-    }
-  }
-
-  for (int y = 0; y < GRID_H; ++y) {
-    for (int x = 0; x < GRID_W; ++x) {
       int idx = y * GRID_W + x;
-      if (visited[idx])
-        continue;
+      if (visited[idx]) continue;
 
       Cell &cell = grid.Get(x, y);
-      const auto &props =
-          ctx.config.elements[static_cast<size_t>(cell.element)];
-      bool isDynamic = props.rigidBody;
-      bool isStatic = (cell.element == Element::EARTH);
+      const auto &props = ctx.config.elements[static_cast<size_t>(cell.element)];
 
-      if ((isDynamic || isStatic) && cell.bodyID == -1) {
-        std::vector<std::pair<int, int>> componentPixels;
-        std::vector<Element> componentElements;
+      if (props.rigidBody && cell.bodyID == -1) {
+        std::vector<std::pair<int, int>> pixels;
         std::queue<std::pair<int, int>> q;
-
         q.push({x, y});
         visited[idx] = true;
         float sumX = 0, sumY = 0;
         Element startElement = cell.element;
 
         while (!q.empty()) {
-          auto [cx, cy] = q.front();
-          q.pop();
-          componentPixels.push_back({cx, cy});
-          componentElements.push_back(grid.Get(cx, cy).element);
-          sumX += cx;
-          sumY += cy;
-
-          int dx[] = {0, 0, 1, -1}, dy[] = {1, -1, 0, 0};
-          for (int i = 0; i < 4; ++i) {
-            int nx = cx + dx[i], ny = cy + dy[i];
-            if (grid.InBounds(nx, ny)) {
-              int nidx = ny * GRID_W + nx;
-              if (!visited[nidx]) {
-                Cell &nb = grid.Get(nx, ny);
-                if (nb.element == startElement && nb.bodyID == -1) {
-                  visited[nidx] = true;
-                  q.push({nx, ny});
-                }
-              }
+          auto [cx, cy] = q.front(); q.pop();
+          pixels.push_back({cx, cy});
+          sumX += cx; sumY += cy;
+          int dx[] = {0,0,1,-1}, dy[] = {1,-1,0,0};
+          for(int i=0; i<4; ++i) {
+            int nx = cx+dx[i], ny = cy+dy[i];
+            if (grid.InBounds(nx, ny) && !visited[ny*GRID_W+nx] && grid.Get(nx, ny).element == startElement) {
+              visited[ny*GRID_W+nx] = true;
+              q.push({nx, ny});
             }
           }
         }
 
-        if (componentPixels.empty())
-          continue;
-
-        float centerX = sumX / componentPixels.size();
-        float centerY = sumY / componentPixels.size();
-
+        float centerX = sumX / pixels.size(), centerY = sumY / pixels.size();
         b2BodyDef bodyDef = b2DefaultBodyDef();
-        bodyDef.type = isDynamic ? b2_dynamicBody : b2_staticBody;
+        bodyDef.type = b2_dynamicBody;
         bodyDef.position = {centerX, centerY};
         b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
 
-        AddGreedyShapes(bodyId, componentPixels, centerX, centerY,
-                        props.density);
-
-        if (isDynamic) {
-          BodyData data;
-          data.bodyId = bodyId;
-          int minX = componentPixels[0].first, maxX = minX;
-          int minY = componentPixels[0].second, maxY = minY;
-          for (auto &p : componentPixels) {
-            minX = std::min(minX, p.first);
-            maxX = std::max(maxX, p.first);
-            minY = std::min(minY, p.second);
-            maxY = std::max(maxY, p.second);
-          }
-
-          data.minX = (int)std::floor(minX - centerX);
-          data.maxX = (int)std::ceil(maxX - centerX);
-          data.minY = (int)std::floor(minY - centerY);
-          data.maxY = (int)std::ceil(maxY - centerY);
-
-          int width = data.maxX - data.minX + 1;
-          int height = data.maxY - data.minY + 1;
-          data.pixelMask.assign(width * height, false);
-          data.localElements.assign(width * height, Element::AIR);
-
-          const int32_t newBodyID = MakeBodyID(bodyId);
-
-          for (size_t i = 0; i < componentPixels.size(); ++i) {
-            auto &p = componentPixels[i];
-            int lx = (int)std::round(p.first - centerX);
-            int ly = (int)std::round(p.second - centerY);
-
-            // round() can land one cell outside the floor/ceil
-            // derived [minX, maxX] x [minY, maxY] range (e.g. when
-            // (p - center) is exactly N.5 and rounds away from the
-            // bound). Clamp before indexing to avoid an
-            // out-of-bounds heap write into pixelMask/localElements.
-            lx = std::clamp(lx, data.minX, data.maxX);
-            ly = std::clamp(ly, data.minY, data.maxY);
-
-            int kidx = (ly - data.minY) * width + (lx - data.minX);
-            if (kidx < 0 || kidx >= width * height)
-              continue;
-
-            data.pixelMask[kidx] = true;
-            data.localElements[kidx] = componentElements[i];
-            data.originalPixels.push_back({(float)lx, (float)ly});
-            data.elements.push_back(componentElements[i]);
-          }
-          m_bodies.push_back(data);
-
-          for (auto &p : componentPixels)
-            grid.Get(p.first, p.second).bodyID = newBodyID;
-        } else {
-          m_staticBodies.push_back(bodyId);
-          const int32_t staticBodyID = MakeBodyID(bodyId);
-          for (auto &p : componentPixels)
-            grid.Get(p.first, p.second).bodyID = staticBodyID;
+        int minX = pixels[0].first, maxX = minX, minY = pixels[0].second, maxY = minY;
+        for (auto &p : pixels) {
+          minX = std::min(minX, p.first); maxX = std::max(maxX, p.first);
+          minY = std::min(minY, p.second); maxY = std::max(maxY, p.second);
         }
+        int width = maxX - minX + 1, height = maxY - minY + 1;
+        std::vector<bool> mask(width * height, false);
+        for (auto &p : pixels) mask[(p.second - minY) * width + (p.first - minX)] = true;
+
+        AddTriangulatedShapes(bodyId, mask, width, height, centerX - minX, centerY - minY, props.density, props.restitution);
+
+        BodyData data;
+        data.bodyId = bodyId;
+        data.minX = (int)std::floor(minX - centerX); data.maxX = (int)std::ceil(maxX - centerX);
+        data.minY = (int)std::floor(minY - centerY); data.maxY = (int)std::ceil(maxY - centerY);
+        data.pixelMask.assign((data.maxX - data.minX + 1) * (data.maxY - data.minY + 1), false);
+        data.localElements.assign(data.pixelMask.size(), Element::AIR);
+        
+        for (auto &p : pixels) {
+            int lx = (int)std::round(p.first - centerX), ly = (int)std::round(p.second - centerY);
+            int kidx = (ly - data.minY) * (data.maxX - data.minX + 1) + (lx - data.minX);
+            data.pixelMask[kidx] = true;
+            data.localElements[kidx] = startElement;
+            data.elements.push_back(startElement);
+            data.originalPixels.push_back({(float)lx, (float)ly});
+        }
+        m_bodies.push_back(data);
       }
     }
   }
 }
 
-void RigidBodySystem::AddGreedyShapes(
-    b2BodyId bodyId, const std::vector<std::pair<int, int>> &pixels,
-    float centerX, float centerY, float density) {
-  if (pixels.empty())
-    return;
+void RigidBodySystem::AddTriangulatedShapes(b2BodyId bodyId, const std::vector<bool>& mask, 
+                                           int width, int height, float offX, float offY, 
+                                           float density, float restitution) {
+    auto loops = GeometryUtils::MarchingSquares(mask, width, height);
+    b2ShapeDef shapeDef = b2DefaultShapeDef();
+    shapeDef.density = density / 1000.0f;
+    // shapeDef.friction = 0.4f;
+    // shapeDef.restitution = restitution;
 
-  int minX = pixels[0].first, maxX = minX;
-  int minY = pixels[0].second, maxY = minY;
-  for (auto &p : pixels) {
-    minX = std::min(minX, p.first);
-    maxX = std::max(maxX, p.first);
-    minY = std::min(minY, p.second);
-    maxY = std::max(maxY, p.second);
-  }
-
-  int width = maxX - minX + 1;
-  int height = maxY - minY + 1;
-  std::vector<bool> localMask(width * height, false);
-  for (auto &p : pixels) {
-    localMask[(p.second - minY) * width + (p.first - minX)] = true;
-  }
-
-  std::vector<bool> used = localMask;
-  b2ShapeDef shapeDef = b2DefaultShapeDef();
-  shapeDef.density = density / 1000.0f;
-  // TODO: add the friction later
-  // shapeDef.friction = 0.3f;
-
-  for (int ly = 0; ly < height; ++ly) {
-    for (int lx = 0; lx < width; ++lx) {
-      if (used[ly * width + lx]) {
-        int rw = 0;
-        while (lx + rw < width && used[ly * width + lx + rw])
-          rw++;
-
-        int rh = 1;
-        while (ly + rh < height) {
-          bool rowAllGood = true;
-          for (int i = 0; i < rw; ++i) {
-            if (!used[(ly + rh) * width + lx + i]) {
-              rowAllGood = false;
-              break;
+    for (auto& loop : loops) {
+        auto simplified = GeometryUtils::DouglasPeucker(loop, 0.5f);
+        auto triangles = GeometryUtils::Triangulate(simplified);
+        for (auto& tri : triangles) {
+            b2Vec2 points[3];
+            for (int i = 0; i < 3; ++i) {
+                points[i] = {tri[i].x - offX, tri[i].y - offY};
             }
-          }
-          if (!rowAllGood)
-            break;
-          rh++;
+            
+            b2Hull hull = b2ComputeHull(points, 3);
+            if (hull.count == 3) {
+                b2Polygon poly = b2MakePolygon(&hull, 0.0f);
+                b2CreatePolygonShape(bodyId, &shapeDef, &poly);
+            }
         }
+    }
+}
 
-        for (int iy = ly; iy < ly + rh; ++iy) {
-          for (int ix = lx; ix < lx + rw; ++ix) {
-            used[iy * width + ix] = false;
-          }
+void RigidBodySystem::DrawDebug() {
+  for (auto &bodyData : m_bodies) {
+    b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
+    b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
+    int shapeCount = b2Body_GetShapeCount(bodyData.bodyId);
+    if (shapeCount > 0) {
+      std::vector<b2ShapeId> shapes(shapeCount);
+      b2Body_GetShapes(bodyData.bodyId, shapes.data(), shapeCount);
+      for (auto shapeId : shapes) {
+        b2Polygon poly = b2Shape_GetPolygon(shapeId);
+        for (int i = 0; i < poly.count; ++i) {
+          int next = (i + 1) % poly.count;
+          b2Vec2 p1 = b2TransformPoint({pos, rot}, poly.vertices[i]);
+          b2Vec2 p2 = b2TransformPoint({pos, rot}, poly.vertices[next]);
+          DrawLine((int)(p1.x * CELL_SIZE), (int)(p1.y * CELL_SIZE), (int)(p2.x * CELL_SIZE), (int)(p2.y * CELL_SIZE), RED);
         }
-
-        float hx = rw * 0.5f;
-        float hy = rh * 0.5f;
-        float offX = (minX + lx + hx) - centerX;
-        float offY = (minY + ly + hy) - centerY;
-
-        b2Polygon box = b2MakeOffsetBox(hx, hy, {offX, offY}, b2Rot_identity);
-        b2CreatePolygonShape(bodyId, &shapeDef, &box);
       }
     }
   }
