@@ -135,6 +135,27 @@ bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
   return MovementSystem::TryMove(x, y, furthestX, y, cell, ctx);
 }
 
+bool TrySlide(int x, int y, Cell &cell, const LiquidProperties &props,
+              ElementContext &ctx) {
+  int dirs[2] = {-1, 1};
+  if (ctx.rng() % 2)
+    std::swap(dirs[0], dirs[1]);
+
+  for (int dir : dirs) {
+    int nx = x + dir;
+    int ny = y + 1;
+
+    if (ctx.grid.InBounds(nx, ny)) {
+      const Cell &target = ctx.grid.Get(nx, ny);
+      if (IsPassableForLiquid(target, props)) {
+        if (MovementSystem::TryMove(x, y, nx, ny, cell, ctx))
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
 bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
                ElementContext &ctx) {
   if (cell.pressure < 0.05f && std::abs(cell.vx) < 0.1f)
@@ -185,6 +206,9 @@ void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &props,
   }
 
   if (TryFall(x, y, cell, props, ctx))
+    return;
+
+  if (TrySlide(x, y, cell, props, ctx))
     return;
 
   if (TrySpread(x, y, cell, props, ctx))

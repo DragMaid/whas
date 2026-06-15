@@ -402,11 +402,7 @@ void RigidBodySystem::AddGreedyShapes(
         float offX = (minX + lx + hx) - centerX;
         float offY = (minY + ly + hy) - centerY;
 
-        b2Polygon box = b2MakeBox(hx, hy);
-        for (int i = 0; i < box.count; ++i) {
-          box.vertices[i].x += offX;
-          box.vertices[i].y += offY;
-        }
+        b2Polygon box = b2MakeOffsetBox(hx, hy, {offX, offY}, b2Rot_identity);
         b2CreatePolygonShape(bodyId, &shapeDef, &box);
       }
     }
