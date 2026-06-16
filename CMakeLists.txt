@@ -50,6 +50,7 @@ set(SOURCES
     src/physics/fluid_movement_system.cpp
     src/physics/rigid_body_system.cpp
     src/physics/geometry_utils.cpp
+    src/physics/particle_system.cpp
 
     src/element/fire.cpp
     src/element/water.cpp

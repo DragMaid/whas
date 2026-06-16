@@ -5,6 +5,7 @@
 #include "whas/world/chunk_manager.h"
 #include "whas/world/grid.h"
 #include "whas/physics/rigid_body_system.h"
+#include "whas/physics/particle_system.h"
 #include <random>
 #include <thread>
 #include <vector>
@@ -36,6 +37,7 @@ public:
   // Runtime Tuning
   SimulationConfig &GetConfig() { return m_config; }
   RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
+  ParticleSystem &GetParticleSystem() { return m_particles; }
 
 private:
   SimulationConfig m_config;      // Editable source
@@ -47,6 +49,7 @@ private:
   Grid m_grid;
   ChunkManager m_chunks;
   RigidBodySystem m_rigidBodies;
+  ParticleSystem m_particles;
 
   int m_particleCount = 0;
   float m_avgPressure = 0.0f;

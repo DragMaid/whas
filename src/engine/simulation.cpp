@@ -8,7 +8,7 @@
 #include <algorithm>
 
 Simulation::Simulation()
-    : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config),
+    : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config), m_particles(),
       m_syncBarrier(std::thread::hardware_concurrency() + 1, [this]() {
         m_currentPass++;
       }) {
@@ -48,7 +48,10 @@ void Simulation::Update(float dt, bool isPainting) {
   if (!isPainting) {
     m_rigidBodies.ExtractDynamicBodies(m_grid, ctx);
   }
-  m_rigidBodies.PostUpdate(m_grid, ctx, dt);
+  m_rigidBodies.PostUpdate(m_grid, ctx, m_particles, dt);
+
+  // 3. Update Particles
+  m_particles.Update(m_grid, ctx, dt);
 
   // Heat and Pressure propagation
   for (int y = 0; y < GRID_H; ++y) {

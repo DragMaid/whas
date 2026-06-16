@@ -1,7 +1,6 @@
 #include "whas/physics/geometry_utils.h"
 #include <cmath>
 #include <algorithm>
-#include <map>
 
 namespace GeometryUtils {
 

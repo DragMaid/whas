@@ -14,7 +14,7 @@ public:
 
   // New Noita-style update flow
   void PreUpdate(Grid &grid, ElementContext &ctx);
-  void PostUpdate(Grid &grid, ElementContext &ctx, float dt);
+  void PostUpdate(Grid &grid, ElementContext &ctx, class ParticleSystem &particles, float dt);
   
   void DrawDebug();
   
@@ -23,7 +23,7 @@ public:
 
 private:
   void UpdateWorldMeshes(Grid &grid, ElementContext &ctx);
-  void ProcessDisplacement(Grid &grid, ElementContext &ctx);
+  void ProcessDisplacement(Grid &grid, ElementContext &ctx, class ParticleSystem &particles);
   void SyncBackToGrid(Grid &grid, ElementContext &ctx);
 
   void AddTriangulatedShapes(b2BodyId bodyId, const std::vector<bool>& mask, 

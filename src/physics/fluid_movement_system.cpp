@@ -22,11 +22,17 @@ bool IsPassableForLiquid(const Cell &target, const LiquidProperties &props) {
 
 void IntegrateVelocity(Cell &cell, const LiquidProperties &props,
                        ElementContext &ctx) {
-  // Accumulate downward velocity from gravity
   cell.vy += ctx.config.world.gravity;
   cell.vy = std::min(cell.vy, props.maxFallSpeed);
 
-  // Horizontal velocity clamp
+  // Continuous horizontal drag.
+  constexpr float kAirDrag = 0.85f;
+
+  cell.vx *= kAirDrag;
+
+  if (std::abs(cell.vx) < 0.05f)
+    cell.vx = 0.0f;
+
   cell.vx =
       std::clamp(cell.vx, -props.maxHorizontalSpeed, props.maxHorizontalSpeed);
 }
@@ -56,23 +62,29 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
         return true;
     }
 
-    // Hit something solid: convert vertical momentum into horizontal,
-    // biased toward existing vx (or random if vx is ~0).
     float impactSpeed = cell.vy;
 
-    if (impactSpeed > 0.1f) {
+    if (impactSpeed > 0.25f) {
       int dir;
-      if (std::abs(cell.vx) >= 0.1f) {
-        dir = (cell.vx >= 0.0f) ? 1 : -1;
+
+      if (std::abs(cell.vx) > 0.25f) {
+        // 60% keep direction
+        // 40% randomize
+
+        bool keepDirection = (ctx.rng() % 100) < 60;
+
+        if (keepDirection)
+          dir = (cell.vx > 0.0f) ? 1 : -1;
+        else
+          dir = (ctx.rng() % 2) ? 1 : -1;
       } else {
         dir = (ctx.rng() % 2) ? 1 : -1;
       }
 
-      // Only a portion of the vertical speed becomes horizontal speed,
-      // and friction immediately bleeds it down so it doesn't sustain
-      // an infinite horizontal slide.
-      float converted = impactSpeed * (1.0f - props.viscosity) * props.friction;
-      cell.vx += dir * converted;
+      constexpr float kImpactTransfer = 0.25f;
+
+      cell.vx += dir * impactSpeed * kImpactTransfer * (1.0f - props.viscosity);
+
       cell.vx = std::clamp(cell.vx, -props.maxHorizontalSpeed,
                            props.maxHorizontalSpeed);
     }
@@ -91,14 +103,13 @@ float ComputeSpreadPower(int x, int y, const Cell &cell,
                          const LiquidProperties &props, ElementContext &ctx) {
   float pressure = PressureSystem::GetPressure(x, y, ctx.grid);
 
-  // Combine pressure and existing speed
-  float drivingForce = pressure * props.spreadFactor + std::abs(cell.vx);
+  float pressureForce = pressure * props.spreadFactor;
 
-  if (drivingForce < 1.0f) {
-    drivingForce = 1.0f;
-  }
+  float momentumForce = std::abs(cell.vx) * 0.35f;
 
-  return drivingForce * (1.0f - props.viscosity);
+  float spreadPower = pressureForce + momentumForce;
+
+  return std::clamp(spreadPower, 1.0f, 3.0f);
 }
 
 bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
@@ -156,41 +167,66 @@ bool TrySlide(int x, int y, Cell &cell, const LiquidProperties &props,
   return false;
 }
 
-bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
-               ElementContext &ctx) {
-  if (cell.pressure < 0.05f && std::abs(cell.vx) < 0.1f)
-    return false;
-  float spreadPower = ComputeSpreadPower(x, y, cell, props, ctx);
+void BuildSpreadDirections(const Cell &cell, int (&dirs)[2],
+                           ElementContext &ctx) {
+  dirs[0] = -1;
+  dirs[1] = 1;
 
-  // Bias direction based on existing vx
-  int firstDir = (cell.vx >= 0.0f) ? 1 : -1;
-  int dirs[2] = {firstDir, -firstDir};
+  float speed = std::abs(cell.vx);
 
-  // If vx is near zero, randomize
-  if (std::abs(cell.vx) < 0.1f) {
+  if (speed < 0.25f) {
     if (ctx.rng() % 2)
       std::swap(dirs[0], dirs[1]);
+
+    return;
   }
 
+  int preferred = (cell.vx > 0.0f) ? 1 : -1;
+
+  bool followMomentum = (ctx.rng() % 100) < 65;
+
+  if (followMomentum) {
+    dirs[0] = preferred;
+    dirs[1] = -preferred;
+  } else {
+    dirs[0] = -preferred;
+    dirs[1] = preferred;
+  }
+}
+
+bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
+               ElementContext &ctx) {
+  float pressure = PressureSystem::GetPressure(x, y, ctx.grid);
+
+  if (pressure < 0.05f && std::abs(cell.vx) < 0.1f) {
+    return false;
+  }
+
+  float spreadPower = ComputeSpreadPower(x, y, cell, props, ctx);
+
+  int dirs[2];
+  BuildSpreadDirections(cell, dirs, ctx);
+
   for (int dir : dirs) {
-    if (TrySpreadDirection(x, y, dir, spreadPower, cell, props, ctx))
+    if (TrySpreadDirection(x, y, dir, spreadPower, cell, props, ctx)) {
       return true;
+    }
   }
 
   return false;
 }
 
-void Settle(int x, int y, Cell &cell, const LiquidProperties &props,
-            ElementContext &ctx) {
-  cell.vx *= props.friction;
-  if (std::abs(cell.vx) < 0.1f) {
-    cell.vx = 0.0f;
-  }
-
-  cell.vy *= 0.5f; // Dampen vertical velocity when hitting something
-
-  MovementSystem::SetNext(x, y, cell, ctx);
-}
+// void Settle(int x, int y, Cell &cell, const LiquidProperties &props,
+//             ElementContext &ctx) {
+//   cell.vx *= 0.7f;
+// 
+//   if (std::abs(cell.vx) < 0.05f)
+//     cell.vx = 0.0f;
+// 
+//   cell.vy *= 0.25f;
+// 
+//   MovementSystem::SetNext(x, y, cell, ctx);
+// }
 
 } // namespace
 
@@ -214,7 +250,7 @@ void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &props,
   if (TrySpread(x, y, cell, props, ctx))
     return;
 
-  Settle(x, y, cell, props, ctx);
+  // Settle(x, y, cell, props, ctx);
 }
 
 } // namespace FluidMovementSystem

@@ -21,6 +21,10 @@ void Renderer::DrawWorld(const Simulation &sim) {
       DrawRectangle(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE, col);
     }
   }
+
+  // Draw particles (needs to cast away const for Draw() if it's not marked const, 
+  // but it calls raylib DrawPixel which is global anyway)
+  const_cast<Simulation&>(sim).GetParticleSystem().Draw();
 }
 
 void Renderer::DrawDebugOverlay(const Simulation &sim) {
