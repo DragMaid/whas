@@ -33,24 +33,26 @@ void UpdateSand(int x, int y, ElementContext &ctx) {
     }
   }
 
+  bool moved = false;
   if (furthestY > y) {
-      MovementSystem::TryMove(x, y, x, furthestY, sand, ctx);
-      return;
+      moved = MovementSystem::TryMove(x, y, x, furthestY, sand, ctx);
   }
 
-  // Try move diagonal down (sliding)
-  std::vector<int> dirs = {-1, 1};
-  std::shuffle(dirs.begin(), dirs.end(), ctx.rng);
+  if (!moved) {
+    // Try move diagonal down (sliding)
+    std::vector<int> dirs = {-1, 1};
+    std::shuffle(dirs.begin(), dirs.end(), ctx.rng);
 
-  for (int dx : dirs) {
-    if (MovementSystem::TryMove(x, y, x + dx, y + 1, sand, ctx)) {
-      return;
+    for (int dx : dirs) {
+      if (MovementSystem::TryMove(x, y, x + dx, y + 1, sand, ctx)) {
+        return;
+      }
     }
-  }
 
-  // If not moved, mark as updated and dampen velocity
-  sand.vy *= 0.5f;
-  MovementSystem::SetNext(x, y, sand, ctx);
+    // If not moved, mark as updated and dampen velocity
+    sand.vy *= 0.5f;
+    MovementSystem::SetNext(x, y, sand, ctx);
+  }
 }
 
 } // namespace ElementsImpl

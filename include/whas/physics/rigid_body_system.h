@@ -53,6 +53,7 @@ private:
   struct ChunkMesh {
       b2BodyId bodyId;
       uint32_t lastChangeFrame;
+      bool active = false;
   };
-  std::map<int, ChunkMesh> m_chunkMeshes;
+  std::vector<ChunkMesh> m_chunkMeshes;
 };

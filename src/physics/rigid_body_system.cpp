@@ -4,6 +4,7 @@
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
 #include "whas/physics/geometry_utils.h"
+#include "whas/physics/movement_system.h"
 #include "whas/physics/particle_system.h"
 #include <algorithm>
 #include <cmath>
@@ -15,27 +16,6 @@ inline int32_t MakeBodyID(b2BodyId id) {
   return (static_cast<int32_t>(id.index1) << 16) |
          (static_cast<int32_t>(id.generation) & 0xFFFF);
 }
-
-// FIX 1 — DEFORMATION:
-// The old code used floor(lx + 0.5f) (i.e. round-to-nearest in local space)
-// and then iterated over the world-space bounding box of the rotated AABB.
-// This causes two problems:
-//   a) Multiple world pixels can map to the same local pixel (overdraw) while
-//      adjacent local pixels map to *no* world pixel (holes) — producing the
-//      "crumbling sphere" look during rotation.
-//   b) Clearing old pixels in PostUpdate and re-drawing them in SyncBackToGrid
-//      using the same imprecise mapping leaves orphan cells.
-//
-// Fix: iterate in LOCAL pixel space and project each pixel forward into world
-// space, then stamp exactly one world cell per local pixel. This is a
-// forward-mapping approach: for every (lx, ly) in the body's pixel list we
-// compute the world (wx, wy) and write there. No bounding-box sweep, no
-// rounding ambiguity, no holes.
-//
-// We still need a *clear* pass before the step. For clearing we use the
-// bodyID tag — every cell that has our bodyID gets wiped regardless of
-// where it ended up last frame. This is safe because we wrote the tag on
-// the previous SyncBack.
 
 inline void ProjectToWorld(float lx, float ly, b2Vec2 pos, b2Rot rot, int &wx,
                            int &wy) {
@@ -49,13 +29,18 @@ RigidBodySystem::RigidBodySystem() {
   b2WorldDef worldDef = b2DefaultWorldDef();
   worldDef.gravity = {0.0f, 9.8f};
   m_worldId = b2CreateWorld(&worldDef);
+  m_chunkMeshes.resize(CHUNK_COLS * CHUNK_ROWS);
 }
 
-RigidBodySystem::~RigidBodySystem() { b2DestroyWorld(m_worldId); }
+RigidBodySystem::~RigidBodySystem() { 
+  for (auto &mesh : m_chunkMeshes) {
+    if (mesh.active) {
+      b2DestroyBody(mesh.bodyId);
+    }
+  }
+  b2DestroyWorld(m_worldId); 
+}
 
-// ---------------------------------------------------------------------------
-// PreUpdate — damage detection & body release
-// ---------------------------------------------------------------------------
 void RigidBodySystem::PreUpdate(Grid &grid, ElementContext &ctx) {
   static int32_t nextReleaseID = -2;
 
@@ -104,19 +89,16 @@ void RigidBodySystem::PreUpdate(Grid &grid, ElementContext &ctx) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// PostUpdate — clear → mesh → step → displace → sync
-// ---------------------------------------------------------------------------
 void RigidBodySystem::PostUpdate(Grid &grid, ElementContext &ctx,
                                  ParticleSystem &particles, SimulationConfig &config, float dt) {
-  // 1. Clear old body pixels from grid using forward-mapping (FIX 1 — no holes)
+  // 1. Clear old body pixels from grid using forward-mapping
   ClearBodiesFromGrid(grid, config);
 
-  // 2. Rebuild static world meshes (only for dirty chunks — FIX 2)
+  // 2. Rebuild static world meshes (only for dirty chunks)
   UpdateWorldMeshes(grid, ctx);
 
   // 3. Step physics
-  b2World_Step(m_worldId, 1.0f / 60.0f, 4);
+  b2World_Step(m_worldId, dt, 4);
 
   // 4. Fluid displacement & drag
   ProcessDisplacement(grid, ctx, particles);
@@ -125,11 +107,10 @@ void RigidBodySystem::PostUpdate(Grid &grid, ElementContext &ctx,
   SyncBackToGrid(grid, ctx);
 }
 
-// ---------------------------------------------------------------------------
-// ClearBodiesFromGrid — FIX 1: forward-map each local pixel to world space
-// ---------------------------------------------------------------------------
 void RigidBodySystem::ClearBodiesFromGrid(Grid &grid, SimulationConfig &config) {
   for (auto &bodyData : m_bodies) {
+    if (!b2Body_IsAwake(bodyData.bodyId)) continue;
+
     b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
     b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
     const int32_t selfID = MakeBodyID(bodyData.bodyId);
@@ -147,28 +128,22 @@ void RigidBodySystem::ClearBodiesFromGrid(Grid &grid, SimulationConfig &config) 
   }
 }
 
-// ---------------------------------------------------------------------------
-// UpdateWorldMeshes — FIX 2: only regen chunks whose lastStaticChangeFrame
-// has advanced; skip the rest entirely instead of checking every chunk.
-// ---------------------------------------------------------------------------
 void RigidBodySystem::UpdateWorldMeshes(Grid &grid, ElementContext &ctx) {
   for (int cy = 0; cy < CHUNK_ROWS; ++cy) {
     for (int cx = 0; cx < CHUNK_COLS; ++cx) {
-      auto &chunk = ctx.chunks.GetChunk(cx, cy);
       int chunkIdx = cy * CHUNK_COLS + cx;
+      auto &chunk = ctx.chunks.GetChunk(cx, cy);
+      auto &mesh = m_chunkMeshes[chunkIdx];
 
       // Early-out: nothing changed since last build
-      auto it = m_chunkMeshes.find(chunkIdx);
-      if (it != m_chunkMeshes.end() &&
-          it->second.lastChangeFrame >= chunk.lastStaticChangeFrame) {
-        continue; // <-- this is the key skip that eliminates the per-frame
-                  // rebuild
+      if (mesh.active && mesh.lastChangeFrame >= chunk.lastStaticChangeFrame) {
+        continue;
       }
 
       // Destroy old body if any
-      if (it != m_chunkMeshes.end()) {
-        b2DestroyBody(it->second.bodyId);
-        m_chunkMeshes.erase(it);
+      if (mesh.active) {
+        b2DestroyBody(mesh.bodyId);
+        mesh.active = false;
       }
 
       int x0 = cx * CHUNK_SIZE, y0 = cy * CHUNK_SIZE;
@@ -179,7 +154,7 @@ void RigidBodySystem::UpdateWorldMeshes(Grid &grid, ElementContext &ctx) {
         for (int lx = 0; lx < CHUNK_SIZE; ++lx) {
           if (grid.InBounds(x0 + lx, y0 + ly)) {
             const Cell &c = grid.Get(x0 + lx, y0 + ly);
-            if (c.element == Element::EARTH) {
+            if (c.element == Element::EARTH || c.element == Element::ROCK) {
               mask[ly * CHUNK_SIZE + lx] = true;
               hasSolid = true;
             }
@@ -191,32 +166,29 @@ void RigidBodySystem::UpdateWorldMeshes(Grid &grid, ElementContext &ctx) {
         b2BodyDef bodyDef = b2DefaultBodyDef();
         bodyDef.type = b2_staticBody;
         bodyDef.position = {(float)x0, (float)y0};
-        b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
+        mesh.bodyId = b2CreateBody(m_worldId, &bodyDef);
+        mesh.lastChangeFrame = chunk.lastStaticChangeFrame;
+        mesh.active = true;
 
         const auto &props =
             ctx.config.elements[static_cast<size_t>(Element::EARTH)];
-        AddTriangulatedShapes(bodyId, mask, CHUNK_SIZE, CHUNK_SIZE, 0, 0,
+        AddTriangulatedShapes(mesh.bodyId, mask, CHUNK_SIZE, CHUNK_SIZE, 0, 0,
                               props.density, props.restitution);
-        m_chunkMeshes[chunkIdx] = {bodyId, chunk.lastStaticChangeFrame};
       }
-      // If no solid, just leave the entry absent — no body needed
     }
   }
 }
 
-// ---------------------------------------------------------------------------
-// ProcessDisplacement — unchanged logic, but uses forward-mapping (FIX 1)
-// ---------------------------------------------------------------------------
 void RigidBodySystem::ProcessDisplacement(Grid &grid, ElementContext &ctx,
                                           ParticleSystem &particles) {
   for (auto &bodyData : m_bodies) {
+    if (!b2Body_IsAwake(bodyData.bodyId)) continue;
+
     b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
     b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
     b2Vec2 vel = b2Body_GetLinearVelocity(bodyData.bodyId);
     float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
     float dragForce = 0.0f;
-
-    int maskW = bodyData.maxX - bodyData.minX + 1;
 
     for (auto &p : bodyData.originalPixels) {
       int wx, wy;
@@ -234,13 +206,21 @@ void RigidBodySystem::ProcessDisplacement(Grid &grid, ElementContext &ctx,
       c.vy += vel.y * 0.2f;
       ctx.chunks.WakeChunkAt(wx, wy, ctx.frameIndex);
 
+      bool displaced = false;
       if (speed > 4.0f) {
-        float splashChance = (speed - 4.0f) * 0.1f;
+        float splashChance = (speed - 4.0f) * 0.15f;
         if ((float)(ctx.rng() % 100) / 100.0f < splashChance) {
-          Vector2 pVel = {vel.x * 0.4f +
-                              (float)((ctx.rng() % 100) - 50) * 0.05f,
-                          vel.y * 0.4f - (float)(ctx.rng() % 50) * 0.1f};
+          Vector2 pVel = {vel.x * 0.5f + (float)((ctx.rng() % 100) - 50) * 0.1f,
+                          vel.y * 0.5f - (float)(ctx.rng() % 100) * 0.15f};
           particles.Spawn({(float)wx, (float)wy}, pVel, c.element);
+          c = ElementFactory::Create(Element::AIR, ctx.config);
+          displaced = true;
+        }
+      }
+
+      if (!displaced) {
+        Cell fluid = c;
+        if (MovementSystem::TryDisplace(wx, wy, fluid, ctx)) {
           c = ElementFactory::Create(Element::AIR, ctx.config);
         }
       }
@@ -255,11 +235,10 @@ void RigidBodySystem::ProcessDisplacement(Grid &grid, ElementContext &ctx,
   }
 }
 
-// ---------------------------------------------------------------------------
-// SyncBackToGrid — FIX 1: forward-map to avoid holes/deformation
-// ---------------------------------------------------------------------------
 void RigidBodySystem::SyncBackToGrid(Grid &grid, ElementContext &ctx) {
   for (auto &bodyData : m_bodies) {
+    if (!b2Body_IsAwake(bodyData.bodyId)) continue;
+
     b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
     b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
     const int32_t selfID = MakeBodyID(bodyData.bodyId);
@@ -289,11 +268,6 @@ void RigidBodySystem::SyncBackToGrid(Grid &grid, ElementContext &ctx) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// ExtractDynamicBodies — FIX 3: ALL orphaned rigid pixels become particles,
-// regardless of blob size. The old code only did this for blobs < 10 pixels
-// and re-extracted larger ones, leaving visible rock clumps on detach.
-// ---------------------------------------------------------------------------
 void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
                                            ParticleSystem &particles) {
   std::vector<bool> visited(GRID_W * GRID_H, false);
@@ -352,22 +326,23 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
         }
       }
 
-      // FIX 3: Orphaned blobs (released from a broken body) ALWAYS become
-      // particles and disappear — no re-extraction into a new rigid body.
-      // This eliminates the lingering rock clumps.
+      // Orphaned blobs (released from a broken body)
       if (isOrphan) {
-        for (auto &p : pixels) {
-          Cell &c = grid.Get(p.first, p.second);
-          Vector2 pVel = {(float)((ctx.rng() % 100) - 50) * 0.1f,
-                          (float)((ctx.rng() % 100) - 50) * 0.1f};
-          particles.Spawn({(float)p.first, (float)p.second}, pVel, c.element);
-          c = ElementFactory::Create(Element::AIR, ctx.config);
+        if (pixels.size() < 10) {
+          for (auto &p : pixels) {
+            Cell &c = grid.Get(p.first, p.second);
+            Vector2 pVel = {(float)((ctx.rng() % 100) - 50) * 0.1f,
+                            (float)((ctx.rng() % 100) - 50) * 0.1f};
+            particles.Spawn({(float)p.first, (float)p.second}, pVel, c.element);
+            c = ElementFactory::Create(Element::AIR, ctx.config);
+          }
+          continue;
         }
-        continue;
+        // If large enough, fall through and create a new rigid body
       }
 
-      // Fresh pixels (isFresh): small blobs crumble to particles,
-      // large blobs become a new rigid body — same as before.
+      // Fresh pixels or large orphaned blobs: small blobs crumble to particles,
+      // large blobs become a new rigid body.
       if (pixels.size() < 10) {
         for (auto &p : pixels) {
           Cell &c = grid.Get(p.first, p.second);
@@ -402,6 +377,8 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
       AddTriangulatedShapes(bodyId, mask, width, height, centerX - minX,
                             centerY - minY, props.density, props.restitution);
 
+      b2Body_ApplyMassFromShapes(bodyId);
+
       BodyData data;
       data.bodyId = bodyId;
       data.minX = (int)std::floor(minX - centerX);
@@ -428,9 +405,6 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
   }
 }
 
-// ---------------------------------------------------------------------------
-// AddTriangulatedShapes — unchanged
-// ---------------------------------------------------------------------------
 void RigidBodySystem::AddTriangulatedShapes(b2BodyId bodyId,
                                             const std::vector<bool> &mask,
                                             int width, int height, float offX,
@@ -457,13 +431,21 @@ void RigidBodySystem::AddTriangulatedShapes(b2BodyId bodyId,
   }
 }
 
-// ---------------------------------------------------------------------------
-// DrawDebug — unchanged
-// ---------------------------------------------------------------------------
 void RigidBodySystem::DrawDebug() {
   for (auto &bodyData : m_bodies) {
     b2Vec2 pos = b2Body_GetPosition(bodyData.bodyId);
     b2Rot rot = b2Body_GetRotation(bodyData.bodyId);
+    b2BodyType type = b2Body_GetType(bodyData.bodyId);
+    float mass = b2Body_GetMass(bodyData.bodyId);
+    bool isAwake = b2Body_IsAwake(bodyData.bodyId);
+
+    Color debugColor = RED;
+    if (type != b2_dynamicBody || mass <= 0.0f) {
+      debugColor = BLUE;
+    } else if (!isAwake) {
+      debugColor = ORANGE;
+    }
+
     int shapeCount = b2Body_GetShapeCount(bodyData.bodyId);
     if (shapeCount > 0) {
       std::vector<b2ShapeId> shapes(shapeCount);
@@ -475,7 +457,7 @@ void RigidBodySystem::DrawDebug() {
           b2Vec2 p1 = b2TransformPoint({pos, rot}, poly.vertices[i]);
           b2Vec2 p2 = b2TransformPoint({pos, rot}, poly.vertices[next]);
           DrawLine((int)(p1.x * CELL_SIZE), (int)(p1.y * CELL_SIZE),
-                   (int)(p2.x * CELL_SIZE), (int)(p2.y * CELL_SIZE), RED);
+                   (int)(p2.x * CELL_SIZE), (int)(p2.y * CELL_SIZE), debugColor);
         }
       }
     }

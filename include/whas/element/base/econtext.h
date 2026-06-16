@@ -10,4 +10,5 @@ struct ElementContext {
   std::mt19937 &rng;
   const SimulationConfig &config;
   uint32_t frameIndex;
+  class ParticleSystem &particles;
 };

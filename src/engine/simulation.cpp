@@ -35,7 +35,7 @@ void Simulation::Update(float dt, bool isPainting) {
   m_chunks.BeginFrame();
   m_frameConfig = m_config;
 
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter};
+  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter, m_particles};
 
   // 1. Damage check — detect erased/painted-over body pixels and release them
   m_rigidBodies.PreUpdate(m_grid, ctx);
@@ -90,7 +90,7 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
     uint32_t currentFrame = m_workerFrame;
     std::mt19937 threadRng(currentFrame + threadIdx);
     ElementContext ctx{m_grid, m_chunks, threadRng, m_frameConfig,
-                       currentFrame};
+                       currentFrame, m_particles};
 
     for (int pass = 0; pass < 4; ++pass) {
       int passX = pass % 2;

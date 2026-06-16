@@ -27,7 +27,6 @@ bool ErosionSystem::TryErode(int wx, int wy, int ex, int ey, Cell &supposed_w,
   if (kineticEnergy >= supposed_e.hardness) {
     // Update the breaking of earth block
     Cell air = ElementFactory::Create(Element::AIR, ctx.config);
-    air.lastUpdateFrame = ctx.frameIndex;
     ctx.grid.Get(ex, ey) = air;
     ctx.chunks.WakeChunkAt(ex, ey, ctx.frameIndex, true);
 

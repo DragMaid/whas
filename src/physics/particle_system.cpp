@@ -69,20 +69,26 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
 void ParticleSystem::Draw() {
   for (const auto &p : m_particles) {
     if (p.active) {
-      // Simplified: Draw a pixel with approximate element color
+      // Simplified: Draw a rectangle with approximate element color
       Color color;
       switch (p.element) {
       case Element::WATER:
-        color = BLUE;
+        color = {40, 140, 220, 255};
         break;
       case Element::SAND:
-        color = GOLD;
+        color = {220, 180, 100, 255};
+        break;
+      case Element::EARTH:
+        color = {90, 55, 30, 255};
+        break;
+      case Element::ROCK:
+        color = {100, 100, 100, 255};
         break;
       default:
         color = WHITE;
         break;
       }
-      DrawPixel((int)(p.pos.x * CELL_SIZE), (int)(p.pos.y * CELL_SIZE), color);
+      DrawRectangle((int)(p.pos.x * CELL_SIZE), (int)(p.pos.y * CELL_SIZE), CELL_SIZE, CELL_SIZE, color);
     }
   }
 }
