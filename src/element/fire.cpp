@@ -19,12 +19,13 @@ void UpdateFire(int x, int y, ElementContext &ctx) {
   // Spontaneous Sparking
   if (std::rand() % fConfig.sparkChance == 0) {
     int uy = y - 1;
-    if (ctx.grid.InBounds(x, uy) &&
-        ctx.grid.Get(x, uy).element == Element::AIR) {
+    if (ctx.grid.InBounds(x, uy)) {
       Cell spark = ElementFactory::Create(Element::FIRE, ctx.config);
-      spark.temperature = src.temperature * fConfig.sparkTempScale;
-      spark.lifetime = src.lifetime * fConfig.sparkLifetimeScale;
-      MovementSystem::SetNext(x, uy, spark, ctx);
+      if (MovementSystem::CanDisplace(spark, ctx.grid.Get(x, uy), ctx)) {
+        spark.temperature = src.temperature * fConfig.sparkTempScale;
+        spark.lifetime = src.lifetime * fConfig.sparkLifetimeScale;
+        MovementSystem::SetNext(x, uy, spark, ctx);
+      }
     }
   }
 

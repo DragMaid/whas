@@ -9,17 +9,6 @@ namespace FluidMovementSystem {
 
 namespace {
 
-bool IsPassableForLiquid(const Cell &target, const LiquidProperties &props) {
-  if (target.element == Element::AIR || target.element == Element::FIRE)
-    return true;
-
-  if (props.canDisplaceGas &&
-      (target.element == Element::STEAM || target.element == Element::CLOUD))
-    return true;
-
-  return false;
-}
-
 void IntegrateVelocity(Cell &cell, const LiquidProperties &props,
                        ElementContext &ctx) {
   cell.vy += ctx.config.world.gravity;
@@ -52,7 +41,7 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
 
     const Cell &target = ctx.grid.Get(x, nextY);
 
-    if (IsPassableForLiquid(target, props)) {
+    if (MovementSystem::CanDisplace(cell, target, ctx)) {
       furthestY = nextY;
       continue;
     }
@@ -125,7 +114,7 @@ bool TrySpreadDirection(int x, int y, int dir, float spreadPower, Cell &cell,
 
     const Cell &target = ctx.grid.Get(nextX, y);
 
-    if (IsPassableForLiquid(target, props)) {
+    if (MovementSystem::CanDisplace(cell, target, ctx)) {
       furthestX = nextX;
       continue;
     }
@@ -158,7 +147,7 @@ bool TrySlide(int x, int y, Cell &cell, const LiquidProperties &props,
 
     if (ctx.grid.InBounds(nx, ny)) {
       const Cell &target = ctx.grid.Get(nx, ny);
-      if (IsPassableForLiquid(target, props)) {
+      if (MovementSystem::CanDisplace(cell, target, ctx)) {
         if (MovementSystem::TryMove(x, y, nx, ny, cell, ctx))
           return true;
       }
@@ -216,30 +205,23 @@ bool TrySpread(int x, int y, Cell &cell, const LiquidProperties &props,
   return false;
 }
 
-// void Settle(int x, int y, Cell &cell, const LiquidProperties &props,
-//             ElementContext &ctx) {
-//   cell.vx *= 0.7f;
-// 
-//   if (std::abs(cell.vx) < 0.05f)
-//     cell.vx = 0.0f;
-// 
-//   cell.vy *= 0.25f;
-// 
-//   MovementSystem::SetNext(x, y, cell, ctx);
-// }
+void Settle(int x, int y, Cell &cell, const LiquidProperties &props,
+            ElementContext &ctx) {
+  cell.vx *= 0.7f;
+
+  if (std::abs(cell.vx) < 0.05f)
+    cell.vx = 0.0f;
+
+  cell.vy *= 0.25f;
+
+  MovementSystem::SetNext(x, y, cell, ctx);
+}
 
 } // namespace
 
 void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &props,
                   ElementContext &ctx) {
   IntegrateVelocity(cell, props, ctx);
-
-  // Special behavior: If on FIRE, try falling through it aggressively
-  if (ctx.grid.InBounds(x, y + 1) &&
-      ctx.grid.Get(x, y + 1).element == Element::FIRE) {
-    if (TryFall(x, y, cell, props, ctx))
-      return;
-  }
 
   if (TryFall(x, y, cell, props, ctx))
     return;
@@ -250,7 +232,7 @@ void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &props,
   if (TrySpread(x, y, cell, props, ctx))
     return;
 
-  // Settle(x, y, cell, props, ctx);
+  Settle(x, y, cell, props, ctx);
 }
 
 } // namespace FluidMovementSystem

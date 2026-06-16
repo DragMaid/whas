@@ -25,7 +25,7 @@ void UpdateSand(int x, int y, ElementContext &ctx) {
     }
     
     const Cell &target = ctx.grid.Get(x, nextY);
-    if (target.element == Element::AIR) {
+    if (MovementSystem::CanDisplace(sand, target, ctx)) {
         furthestY = nextY;
     } else {
         sand.vy = 0.0f;

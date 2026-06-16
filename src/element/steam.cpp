@@ -53,8 +53,7 @@ static bool TryBuoyancyMove(int x, int y, Cell &src, ElementContext &ctx) {
     if (!ctx.grid.InBounds(x, ty)) break;
     
     const Cell &target = ctx.grid.Get(x, ty);
-    const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
-    if (props.passable) {
+    if (MovementSystem::CanDisplace(src, target, ctx)) {
       furthestY = ty;
     } else {
       break;
@@ -80,8 +79,7 @@ static bool TryDriftMove(int x, int y, Cell &src, ElementContext &ctx) {
     if (!ctx.grid.InBounds(tx, y)) break;
 
     const Cell &target = ctx.grid.Get(tx, y);
-    const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
-    if (props.passable) {
+    if (MovementSystem::CanDisplace(src, target, ctx)) {
       furthestX = tx;
     } else {
       break;

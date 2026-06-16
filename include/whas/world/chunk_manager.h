@@ -7,8 +7,8 @@ public:
   ChunkManager();
 
   void BeginFrame();
-  void WakeChunkAt(int x, int y, uint32_t frameIndex);
-  void WakeNeighbourChunks(int cx, int cy, uint32_t frameIndex);
+  void WakeChunkAt(int x, int y, uint32_t frameIndex, bool staticChange = false);
+  void WakeNeighbourChunks(int cx, int cy, uint32_t frameIndex, bool staticChange = false);
 
   Chunk &GetChunk(int cx, int cy);
   const std::vector<Chunk> &GetChunks() const { return m_chunks; };

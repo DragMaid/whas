@@ -28,12 +28,13 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
   // Ambient Rain Generation
   if (std::rand() % cConfig.rainChance == 0) {
     int ry = y + 1;
-    if (ctx.grid.InBounds(x, ry) &&
-        ctx.grid.Get(x, ry).element == Element::AIR) {
+    if (ctx.grid.InBounds(x, ry)) {
       Cell rain = ElementFactory::Create(Element::WATER, ctx.config);
-      rain.vy = cConfig.rainVelocity;
-      MovementSystem::SetNext(x, ry, rain, ctx);
-      src.moisture -= cConfig.rainMoistureCost;
+      if (MovementSystem::CanDisplace(rain, ctx.grid.Get(x, ry), ctx)) {
+        rain.vy = cConfig.rainVelocity;
+        MovementSystem::SetNext(x, ry, rain, ctx);
+        src.moisture -= cConfig.rainMoistureCost;
+      }
     }
   }
 
@@ -51,7 +52,7 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
         break;
 
       const Cell &target = ctx.grid.Get(tx, y);
-      if (target.element == Element::AIR) {
+      if (MovementSystem::CanDisplace(src, target, ctx)) {
         furthestX = tx;
       } else {
         break;

@@ -2,22 +2,24 @@
 #include "whas/core/config.h"
 #include "whas/element/base/factory.h"
 
+bool MovementSystem::CanDisplace(const Cell &source, const Cell &target,
+                                 const ElementContext &ctx) {
+  if (source.element == target.element)
+    return false;
+
+  const auto &targetProps =
+      ctx.config.elements[static_cast<size_t>(target.element)];
+  return !targetProps.solid;
+}
+
 bool MovementSystem::TryMove(int x, int y, int tx, int ty, Cell &moved,
                              ElementContext &ctx) {
   if (!ctx.grid.InBounds(tx, ty))
     return false;
-
   Cell &target = ctx.grid.Get(tx, ty);
-  
-  // If target already updated this frame, we might have a collision with a moved particle
-  // In single-buffer, we should be careful. 
-  // For now, let's assume we can move into it if it's passable.
   if (target.lastUpdateFrame == ctx.frameIndex)
     return false;
-
-  const ElementProperties &targetProps =
-      ctx.config.elements[static_cast<size_t>(target.element)];
-  if (!targetProps.passable)
+  if (!CanDisplace(moved, target, ctx))
     return false;
 
   moved.lastUpdateFrame = ctx.frameIndex;
@@ -25,11 +27,63 @@ bool MovementSystem::TryMove(int x, int y, int tx, int ty, Cell &moved,
   if (target.element != Element::AIR) {
     Cell displaced = target;
     displaced.lastUpdateFrame = ctx.frameIndex;
-    ctx.grid.Get(x, y) = displaced;
+
+    static constexpr int kOffsets[8][2] = {
+        {0, -1},           // up
+        {-1, -1}, {1, -1}, // up-left, up-right
+        {-1, 0},  {1, 0},  // left, right
+        {-1, 1},  {1, 1},  // down-left, down-right
+        {0, 1},            // down (last resort)
+    };
+
+    bool pushed = false;
+
+    for (const auto &off : kOffsets) {
+      int nx = x + off[0], ny = y + off[1];
+      if (!ctx.grid.InBounds(nx, ny))
+        continue;
+
+      Cell &neighbor = ctx.grid.Get(nx, ny);
+      if (neighbor.element != Element::AIR)
+        continue;
+
+      bool hasEscapeRoute = false;
+      for (int dy2 = -1; dy2 <= 1 && !hasEscapeRoute; ++dy2) {
+        for (int dx2 = -1; dx2 <= 1; ++dx2) {
+          if (dx2 == 0 && dy2 == 0)
+            continue;
+          int ex = nx + dx2, ey = ny + dy2;
+          if (ex == x && ey == y)
+            continue; // skip the cell we're vacating
+          if (ctx.grid.InBounds(ex, ey) &&
+              ctx.grid.Get(ex, ey).element == Element::AIR) {
+            hasEscapeRoute = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasEscapeRoute)
+        continue;
+
+      neighbor = displaced;
+      pushed = true;
+      neighbor.lastUpdateFrame = ctx.frameIndex - 1;
+      ctx.chunks.WakeChunkAt(nx, ny, ctx.frameIndex);
+      break;
+    }
+
+    if (!pushed) {
+      return false;
+    }
+
+    Cell air = ElementFactory::Create(Element::AIR, ctx.config);
+    air.lastUpdateFrame = ctx.frameIndex - 1;
+    ctx.grid.Get(x, y) = air;
   } else {
     Cell air = ElementFactory::Create(Element::AIR, ctx.config);
     air.temperature = moved.temperature * 0.5f;
-    air.lastUpdateFrame = ctx.frameIndex;
+    air.lastUpdateFrame = ctx.frameIndex - 1;
     ctx.grid.Get(x, y) = air;
   }
 

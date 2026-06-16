@@ -1,4 +1,5 @@
 #pragma once
+#include "whas/core/config.h"
 #include "whas/world/grid.h"
 #include <box2d/box2d.h>
 #include <vector>
@@ -14,12 +15,12 @@ public:
 
   // New Noita-style update flow
   void PreUpdate(Grid &grid, ElementContext &ctx);
-  void PostUpdate(Grid &grid, ElementContext &ctx, class ParticleSystem &particles, float dt);
+  void PostUpdate(Grid &grid, ElementContext &ctx, class ParticleSystem &particles, SimulationConfig &config, float dt);
   
   void DrawDebug();
   
   // Extract rigid bodies from the grid (for initial or new dynamic bodies)
-  void ExtractDynamicBodies(Grid &grid, ElementContext &ctx);
+  void ExtractDynamicBodies(Grid &grid, ElementContext &ctx, class ParticleSystem &particles);
 
 private:
   void UpdateWorldMeshes(Grid &grid, ElementContext &ctx);
@@ -29,6 +30,7 @@ private:
   void AddTriangulatedShapes(b2BodyId bodyId, const std::vector<bool>& mask, 
                            int width, int height, float centerX, float centerY, 
                            float density, float restitution);
+  void ClearBodiesFromGrid(Grid &grid, SimulationConfig &config);
 
   b2WorldId m_worldId;
   

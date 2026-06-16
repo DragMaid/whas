@@ -1,4 +1,3 @@
-
 #pragma once
 #include "whas/element/base/econtext.h"
 
