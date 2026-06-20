@@ -12,5 +12,7 @@ const Cell &Grid::Get(int x, int y) const {
 }
 
 bool Grid::InBounds(int x, int y) const {
-  return x >= 0 && x < GRID_W && y >= 0 && y < GRID_H;
+  // NOTE: the damn tool bar is considered here too
+  // TODO: remove this hard-coded part for the real panel setting
+  return x >= 0 && x < GRID_W && y >= 0 && y < GRID_H - 20;
 }

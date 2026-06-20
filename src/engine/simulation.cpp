@@ -13,6 +13,7 @@ Simulation::Simulation()
                     [this]() { m_currentPass++; }) {
 
   int numThreads = std::thread::hardware_concurrency();
+  // int numThreads = 1;
   for (int i = 0; i < numThreads; ++i) {
     m_workers.emplace_back(
         [this, i](std::stop_token st) { WorkerLoop(i, st); });
@@ -51,8 +52,7 @@ void Simulation::Update(float dt, bool isPainting) {
   }
 
   // 3. Extract new rigid bodies from freshly painted pixels (skip while
-  // painting
-  //    to avoid extracting a body from an incomplete stroke).
+  // painting to avoid extracting a body from an incomplete stroke).
   if (!isPainting) {
     m_rigidBodies.ExtractDynamicBodies(m_grid, ctx, m_particles);
   }
@@ -64,6 +64,8 @@ void Simulation::Update(float dt, bool isPainting) {
   m_particles.Update(m_grid, ctx, dt);
 
   // 6. Heat & pressure propagation
+  // TODO: this doesnt gain anything from the parallelism
+  // TODO: re-consider this realistic heat transfer system later
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
       HeatSystem::Propagate(x, y, ctx, dt);
@@ -154,7 +156,7 @@ void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
       Cell c = ElementFactory::Create(element, m_config);
       m_grid.Get(x, y) = c;
       const auto &props = m_config.elements[static_cast<size_t>(element)];
-      m_chunks.WakeChunkAt(x, y, m_frameCounter, !props.mobile && props.solid);
+      m_chunks.WakeChunkAt(x, y, m_frameCounter, props.staticTerrain);
     }
   }
 }
@@ -169,7 +171,7 @@ void Simulation::Erase(int cx, int cy, int brushRadius) {
         continue;
       const Cell &c = m_grid.Get(x, y);
       const auto &props = m_config.elements[static_cast<size_t>(c.element)];
-      bool wasStatic = !props.mobile && props.solid;
+      bool wasStatic = props.staticTerrain;
       m_grid.Get(x, y) = ElementFactory::Create(Element::AIR, m_config);
       m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
     }

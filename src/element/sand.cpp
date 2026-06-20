@@ -14,7 +14,7 @@ void UpdateSand(int x, int y, ElementContext &ctx) {
   sand.vy += ctx.config.world.gravity;
   sand.vy = std::min(sand.vy, 10.0f); // Max fall speed
 
-  int steps = std::max(1, (int)std::round(sand.vy));
+  int steps = std::max(1, (int)std::floor(sand.vy));
   int furthestY = y;
   
   for (int s = 1; s <= steps; ++s) {
@@ -35,7 +35,14 @@ void UpdateSand(int x, int y, ElementContext &ctx) {
 
   bool moved = false;
   if (furthestY > y) {
-      moved = MovementSystem::TryMove(x, y, x, furthestY, sand, ctx);
+    // Try the furthest cell first; if contention occurs, try shorter distances
+    // so the grain can still progress this frame.
+    for (int ty = furthestY; ty > y; --ty) {
+      if (MovementSystem::TryMove(x, y, x, ty, sand, ctx)) {
+        moved = true;
+        break;
+      }
+    }
   }
 
   if (!moved) {

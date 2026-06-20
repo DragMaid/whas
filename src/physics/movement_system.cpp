@@ -27,12 +27,13 @@ bool MovementSystem::CanDisplace(const Cell &source, const Cell &target,
 }
 
 bool MovementSystem::TryDisplace(int x, int y, Cell &displaced, ElementContext &ctx) {
+  // Prefer placing displaced cell downward first, then sides, then up.
   static constexpr int kOffsets[8][2] = {
-      {0, -1},           // up
-      {-1, -1}, {1, -1}, // up-left, up-right
-      {-1, 0},  {1, 0},  // left, right
-      {-1, 1},  {1, 1},  // down-left, down-right
       {0, 1},            // down
+      {-1, 1}, {1, 1},   // down-left, down-right
+      {-1, 0}, {1, 0},   // left, right
+      {-1, -1}, {1, -1}, // up-left, up-right
+      {0, -1},           // up
   };
 
   for (const auto &off : kOffsets) {
@@ -41,7 +42,9 @@ bool MovementSystem::TryDisplace(int x, int y, Cell &displaced, ElementContext &
       continue;
 
     Cell &neighbor = ctx.grid.Get(nx, ny);
-    if (neighbor.element == Element::AIR) {
+    // Allow displacement into a neighbor if it's AIR or if the displaced cell
+    // can push/replace the neighbor according to movement rules.
+    if (neighbor.element == Element::AIR || CanDisplace(displaced, neighbor, ctx)) {
       neighbor = displaced;
       neighbor.lastUpdateFrame = ctx.frameIndex;
       ctx.chunks.WakeChunkAt(nx, ny, ctx.frameIndex);

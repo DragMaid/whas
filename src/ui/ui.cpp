@@ -247,6 +247,9 @@ void UI::DrawElementPropertyEditor(SimulationConfig &config) {
   ImGui::Checkbox("Mobile", &props.mobile);
   ImGui::Checkbox("Solid", &props.solid);
   ImGui::Checkbox("Passable", &props.passable);
+  ImGui::Checkbox("Rigid Body Candidate", &props.rigidBodyCandidate);
+  ImGui::Checkbox("Static Terrain", &props.staticTerrain);
+  ImGui::Checkbox("Body Movable", &props.bodyMovable);
 
   ImGui::SliderFloat("Density", &props.density, 0.0f, 5000.0f);
   ImGui::SliderFloat("Default Temp", &props.defaultTemperature, -100.0f, 2000.0f);

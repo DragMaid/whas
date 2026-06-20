@@ -9,6 +9,7 @@ namespace FluidMovementSystem {
 
 namespace {
 
+// TODO: fix the middle collapse for some reason
 void IntegrateVelocity(Cell &cell, const LiquidProperties &props,
                        ElementContext &ctx) {
   cell.vy += ctx.config.world.gravity;
@@ -85,7 +86,14 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
   if (furthestY == y)
     return false;
 
-  return MovementSystem::TryMove(x, y, x, furthestY, cell, ctx);
+  // Attempt to move to the furthest found cell; if that fails (contention),
+  // fall back to shorter distances so the element can still advance this frame.
+  for (int ty = furthestY; ty > y; --ty) {
+    if (MovementSystem::TryMove(x, y, x, ty, cell, ctx))
+      return true;
+  }
+
+  return false;
 }
 
 float ComputeSpreadPower(int x, int y, const Cell &cell,

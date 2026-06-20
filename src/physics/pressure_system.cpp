@@ -37,19 +37,20 @@ void PressureSystem::Propagate(int x, int y, ElementContext &ctx) {
   if (source.element != Element::WATER)
     return;
 
+  auto &buffer = ctx.grid.GetPressureBuffer();
+
   const int dx[2] = {-1, 1};
   for (int direction : dx) {
     int nx = x + direction;
     if (!ctx.grid.InBounds(nx, y))
       continue;
-
     Cell &target = ctx.grid.Get(nx, y);
     if (target.element == Element::WATER) {
-      float sourceP = GetPressure(x, y, ctx.grid);
-      float targetP = GetPressure(nx, y, ctx.grid);
+      float sourceP = buffer[y * GRID_W + x];
+      float targetP = buffer[y * GRID_W + nx];
       float diff = sourceP - targetP;
-      target.pressure += diff * ctx.config.world.pressureEq;
-      source.pressure -= diff * ctx.config.world.pressureEq;
+      buffer[nx + y * GRID_W] += diff * ctx.config.world.pressureEq;
+      buffer[x + y * GRID_W] -= diff * ctx.config.world.pressureEq;
     }
   }
 }
