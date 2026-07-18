@@ -84,11 +84,23 @@ void SpellEditor::DrawAssetThumbnail(const SvgAsset &asset, bool selected) {
   ImVec2 size(72, 72);
   ImGui::PushID(asset.id.c_str());
 
+  bool anyInvalid = false;
+  for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
+    if (!IsPlacementValid(m_currentSpell.glyphs[i], i)) {
+      anyInvalid = true;
+      break;
+    }
+  }
+
+  if (anyInvalid) ImGui::BeginDisabled();
   if (ImGui::Selectable("##thumb", selected, 0, size)) {
     m_paletteAssetId = asset.id;
     m_isPlacing = true;
     m_selectedGlyphIndex = -1;
+    m_ghostScale = 1.0f;
+    m_ghostRotation = 0.0f;
   }
+  if (anyInvalid) ImGui::EndDisabled();
 
   ImDrawList *dl = ImGui::GetWindowDrawList();
   ImVec2 p0 = ImGui::GetItemRectMin();
@@ -129,11 +141,12 @@ bool SpellEditor::TryPlaceAt(Vector2 spellPos) {
   glyph.assetId = m_paletteAssetId;
   glyph.kind = asset->kind;
   glyph.position = spellPos;
-  glyph.scale = 1.0f;
-  glyph.rotationDeg = 0.0f;
+  glyph.scale = m_ghostScale;
+  glyph.rotationDeg = m_ghostRotation;
 
-  if (!IsPlacementValid(glyph, std::nullopt))
+  if (!IsPlacementValid(glyph, std::nullopt)) {
     return false;
+  }
 
   m_currentSpell.glyphs.push_back(glyph);
   m_isPlacing = false;
@@ -179,9 +192,14 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     if (!asset)
       continue;
 
-    ImU32 color = (static_cast<int>(i) == m_selectedGlyphIndex)
-                      ? IM_COL32(200, 80, 80, 255)
-                      : IM_COL32(0, 0, 0, 255);
+    // Check validity for coloring (red if invalid)
+    bool valid = IsPlacementValid(glyph, i);
+    ImU32 color;
+    if (static_cast<int>(i) == m_selectedGlyphIndex) {
+      color = valid ? IM_COL32(80, 200, 80, 255) : IM_COL32(220, 40, 40, 255);
+    } else {
+      color = valid ? IM_COL32(0, 0, 0, 255) : IM_COL32(220, 40, 40, 255);
+    }
     DrawGlyphLines(dl, *asset, glyph, canvasOrigin, canvasCenter, color, 2.0f);
   }
 
@@ -199,8 +217,23 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
       ghost.assetId = m_paletteAssetId;
       ghost.kind = asset->kind;
       ghost.position = spellMouse;
-      ghost.scale = 1.0f;
-      ghost.rotationDeg = 0.0f;
+      ghost.scale = m_ghostScale;
+      ghost.rotationDeg = m_ghostRotation;
+
+      if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+        m_ghostRotation += 45.0f;
+        if (m_ghostRotation > GLYPH_ROTATION_MAX) m_ghostRotation -= 360.0f;
+      }
+      if (ImGui::IsKeyPressed(ImGuiKey_W)) {
+        m_ghostScale += 0.1f;
+        m_ghostScale = std::min(m_ghostScale, GLYPH_SCALE_MAX);
+      }
+      if (ImGui::IsKeyPressed(ImGuiKey_E)) {
+        m_ghostScale = std::max(GLYPH_SCALE_MIN, m_ghostScale - 0.1f);
+      }
+      
+      ghost.scale = m_ghostScale;
+      ghost.rotationDeg = m_ghostRotation;
 
       bool valid = IsPlacementValid(ghost, std::nullopt);
       ImU32 ghostColor =
@@ -218,12 +251,25 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     }
   }
 
-  if (!m_isPlacing && m_selectedGlyphIndex >= 0 && canvasHovered &&
-      ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-    PlacedGlyph candidate = m_currentSpell.glyphs[m_selectedGlyphIndex];
-    candidate.position = spellMouse;
-    if (IsPlacementValid(candidate, m_selectedGlyphIndex))
-      m_currentSpell.glyphs[m_selectedGlyphIndex].position = spellMouse;
+  if (!m_isPlacing && m_selectedGlyphIndex >= 0) {
+    PlacedGlyph &selectedGlyph = m_currentSpell.glyphs[m_selectedGlyphIndex];
+    if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+      selectedGlyph.rotationDeg += 45.0f;
+      if (selectedGlyph.rotationDeg > GLYPH_ROTATION_MAX) selectedGlyph.rotationDeg -= 360.0f;
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_W)) {
+      selectedGlyph.scale += 0.1f;
+      selectedGlyph.scale = std::min(selectedGlyph.scale, GLYPH_SCALE_MAX);
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_E)) {
+      selectedGlyph.scale = std::max(GLYPH_SCALE_MIN, selectedGlyph.scale - 0.1f);
+    }
+
+    if (canvasHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+      selectedGlyph.position = spellMouse;
+      // Allow moving even if placement becomes invalid; visual feedback will show red.
+      // Validation still updates for feedback elsewhere.
+    }
   }
 }
 
@@ -283,25 +329,12 @@ void SpellEditor::DrawEditPanel() {
   if (rotation > GLYPH_ROTATION_MAX)
     rotation = GLYPH_ROTATION_MAX;
 
-  // R key shortcut: rotate by step degrees while glyph is selected
-  if (ImGui::IsKeyPressed(ImGuiKey_R)) {
-    rotation += rotateStep;
-    if (rotation > GLYPH_ROTATION_MAX)
-      rotation -= 360.0f;
-  }
-
   DrawClampedFloat("Scale", &scale, GLYPH_SCALE_MIN, GLYPH_SCALE_MAX, 0.1f);
   DrawClampedFloat("Rotation", &rotation, GLYPH_ROTATION_MIN,
                    GLYPH_ROTATION_MAX, rotateStep);
 
-  PlacedGlyph candidate = glyph;
-  candidate.scale = scale;
-  candidate.rotationDeg = rotation;
-
-  if (IsPlacementValid(candidate, m_selectedGlyphIndex)) {
-    glyph.scale = scale;
-    glyph.rotationDeg = rotation;
-  }
+  glyph.scale = scale;
+  glyph.rotationDeg = rotation;
 
   if (ImGui::Button("Remove")) {
     m_currentSpell.glyphs.erase(m_currentSpell.glyphs.begin() +
@@ -355,13 +388,30 @@ void SpellEditor::DrawOverlay() {
   }
   ImGui::SameLine();
   if (ImGui::Button("Save Spell")) {
-    m_currentSpell.name = m_nameBuffer;
-    std::string err;
-    if (m_store.Save(m_currentSpell, err)) {
-      m_statusMessage = "Saved.";
-      RefreshSavedSpells();
+    // Validate spell before saving
+    int signCount = 0, sigilCount = 0;
+    bool anyInvalid = false;
+    for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
+      const PlacedGlyph &g = m_currentSpell.glyphs[i];
+      const SvgAsset *a = GetAssetForGlyph(g);
+      if (!a) { anyInvalid = true; break; }
+      if (a->kind == GlyphKind::Sign) signCount++;
+      if (a->kind == GlyphKind::Sigil) sigilCount++;
+      if (!IsPlacementValid(g, i)) { anyInvalid = true; }
+    }
+    if (signCount == 0 || sigilCount == 0) {
+      m_statusMessage = "Spell must contain at least one sign and one sigil.";
+    } else if (anyInvalid) {
+      m_statusMessage = "Spell contains invalid glyph placements (red).";
     } else {
-      m_statusMessage = err;
+      m_currentSpell.name = m_nameBuffer;
+      std::string err;
+      if (m_store.Save(m_currentSpell, err)) {
+        m_statusMessage = "Saved.";
+        RefreshSavedSpells();
+      } else {
+        m_statusMessage = err;
+      }
     }
   }
 

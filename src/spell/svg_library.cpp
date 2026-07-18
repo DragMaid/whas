@@ -143,6 +143,21 @@ bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
   if (asset.segments.empty())
     return false;
 
+  float scaleX = 64.0f / asset.viewWidth;
+  float scaleY = 64.0f / asset.viewHeight;
+  float scale = std::min(scaleX, scaleY);
+
+  for (auto &seg : asset.segments) {
+    seg.a.x *= scale;
+    seg.a.y *= scale;
+    seg.b.x *= scale;
+    seg.b.y *= scale;
+  }
+
+  asset.viewWidth *= scale;
+  asset.viewHeight *= scale;
+  asset.localCenter = {asset.viewWidth * 0.5f, asset.viewHeight * 0.5f};
+
   m_assets.push_back(std::move(asset));
   return true;
 }

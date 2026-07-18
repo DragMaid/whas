@@ -60,6 +60,8 @@ private:
   bool m_isPlacing = false;
   std::string m_paletteAssetId;
   int m_selectedGlyphIndex = -1;
+  float m_ghostScale = 1.0f;
+  float m_ghostRotation = 0.0f;
 
   char m_nameBuffer[SPELL_NAME_MAX_LEN + 1]{};
   std::string m_statusMessage;
