@@ -45,13 +45,27 @@ UI::UI() {
                   Element::AIR,
                   "Eraser",
                   {60, 60, 60, 255}};
+
+  m_spellButton = {(float)(WINDOW_WIDTH - SPELL_BTN_W - 8), 8.0f,
+                   (float)SPELL_BTN_W, (float)SPELL_BTN_H};
 }
 
 UI::~UI() { rlImGuiShutdown(); }
 
 void UI::HandleInput(UIState &state) {
+  if (m_spellEditor.IsOpen())
+    return;
+
   if (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard)
     return;
+
+  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+    Vector2 m = GetMousePosition();
+    if (CheckCollisionPointRec(m, m_spellButton)) {
+      m_spellEditor.Open();
+      return;
+    }
+  }
 
   if (IsKeyPressed(KEY_ONE))
     state.selectedMaterial = Element::WATER;
@@ -92,6 +106,18 @@ void UI::HandleInput(UIState &state) {
   }
 }
 
+void UI::DrawSpellButton() {
+  bool hovered = CheckCollisionPointRec(GetMousePosition(), m_spellButton);
+  DrawRectangleRec(m_spellButton, hovered ? Color{200, 200, 220, 255} : WHITE);
+  DrawRectangleLinesEx(m_spellButton, 2, BLACK);
+  const char *label = "Spells";
+  int textX =
+      (int)m_spellButton.x + (SPELL_BTN_W - MeasureText(label, 14)) / 2;
+  int textY =
+      (int)m_spellButton.y + (SPELL_BTN_H - 14) / 2;
+  DrawText(label, textX, textY, 14, BLACK);
+}
+
 void UI::Draw(UIState &state, Simulation &sim) {
   if (state.debugOverlay) {
     sim.GetRigidBodySystem().DrawDebug();
@@ -113,13 +139,18 @@ void UI::Draw(UIState &state, Simulation &sim) {
   DrawText(TextFormat("Brush: %d", state.brushRadius), WINDOW_WIDTH - 120,
            PANEL_Y + 20, 16, RAYWHITE);
 
+  DrawSpellButton();
+
   rlImGuiBegin();
 
-  if (state.showConfigEditor) {
+  if (state.showConfigEditor && !m_spellEditor.IsOpen()) {
     DrawPropertyEditor(sim.GetConfig());
   }
 
-  DrawInspector(sim);
+  if (!m_spellEditor.IsOpen())
+    DrawInspector(sim);
+
+  m_spellEditor.Draw();
 
   rlImGuiEnd();
 }
@@ -274,4 +305,12 @@ Vector2 UI::GetMouseCell() const {
 
 bool UI::IsMouseOverPanel() const {
   return GetMouseY() >= PANEL_Y || ImGui::GetIO().WantCaptureMouse;
+}
+
+bool UI::IsBlockingWorldInput() const {
+  if (m_spellEditor.IsOpen())
+    return true;
+  if (CheckCollisionPointRec(GetMousePosition(), m_spellButton))
+    return true;
+  return IsMouseOverPanel();
 }

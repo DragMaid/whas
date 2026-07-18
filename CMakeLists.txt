@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-project(whas VERSION 0.1.0 LANGUAGES CXX)
+project(whas VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
@@ -35,6 +35,20 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(box2d)
 
+FetchContent_Declare(
+    nanosvg
+    GIT_REPOSITORY https://github.com/memononen/nanosvg.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(nanosvg)
+
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 set(SOURCES
     src/element/base/factory.cpp
     src/element/base/properties.cpp
@@ -64,6 +78,11 @@ set(SOURCES
     src/engine/renderer.cpp
 
     src/ui/ui.cpp
+
+    src/spell/spell_geometry.cpp
+    src/spell/svg_library.cpp
+    src/spell/spell_store.cpp
+    src/spell/spell_editor.cpp
 )
 
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
@@ -89,8 +108,9 @@ target_include_directories(whas
     $<INSTALL_INTERFACE:include>
     ${IMGUI_DIR}
     ${RLIMGUI_DIR}
+    ${nanosvg_SOURCE_DIR}/src
 )
-target_link_libraries(whas PUBLIC box2d)
+target_link_libraries(whas PUBLIC box2d nanosvg nlohmann_json::nlohmann_json)
 
 add_executable(whasg src/main.cpp)
 # target_link_libraries(whasg PRIVATE whas)

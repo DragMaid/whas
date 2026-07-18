@@ -3,7 +3,6 @@
 #include "whas/element/base/factory.h"
 #include "whas/physics/particle_system.h"
 #include <cmath>
-#include <algorithm>
 
 bool MovementSystem::CanDisplace(const Cell &source, const Cell &target,
                                  const ElementContext &ctx) {

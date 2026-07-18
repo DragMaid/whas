@@ -20,7 +20,7 @@ int main() {
     ui.HandleInput(uiState);
 
     // World painting via mouse.
-    if (!ui.IsMouseOverPanel()) {
+    if (!ui.IsBlockingWorldInput()) {
       Vector2 cell = ui.GetMouseCell();
       int cx = (int)cell.x;
       int cy = (int)cell.y;
@@ -33,7 +33,7 @@ int main() {
     }
 
     // Simulation tick.
-    bool isPainting = IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !ui.IsMouseOverPanel();
+    bool isPainting = IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !ui.IsBlockingWorldInput();
     sim.Update(dt, isPainting);
 
     // Rendering

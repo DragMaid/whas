@@ -366,7 +366,7 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
       // Orphaned blobs (released from a broken body)
       if (isOrphan) {
         // If the connected blocks are way too small just turn them into
-        // 
+        //
         // particles
         if (pixels.size() < 10) {
           for (auto &p : pixels) {
@@ -408,6 +408,7 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
         bodyDef.enableSleep = false;
       b2BodyId bodyId = b2CreateBody(m_worldId, &bodyDef);
 
+      // Obtain te smallest rectangle containing every pixel
       int minX = pixels[0].first, maxX = minX;
       int minY = pixels[0].second, maxY = minY;
       for (auto &p : pixels) {
@@ -419,15 +420,17 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
 
       int width = maxX - minX + 1;
       int height = maxY - minY + 1;
+
+      // Build the bit map wich convert world coords into local bounding box coord
       std::vector<bool> mask(width * height, false);
       for (auto &p : pixels)
         mask[(p.second - minY) * width + (p.first - minX)] = true;
 
       AddTriangulatedShapes(bodyId, mask, width, height, centerX - minX,
                             centerY - minY, props.density, props.restitution);
-
       b2Body_ApplyMassFromShapes(bodyId);
 
+      // Update the body data from pre-calculated
       BodyData data;
       data.bodyId = bodyId;
       data.minX = (int)std::floor(minX - centerX);
