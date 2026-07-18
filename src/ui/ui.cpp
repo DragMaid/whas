@@ -48,16 +48,64 @@ UI::UI() {
 
   m_spellButton = {(float)(WINDOW_WIDTH - SPELL_BTN_W - 8), 8.0f,
                    (float)SPELL_BTN_W, (float)SPELL_BTN_H};
+
+  // Load available spells
+  m_availableSpells = m_spellStore.LoadAll();
 }
 
 UI::~UI() { rlImGuiShutdown(); }
 
-void UI::HandleInput(UIState &state) {
+void UI::HandleInput(UIState &state, Simulation &sim) {
   if (m_spellEditor.IsOpen())
     return;
 
   if (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard)
     return;
+
+  // Handle escape to cancel aiming
+  if (IsKeyPressed(KEY_ESCAPE)) {
+    m_isAimingSpell = false;
+  }
+
+  // Spell casting input
+  if (m_selectedSpellIndex >= 0 &&
+      m_selectedSpellIndex < (int)m_availableSpells.size()) {
+    Vector2 mousePos = GetMousePosition();
+    Vector2 mouseCell = GetMouseCell();
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+      if (m_isAimingSpell) {
+        // Fire the spell
+        if (!IsMouseOverPanel()) {
+          m_spellAimDir = {mousePos.x - m_spellOrigin.x * CELL_SIZE,
+                           mousePos.y - m_spellOrigin.y * CELL_SIZE};
+          float dirLen =
+              std::sqrt(m_spellAimDir.x * m_spellAimDir.x +
+                       m_spellAimDir.y * m_spellAimDir.y);
+          if (dirLen > 0) {
+            m_spellAimDir.x /= dirLen;
+            m_spellAimDir.y /= dirLen;
+          } else {
+            m_spellAimDir = {1, 0};
+          }
+          // Cast the spell from world coordinates
+          Vector2 spellOrigin = {m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
+                                 m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+          sim.CastSpell(m_availableSpells[m_selectedSpellIndex], spellOrigin,
+                        m_spellAimDir);
+          m_isAimingSpell = false;
+        }
+      } else if (!IsMouseOverPanel()) {
+        // Start aiming
+        if (CheckCollisionPointRec(mousePos, m_spellButton)) {
+          m_spellEditor.Open();
+          return;
+        }
+        m_spellOrigin = mouseCell;
+        m_isAimingSpell = true;
+      }
+    }
+  }
 
   if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
     Vector2 m = GetMousePosition();
@@ -141,7 +189,11 @@ void UI::Draw(UIState &state, Simulation &sim) {
 
   DrawSpellButton();
 
+  DrawSpellAimPreview();
+
   rlImGuiBegin();
+
+  DrawSpellSelectionPanel();
 
   if (state.showConfigEditor && !m_spellEditor.IsOpen()) {
     DrawPropertyEditor(sim.GetConfig());
@@ -303,12 +355,70 @@ Vector2 UI::GetMouseCell() const {
   return {std::floor(m.x / CELL_SIZE), std::floor(m.y / CELL_SIZE)};
 }
 
+void UI::DrawSpellSelectionPanel() {
+  if (ImGui::Begin("Spells", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::Text("Available Spells:");
+    for (int i = 0; i < (int)m_availableSpells.size(); ++i) {
+      bool selected = (m_selectedSpellIndex == i);
+      if (ImGui::Selectable(m_availableSpells[i].name.c_str(), selected)) {
+        m_selectedSpellIndex = i;
+        m_isAimingSpell = false;
+      }
+    }
+    ImGui::Separator();
+    if (m_selectedSpellIndex >= 0 &&
+        m_selectedSpellIndex < (int)m_availableSpells.size()) {
+      const Spell &spell = m_availableSpells[m_selectedSpellIndex];
+      float range = SpellSystem::ComputeSpellRange(spell);
+      float speed = SpellSystem::ComputeSpellSpeed(spell);
+      ImGui::Text("Range: %.1f", range);
+      ImGui::Text("Speed: %.1f", speed);
+      ImGui::NewLine();
+      if (ImGui::Button("Cast")) {
+        m_isAimingSpell = true;
+      }
+    }
+    ImGui::End();
+  }
+}
+
+void UI::DrawSpellAimPreview() {
+  if (!m_isAimingSpell)
+    return;
+
+  // Draw circle at origin
+  Vector2 screenOrigin = {m_spellOrigin.x * CELL_SIZE,
+                          m_spellOrigin.y * CELL_SIZE};
+  DrawCircleLines((int)screenOrigin.x, (int)screenOrigin.y, 20, BLUE);
+
+  // Draw arrow from origin to mouse
+  Vector2 mousePos = GetMousePosition();
+  Vector2 dir = {mousePos.x - screenOrigin.x, mousePos.y - screenOrigin.y};
+  float dirLen = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+  if (dirLen > 0.1f) {
+    dir.x /= dirLen;
+    dir.y /= dirLen;
+    DrawLineEx(screenOrigin, mousePos, 2.0f, GREEN);
+    // Draw arrowhead
+    Vector2 arrowBase = {mousePos.x - dir.x * 15,
+                         mousePos.y - dir.y * 15};
+    Vector2 perpDir = {-dir.y, dir.x};
+    Vector2 arrowLeft = {arrowBase.x + perpDir.x * 8,
+                         arrowBase.y + perpDir.y * 8};
+    Vector2 arrowRight = {arrowBase.x - perpDir.x * 8,
+                          arrowBase.y - perpDir.y * 8};
+    DrawTriangle(mousePos, arrowLeft, arrowRight, GREEN);
+  }
+}
+
 bool UI::IsMouseOverPanel() const {
   return GetMouseY() >= PANEL_Y || ImGui::GetIO().WantCaptureMouse;
 }
 
 bool UI::IsBlockingWorldInput() const {
   if (m_spellEditor.IsOpen())
+    return true;
+  if (m_isAimingSpell)
     return true;
   if (CheckCollisionPointRec(GetMousePosition(), m_spellButton))
     return true;

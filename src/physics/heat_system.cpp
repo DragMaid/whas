@@ -31,7 +31,9 @@ void HeatSystem::Propagate(int x, int y, ElementContext &ctx, float dt) {
 
   // Update temperature based on heat capacity
   // We use a small factor to keep simulation stable
-  source.temperature += (netHeatFlux * dt / srcProps.thermal.heatCapacity);
+  const float TRANSFER_SPEED = 3.0f;
+  source.temperature +=
+      netHeatFlux * dt / srcProps.thermal.heatCapacity * TRANSFER_SPEED;
 
   // Apply cooling rate (return to default temp)
   float defaultTemp = srcProps.defaultTemperature;

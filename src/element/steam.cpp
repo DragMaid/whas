@@ -2,7 +2,6 @@
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
 #include "whas/element/base/implementations.h"
-#include "whas/element/base/properties.h"
 #include "whas/physics/movement_system.h"
 #include <algorithm>
 

@@ -6,6 +6,8 @@
 #include "whas/world/grid.h"
 #include "whas/physics/rigid_body_system.h"
 #include "whas/physics/particle_system.h"
+#include "whas/spell/spell_types.h"
+#include "whas/spell/spell_system.h"
 #include <random>
 #include <thread>
 #include <vector>
@@ -39,6 +41,9 @@ public:
   RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
   ParticleSystem &GetParticleSystem() { return m_particles; }
 
+  // Spell casting
+  void CastSpell(const Spell &spell, Vector2 origin, Vector2 mouseDirection);
+
 private:
   SimulationConfig m_config;      // Editable source
   SimulationConfig m_frameConfig; // Per-frame snapshot
@@ -55,8 +60,11 @@ private:
   float m_avgPressure = 0.0f;
   float m_avgTemp = 0.0f;
 
+  std::vector<SpellProjectile> m_spellProjectiles;
+
   void UpdateElements();
   void UpdatePhysics(float dt, bool isPainting);
+  void UpdateProjectiles(float dt);
   void CollectStatistics();
 
   // Parallel Workers

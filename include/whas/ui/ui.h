@@ -2,7 +2,10 @@
 #include "whas/core/element.h"
 #include "whas/engine/simulation.h"
 #include "whas/spell/spell_editor.h"
+#include "whas/spell/spell_store.h"
+#include "whas/spell/spell_system.h"
 #include <raylib.h>
+#include <vector>
 
 struct UIState {
   Element selectedMaterial = Element::WATER;
@@ -16,7 +19,7 @@ public:
   UI();
   ~UI();
 
-  void HandleInput(UIState &state);
+  void HandleInput(UIState &state, Simulation &sim);
   void Draw(UIState &state, Simulation &sim);
   Vector2 GetMouseCell() const;
   bool IsMouseOverPanel() const;
@@ -27,6 +30,8 @@ private:
   void DrawElementPropertyEditor(SimulationConfig &config);
   void DrawInspector(Simulation &sim);
   void DrawSpellButton();
+  void DrawSpellSelectionPanel();
+  void DrawSpellAimPreview();
   const char* GetElementName(Element element) const;
 
   static constexpr int PANEL_HEIGHT = 60;
@@ -47,4 +52,12 @@ private:
   Button m_buttons[9];
   Rectangle m_spellButton{};
   SpellEditor m_spellEditor;
+
+  // Spell casting state
+  SpellStore m_spellStore;
+  std::vector<Spell> m_availableSpells;
+  int m_selectedSpellIndex = -1;
+  bool m_isAimingSpell = false;
+  Vector2 m_spellOrigin{0, 0};
+  Vector2 m_spellAimDir{1, 0};
 };

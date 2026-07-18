@@ -83,6 +83,7 @@ set(SOURCES
     src/spell/svg_library.cpp
     src/spell/spell_store.cpp
     src/spell/spell_editor.cpp
+    src/spell/spell_system.cpp
 )
 
 set(IMGUI_DIR ${imgui_SOURCE_DIR})

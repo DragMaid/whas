@@ -11,6 +11,7 @@ namespace ElementsImpl {
 void UpdateWater(int x, int y, ElementContext &ctx) {
   Cell water = ctx.grid.Get(x, y);
 
+  // TODO: don't know what the defaults are for if you are just gonna set the value right after
   if (water.temperature >= WATER_BOILING_POINT) {
     Cell steam = ElementFactory::Create(Element::STEAM, ctx.config);
     steam.temperature = water.temperature;

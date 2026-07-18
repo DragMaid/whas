@@ -17,7 +17,7 @@ int main() {
     float dt = GetFrameTime();
 
     // Input handling
-    ui.HandleInput(uiState);
+    ui.HandleInput(uiState, sim);
 
     // World painting via mouse.
     if (!ui.IsBlockingWorldInput()) {

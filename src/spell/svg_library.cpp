@@ -23,10 +23,30 @@ void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
 
   for (int i = 0; i < path->npts - 1; i += 3) {
     float *p = &path->pts[i * 2];
-    Vector2 a{p[0], p[1]};
-    Vector2 b{p[6], p[7]};
-    if (std::hypot(b.x - a.x, b.y - a.y) > 0.5f)
-      out.push_back({a, b});
+    Vector2 p0{p[0], p[1]};
+    Vector2 p1{p[2], p[3]};
+    Vector2 p2{p[4], p[5]};
+    Vector2 p3{p[6], p[7]};
+
+    int segments = 10;
+    Vector2 prev = p0;
+    for (int j = 1; j <= segments; ++j) {
+      float t = static_cast<float>(j) / segments;
+      float mt = 1.0f - t;
+      float mt2 = mt * mt;
+      float mt3 = mt2 * mt;
+      float t2 = t * t;
+      float t3 = t2 * t;
+
+      Vector2 current;
+      current.x = mt3 * p0.x + 3.0f * mt2 * t * p1.x + 3.0f * mt * t2 * p2.x + t3 * p3.x;
+      current.y = mt3 * p0.y + 3.0f * mt2 * t * p1.y + 3.0f * mt * t2 * p2.y + t3 * p3.y;
+
+      if (std::hypot(current.x - prev.x, current.y - prev.y) > 0.5f) {
+        out.push_back({prev, current});
+      }
+      prev = current;
+    }
   }
 }
 

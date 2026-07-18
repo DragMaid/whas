@@ -305,6 +305,34 @@ void SpellEditor::DrawPalette() {
 }
 
 void SpellEditor::DrawEditPanel() {
+  if (m_isPlacing && !m_paletteAssetId.empty()) {
+    const SvgAsset *asset = m_library.FindById(m_paletteAssetId);
+    if (!asset) return;
+
+    ImGui::Separator();
+    ImGui::Text("Placing: %s", asset->id.c_str());
+
+    float rotateStep = 45.0f;
+    float scale = m_ghostScale;
+    float rotation = m_ghostRotation;
+    
+    rotation = std::round(rotation / rotateStep) * 45.0f;
+    if (rotation < GLYPH_ROTATION_MIN) rotation = GLYPH_ROTATION_MIN;
+    if (rotation > GLYPH_ROTATION_MAX) rotation = GLYPH_ROTATION_MAX;
+
+    DrawClampedFloat("Scale", &scale, GLYPH_SCALE_MIN, GLYPH_SCALE_MAX, 0.1f);
+    DrawClampedFloat("Rotation", &rotation, GLYPH_ROTATION_MIN, GLYPH_ROTATION_MAX, rotateStep);
+
+    m_ghostScale = scale;
+    m_ghostRotation = rotation;
+    
+    if (ImGui::Button("Cancel")) {
+      m_isPlacing = false;
+      m_paletteAssetId.clear();
+    }
+    return;
+  }
+
   if (m_selectedGlyphIndex < 0 ||
       m_selectedGlyphIndex >= static_cast<int>(m_currentSpell.glyphs.size()))
     return;
