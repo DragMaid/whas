@@ -31,7 +31,9 @@ private:
   void DrawInspector(Simulation &sim);
   void DrawSpellButton();
   void DrawSpellSelectionPanel();
-  void DrawSpellAimPreview();
+  void DrawSpellAimPreview(const Simulation &sim);
+  void DrawActiveSpellEffects(const Simulation &sim);
+  Color GetSpellColor(const Spell &spell) const;
   const char* GetElementName(Element element) const;
 
   static constexpr int PANEL_HEIGHT = 60;

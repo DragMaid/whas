@@ -6,7 +6,7 @@
 #include "whas/physics/heat_system.h"
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
-#include <cmath>
+#include <iostream>
 
 Simulation::Simulation()
     : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config), m_particles(),
@@ -37,10 +37,15 @@ void Simulation::Update(float dt, bool isPainting) {
   m_chunks.BeginFrame();
   m_frameConfig = m_config;
 
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig, m_frameCounter, m_particles};
+  ElementContext ctx{m_grid,
+                     m_chunks,
+                     m_rng,
+                     m_frameConfig,
+                     m_frameCounter,
+                     m_particles,
+                     &m_activeSpellEffects};
 
-  // 0. Update spell projectiles (before element simulation)
-  UpdateProjectiles(dt);
+  // 0. Spell particles are updated as part of the normal particle system.
 
   // 1. Damage check — detect erased/painted-over body pixels and release them
   m_rigidBodies.PreUpdate(m_grid, ctx);
@@ -95,8 +100,13 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
 
     uint32_t currentFrame = m_workerFrame;
     std::mt19937 threadRng(currentFrame + threadIdx);
-    ElementContext ctx{m_grid, m_chunks, threadRng, m_frameConfig,
-                       currentFrame, m_particles};
+    ElementContext ctx{m_grid,
+                       m_chunks,
+                       threadRng,
+                       m_frameConfig,
+                       currentFrame,
+                       m_particles,
+                       &m_activeSpellEffects};
 
     for (int pass = 0; pass < 4; ++pass) {
       int passX = pass % 2;
@@ -151,79 +161,33 @@ void Simulation::UpdateElements() {}
 
 void Simulation::CastSpell(const Spell &spell, Vector2 origin,
                            Vector2 mouseDirection) {
-  // Compute spell properties from glyphs
-  Element outputElement = SpellSystem::GetSpellElement(spell);
   Vector2 direction = SpellSystem::ComputeSpellDirection(spell, mouseDirection);
   float range = SpellSystem::ComputeSpellRange(spell);
   float speed = SpellSystem::ComputeSpellSpeed(spell);
+  float diameter = SpellSystem::ComputeSpellDiameter(spell);
+  int waveCount = SpellSystem::ComputeSpellWaveCount(spell);
+  int particlesPerWave = SpellSystem::ComputeSpellParticleCount(spell);
+  std::cout << "finished" << std::endl;
 
-  // Create and initialize projectile
-  SpellProjectile proj;
-  proj.position = origin;
-  proj.direction = direction;
-  proj.speed = speed;
-  proj.remainingDistance = range;
-  proj.outputElement = outputElement;
-  proj.active = true;
-
-  m_spellProjectiles.push_back(proj);
-}
-
-void Simulation::UpdateProjectiles(float dt) {
-  // Update all active projectiles
-  for (auto &proj : m_spellProjectiles) {
-    if (!proj.active)
-      continue;
-
-    // Move projectile
-    Vector2 oldPos = proj.position;
-    Vector2 movement = {proj.direction.x * proj.speed * dt,
-                        proj.direction.y * proj.speed * dt};
-    proj.position.x += movement.x;
-    proj.position.y += movement.y;
-
-    // Reduce remaining distance
-    float travelDistance =
-        std::sqrt(movement.x * movement.x + movement.y * movement.y);
-    proj.remainingDistance -= travelDistance;
-
-    // Paint element along the travel line
-    Vector2 current = oldPos;
-    Vector2 step = {movement.x, movement.y};
-    float stepLen = travelDistance;
-
-    if (stepLen > 0.1f) {
-      int steps = static_cast<int>(stepLen / 2.0f) + 1;
-      for (int i = 0; i <= steps; ++i) {
-        float t = (steps > 0) ? static_cast<float>(i) / steps : 0.0f;
-        Vector2 pos = {oldPos.x + step.x * t, oldPos.y + step.y * t};
-
-        int cx = static_cast<int>(pos.x);
-        int cy = static_cast<int>(pos.y);
-
-        if (m_grid.InBounds(cx, cy)) {
-          Cell c = ElementFactory::Create(proj.outputElement, m_frameConfig);
-          m_grid.Get(cx, cy) = c;
-          const auto &props = m_frameConfig.elements[static_cast<size_t>(
-              proj.outputElement)];
-          m_chunks.WakeChunkAt(cx, cy, m_frameCounter, props.staticTerrain);
-        }
-      }
-    }
-
-    // Deactivate if out of bounds or range exhausted
-    if (proj.remainingDistance <= 0 || !m_grid.InBounds(
-                                           static_cast<int>(proj.position.x),
-                                           static_cast<int>(proj.position.y))) {
-      proj.active = false;
-    }
-  }
-
-  // Remove inactive projectiles
-  m_spellProjectiles.erase(
-      std::remove_if(m_spellProjectiles.begin(), m_spellProjectiles.end(),
-                     [](const SpellProjectile &p) { return !p.active; }),
-      m_spellProjectiles.end());
+  SpellEffect effect;
+  effect.spell = spell;
+  effect.origin = origin;
+  effect.direction = direction;
+  effect.range = range;
+  effect.speed = speed;
+  effect.diameter = diameter;
+  effect.waveSpacing = std::max(1.0f, range / std::max(1, waveCount));
+  // TODO: this is computationally heavy, remove it
+  effect.affectedCells = SpellSystem::ComputeSpellWavePositions(
+      spell, origin, direction, range, diameter, waveCount, particlesPerWave);
+  std::cout << "finished" << std::endl;
+  effect.targetedElements = {SpellSystem::GetSpellElement(spell)};
+  std::cout << "finished" << std::endl;
+  effect.color = {200, 120, 80, 255};
+  effect.active = true;
+  effect.particleCount = particlesPerWave;
+  m_activeSpellEffects.push_back(effect);
+  std::cout << "finished" << std::endl;
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {

@@ -40,6 +40,9 @@ public:
   SimulationConfig &GetConfig() { return m_config; }
   RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
   ParticleSystem &GetParticleSystem() { return m_particles; }
+  const std::vector<SpellEffect> &GetActiveSpellEffects() const {
+    return m_activeSpellEffects;
+  }
 
   // Spell casting
   void CastSpell(const Spell &spell, Vector2 origin, Vector2 mouseDirection);
@@ -55,16 +58,14 @@ private:
   ChunkManager m_chunks;
   RigidBodySystem m_rigidBodies;
   ParticleSystem m_particles;
+  std::vector<SpellEffect> m_activeSpellEffects;
 
   int m_particleCount = 0;
   float m_avgPressure = 0.0f;
   float m_avgTemp = 0.0f;
 
-  std::vector<SpellProjectile> m_spellProjectiles;
-
   void UpdateElements();
   void UpdatePhysics(float dt, bool isPainting);
-  void UpdateProjectiles(float dt);
   void CollectStatistics();
 
   // Parallel Workers

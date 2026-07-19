@@ -49,40 +49,41 @@ bool TryFall(int x, int y, Cell &cell, const LiquidProperties &props,
       continue;
     }
 
-    // TODO: the erosion can happen not only from falling alone
-    if (props.canErodeTerrain && target.element == Element::EARTH) {
-      if (ErosionSystem::TryErode(x, y, x, nextY, cell, ctx))
-        return true;
-    }
+    // TODO: consider just removing this as collision is now handled by the particle system
+    // if (props.canErodeTerrain && target.element == Element::EARTH) {
+    //   if (ErosionSystem::TryErode(x, y, x, nextY, cell, ctx))
+    //     return true;
+    // }
 
     float impactSpeed = cell.vy;
 
-    //if (impactSpeed > 0.25f) {
-    //  int dir;
+    // If the speed at which the water particle hit the ground is fast enough
+    // then leave a change for kinetics power conversion (y-axis to x-axis)
+    if (impactSpeed > 0.25f) {
+      int dir;
 
-    //  if (std::abs(cell.vx) > 0.25f) {
-    //    // 60% keep direction
-    //    // 40% randomize
+      if (std::abs(cell.vx) > 0.25f) {
+        // 60% keep direction, 40% randomize
 
-    //    bool keepDirection = (ctx.rng() % 100) < 60;
+        bool keepDirection = (ctx.rng() % 100) < 60;
 
-    //    if (keepDirection)
-    //      dir = (cell.vx > 0.0f) ? 1 : -1;
-    //    else
-    //      dir = (ctx.rng() % 2) ? 1 : -1;
-    //  } else {
-    //    dir = (ctx.rng() % 2) ? 1 : -1;
-    //  }
+        if (keepDirection)
+          dir = (cell.vx > 0.0f) ? 1 : -1;
+        else
+          dir = (ctx.rng() % 2) ? 1 : -1;
+      } else {
+        dir = (ctx.rng() % 2) ? 1 : -1;
+      }
 
-    //  constexpr float kImpactTransfer = 0.25f;
+      constexpr float kImpactTransfer = 0.25f;
 
-    //  cell.vx += dir * impactSpeed * kImpactTransfer * (1.0f - props.viscosity);
+      cell.vx += dir * impactSpeed * kImpactTransfer * (1.0f - props.viscosity);
 
-    //  cell.vx = std::clamp(cell.vx, -props.maxHorizontalSpeed,
-    //                       props.maxHorizontalSpeed);
-    //}
+      cell.vx = std::clamp(cell.vx, -props.maxHorizontalSpeed,
+                           props.maxHorizontalSpeed);
+    }
 
-    //cell.vy = 0.0f;
+    cell.vy = 0.0f;
     break;
   }
 
@@ -237,11 +238,11 @@ void UpdateLiquid(int x, int y, Cell &cell, const LiquidProperties &props,
   if (TryFall(x, y, cell, props, ctx))
     return;
 
-  // if (TrySlide(x, y, cell, props, ctx))
-  //   return;
+  if (TrySlide(x, y, cell, props, ctx))
+    return;
 
-  // if (TrySpread(x, y, cell, props, ctx))
-  //   return;
+  if (TrySpread(x, y, cell, props, ctx))
+    return;
 
   Settle(x, y, cell, props, ctx);
 }

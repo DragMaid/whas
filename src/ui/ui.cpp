@@ -5,6 +5,7 @@
 #include "whas/constants.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 UI::UI() {
   rlImGuiSetup(true);
@@ -77,20 +78,27 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
       if (m_isAimingSpell) {
         // Fire the spell
         if (!IsMouseOverPanel()) {
-          m_spellAimDir = {mousePos.x - m_spellOrigin.x * CELL_SIZE,
-                           mousePos.y - m_spellOrigin.y * CELL_SIZE};
-          float dirLen =
-              std::sqrt(m_spellAimDir.x * m_spellAimDir.x +
-                       m_spellAimDir.y * m_spellAimDir.y);
-          if (dirLen > 0) {
-            m_spellAimDir.x /= dirLen;
-            m_spellAimDir.y /= dirLen;
+          // Compute normalized aim in cell-space (cells, not pixels)
+          Vector2 screenOrigin = {
+              m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
+              m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+          Vector2 mouseDirPixels = {mousePos.x - screenOrigin.x,
+                                    mousePos.y - screenOrigin.y};
+          // convert to cell-space direction before normalizing
+          Vector2 mouseDirCells = {mouseDirPixels.x / CELL_SIZE,
+                                   mouseDirPixels.y / CELL_SIZE};
+          float dirLen = std::sqrt(mouseDirCells.x * mouseDirCells.x +
+                                   mouseDirCells.y * mouseDirCells.y);
+          if (dirLen > 0.0001f) {
+            m_spellAimDir.x = mouseDirCells.x / dirLen;
+            m_spellAimDir.y = mouseDirCells.y / dirLen;
           } else {
-            m_spellAimDir = {1, 0};
+            m_spellAimDir = {1.0f, 0.0f};
           }
-          // Cast the spell from world coordinates
-          Vector2 spellOrigin = {m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
-                                 m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+
+          // Cast the spell from cell-space origin (center of cell)
+          Vector2 spellOrigin = {m_spellOrigin.x + 0.5f,
+                                 m_spellOrigin.y + 0.5f};
           sim.CastSpell(m_availableSpells[m_selectedSpellIndex], spellOrigin,
                         m_spellAimDir);
           m_isAimingSpell = false;
@@ -159,10 +167,8 @@ void UI::DrawSpellButton() {
   DrawRectangleRec(m_spellButton, hovered ? Color{200, 200, 220, 255} : WHITE);
   DrawRectangleLinesEx(m_spellButton, 2, BLACK);
   const char *label = "Spells";
-  int textX =
-      (int)m_spellButton.x + (SPELL_BTN_W - MeasureText(label, 14)) / 2;
-  int textY =
-      (int)m_spellButton.y + (SPELL_BTN_H - 14) / 2;
+  int textX = (int)m_spellButton.x + (SPELL_BTN_W - MeasureText(label, 14)) / 2;
+  int textY = (int)m_spellButton.y + (SPELL_BTN_H - 14) / 2;
   DrawText(label, textX, textY, 14, BLACK);
 }
 
@@ -189,7 +195,8 @@ void UI::Draw(UIState &state, Simulation &sim) {
 
   DrawSpellButton();
 
-  DrawSpellAimPreview();
+  DrawActiveSpellEffects(sim);
+  DrawSpellAimPreview(sim);
 
   rlImGuiBegin();
 
@@ -208,33 +215,34 @@ void UI::Draw(UIState &state, Simulation &sim) {
 }
 
 void UI::DrawInspector(Simulation &sim) {
-  if (IsMouseOverPanel()) return;
+  if (IsMouseOverPanel())
+    return;
 
   Vector2 cellPos = GetMouseCell();
   int cx = (int)cellPos.x;
   int cy = (int)cellPos.y;
 
-  if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H) return;
+  if (cx < 0 || cx >= GRID_W || cy < 0 || cy >= GRID_H)
+    return;
 
   const Cell &cell = sim.GetCell(cx, cy);
 
   Vector2 mousePos = GetMousePosition();
   ImVec2 pivot = ImVec2(-0.1f, 1.1f);
 
-  if (mousePos.y < 160) pivot.y = -0.1f;
-  if (mousePos.x > WINDOW_WIDTH - 200) pivot.x = 1.1f;
+  if (mousePos.y < 160)
+    pivot.y = -0.1f;
+  if (mousePos.x > WINDOW_WIDTH - 200)
+    pivot.x = 1.1f;
 
   ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always, pivot);
-  ImGui::Begin("Inspector", nullptr, 
-               ImGuiWindowFlags_NoTitleBar | 
-               ImGuiWindowFlags_NoResize | 
-               ImGuiWindowFlags_NoMove | 
-               ImGuiWindowFlags_NoScrollbar | 
-               ImGuiWindowFlags_NoSavedSettings | 
-               ImGuiWindowFlags_AlwaysAutoResize |
-               ImGuiWindowFlags_NoInputs |
-               ImGuiWindowFlags_NoFocusOnAppearing |
-               ImGuiWindowFlags_NoNav);
+  ImGui::Begin(
+      "Inspector", nullptr,
+      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+          ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize |
+          ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing |
+          ImGuiWindowFlags_NoNav);
 
   ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "Cell [%d, %d]", cx, cy);
   ImGui::Separator();
@@ -244,24 +252,36 @@ void UI::DrawInspector(Simulation &sim) {
   ImGui::Text("Velocity: (%.2f, %.2f)", cell.vx, cell.vy);
   ImGui::Text("Mass: %.2f g", cell.mass);
   ImGui::Text("Density: %.2f g/cm3", cell.density);
-  if (cell.lifetime > 0) ImGui::Text("Lifetime: %.2f s", cell.lifetime);
-  if (cell.moisture > 0) ImGui::Text("Moisture: %.2f", cell.moisture);
+  if (cell.lifetime > 0)
+    ImGui::Text("Lifetime: %.2f s", cell.lifetime);
+  if (cell.moisture > 0)
+    ImGui::Text("Moisture: %.2f", cell.moisture);
 
   ImGui::End();
 }
 
-const char* UI::GetElementName(Element element) const {
+const char *UI::GetElementName(Element element) const {
   switch (element) {
-    case Element::AIR: return "AIR";
-    case Element::WATER: return "WATER";
-    case Element::EARTH: return "EARTH";
-    case Element::FIRE: return "FIRE";
-    case Element::STEAM: return "STEAM";
-    case Element::CLOUD: return "CLOUD";
-    case Element::ICE: return "ICE";
-    case Element::SAND: return "SAND";
-    case Element::ROCK: return "ROCK";
-    default: return "UNKNOWN";
+  case Element::AIR:
+    return "AIR";
+  case Element::WATER:
+    return "WATER";
+  case Element::EARTH:
+    return "EARTH";
+  case Element::FIRE:
+    return "FIRE";
+  case Element::STEAM:
+    return "STEAM";
+  case Element::CLOUD:
+    return "CLOUD";
+  case Element::ICE:
+    return "ICE";
+  case Element::SAND:
+    return "SAND";
+  case Element::ROCK:
+    return "ROCK";
+  default:
+    return "UNKNOWN";
   }
 }
 
@@ -271,20 +291,28 @@ void UI::DrawPropertyEditor(SimulationConfig &config) {
   if (ImGui::CollapsingHeader("World")) {
     ImGui::SliderFloat("Gravity", &config.world.gravity, -1.0f, 1.0f);
     ImGui::SliderFloat("Pressure Eq", &config.world.pressureEq, 0.0f, 1.0f);
-    ImGui::SliderFloat("Ambient Temp", &config.world.ambientTemp, -50.0f, 100.0f);
+    ImGui::SliderFloat("Ambient Temp", &config.world.ambientTemp, -50.0f,
+                       100.0f);
   }
 
   if (ImGui::CollapsingHeader("Fluid Physics")) {
-    ImGui::SliderInt("Pressure Scan Depth", &config.fluid.pressureScanDepth, 1, 50);
-    ImGui::SliderFloat("Pressure Weight", &config.fluid.pressureWeight, 0.0f, 2.0f);
-    ImGui::SliderFloat("Gas Displacement Chance", &config.fluid.gasDisplacementChance, 0.0f, 1.0f);
+    ImGui::SliderInt("Pressure Scan Depth", &config.fluid.pressureScanDepth, 1,
+                     50);
+    ImGui::SliderFloat("Pressure Weight", &config.fluid.pressureWeight, 0.0f,
+                       2.0f);
+    ImGui::SliderFloat("Gas Displacement Chance",
+                       &config.fluid.gasDisplacementChance, 0.0f, 1.0f);
 
     if (ImGui::TreeNode("Water Specific")) {
       ImGui::SliderFloat("Density", &config.fluid.water.density, 0.1f, 10.0f);
-      ImGui::SliderFloat("Viscosity", &config.fluid.water.viscosity, 0.0f, 1.0f);
-      ImGui::SliderFloat("Max Fall Speed", &config.fluid.water.maxFallSpeed, 0.0f, 20.0f);
-      ImGui::SliderFloat("Max Horizontal Speed", &config.fluid.water.maxHorizontalSpeed, 0.0f, 20.0f);
-      ImGui::SliderFloat("Spread Factor", &config.fluid.water.spreadFactor, 0.0f, 1.0f);
+      ImGui::SliderFloat("Viscosity", &config.fluid.water.viscosity, 0.0f,
+                         1.0f);
+      ImGui::SliderFloat("Max Fall Speed", &config.fluid.water.maxFallSpeed,
+                         0.0f, 20.0f);
+      ImGui::SliderFloat("Max Horizontal Speed",
+                         &config.fluid.water.maxHorizontalSpeed, 0.0f, 20.0f);
+      ImGui::SliderFloat("Spread Factor", &config.fluid.water.spreadFactor,
+                         0.0f, 1.0f);
       ImGui::SliderFloat("Friction", &config.fluid.water.friction, 0.0f, 1.0f);
       ImGui::Checkbox("Can Displace Gas", &config.fluid.water.canDisplaceGas);
       ImGui::Checkbox("Can Erode Terrain", &config.fluid.water.canErodeTerrain);
@@ -317,8 +345,8 @@ void UI::DrawPropertyEditor(SimulationConfig &config) {
 }
 
 void UI::DrawElementPropertyEditor(SimulationConfig &config) {
-  const char *elementNames[] = {"AIR",   "WATER", "EARTH", "FIRE",
-                                "STEAM", "CLOUD", "ICE", "SAND", "ROCK"};
+  const char *elementNames[] = {"AIR",   "WATER", "EARTH", "FIRE", "STEAM",
+                                "CLOUD", "ICE",   "SAND",  "ROCK"};
   static int selectedElement = 0;
 
   ImGui::Combo("Select Element", &selectedElement, elementNames,
@@ -335,7 +363,8 @@ void UI::DrawElementPropertyEditor(SimulationConfig &config) {
   ImGui::Checkbox("Body Movable", &props.bodyMovable);
 
   ImGui::SliderFloat("Density", &props.density, 0.0f, 5000.0f);
-  ImGui::SliderFloat("Default Temp", &props.defaultTemperature, -100.0f, 2000.0f);
+  ImGui::SliderFloat("Default Temp", &props.defaultTemperature, -100.0f,
+                     2000.0f);
   ImGui::SliderFloat("Default Mass", &props.defaultMass, 0.0f, 10.0f);
   ImGui::SliderFloat("Default Hardness", &props.defaultHardness, 0.0f, 1000.0f);
   ImGui::SliderFloat("Default Lifetime", &props.defaultLifetime, 0.0f, 60.0f);
@@ -343,7 +372,8 @@ void UI::DrawElementPropertyEditor(SimulationConfig &config) {
   ImGui::SliderFloat("Default Moisture", &props.defaultMoisture, 0.0f, 10.0f);
 
   if (ImGui::TreeNode("Thermal Properties")) {
-    ImGui::SliderFloat("Heat Capacity", &props.thermal.heatCapacity, 0.01f, 10.0f);
+    ImGui::SliderFloat("Heat Capacity", &props.thermal.heatCapacity, 0.01f,
+                       10.0f);
     ImGui::SliderFloat("Conductivity", &props.thermal.conductivity, 0.0f, 1.0f);
     ImGui::SliderFloat("Cooling Rate", &props.thermal.coolingRate, 0.0f, 1.0f);
     ImGui::TreePop();
@@ -371,8 +401,13 @@ void UI::DrawSpellSelectionPanel() {
       const Spell &spell = m_availableSpells[m_selectedSpellIndex];
       float range = SpellSystem::ComputeSpellRange(spell);
       float speed = SpellSystem::ComputeSpellSpeed(spell);
+      int waves = SpellSystem::ComputeSpellWaveCount(spell);
+      int particles = SpellSystem::ComputeSpellParticleCount(spell);
       ImGui::Text("Range: %.1f", range);
       ImGui::Text("Speed: %.1f", speed);
+      ImGui::Text("Diameter: %.1f", SpellSystem::ComputeSpellDiameter(spell));
+      ImGui::Text("Waves: %d", waves);
+      ImGui::Text("Particles: %d", particles);
       ImGui::NewLine();
       if (ImGui::Button("Cast")) {
         m_isAimingSpell = true;
@@ -382,33 +417,67 @@ void UI::DrawSpellSelectionPanel() {
   }
 }
 
-void UI::DrawSpellAimPreview() {
+void UI::DrawActiveSpellEffects(const Simulation &sim) {
+  for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
+    if (!effect.active)
+      continue;
+    Color col = GetSpellColor(effect.spell);
+    for (const Vector2 &cell : effect.affectedCells) {
+      Rectangle rect{cell.x * CELL_SIZE, cell.y * CELL_SIZE, CELL_SIZE,
+                     CELL_SIZE};
+      DrawRectangleLinesEx(rect, 1, col);
+      DrawRectangleRec(rect, Color{col.r, col.g, col.b, 45});
+    }
+  }
+}
+
+void UI::DrawSpellAimPreview(const Simulation &sim) {
+  (void)sim;
   if (!m_isAimingSpell)
     return;
 
-  // Draw circle at origin
-  Vector2 screenOrigin = {m_spellOrigin.x * CELL_SIZE,
-                          m_spellOrigin.y * CELL_SIZE};
-  DrawCircleLines((int)screenOrigin.x, (int)screenOrigin.y, 20, BLUE);
+  Vector2 screenOrigin = {m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
+                          m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+  DrawCircleLines((int)screenOrigin.x, (int)screenOrigin.y, 10, BLUE);
 
-  // Draw arrow from origin to mouse
-  Vector2 mousePos = GetMousePosition();
-  Vector2 dir = {mousePos.x - screenOrigin.x, mousePos.y - screenOrigin.y};
-  float dirLen = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-  if (dirLen > 0.1f) {
-    dir.x /= dirLen;
-    dir.y /= dirLen;
-    DrawLineEx(screenOrigin, mousePos, 2.0f, GREEN);
-    // Draw arrowhead
-    Vector2 arrowBase = {mousePos.x - dir.x * 15,
-                         mousePos.y - dir.y * 15};
-    Vector2 perpDir = {-dir.y, dir.x};
-    Vector2 arrowLeft = {arrowBase.x + perpDir.x * 8,
-                         arrowBase.y + perpDir.y * 8};
-    Vector2 arrowRight = {arrowBase.x - perpDir.x * 8,
-                          arrowBase.y - perpDir.y * 8};
-    DrawTriangle(mousePos, arrowLeft, arrowRight, GREEN);
+  if (m_selectedSpellIndex >= 0 &&
+      m_selectedSpellIndex < (int)m_availableSpells.size()) {
+    const Spell &spell = m_availableSpells[m_selectedSpellIndex];
+    Color col = GetSpellColor(spell);
+    float diameterCells =
+        std::max(1.0f, SpellSystem::ComputeSpellDiameter(spell));
+    float rangeCells = SpellSystem::ComputeSpellRange(spell) / CELL_SIZE;
+    int radius = std::max(1, static_cast<int>(std::ceil(diameterCells * 0.5f)));
+
+    for (int step = 0; step <= static_cast<int>(rangeCells); ++step) {
+      Vector2 sample = {screenOrigin.x + m_spellAimDir.x * step * CELL_SIZE,
+                        screenOrigin.y + m_spellAimDir.y * step * CELL_SIZE};
+      for (int dy = -radius; dy <= radius; ++dy) {
+        for (int dx = -radius; dx <= radius; ++dx) {
+          if (dx * dx + dy * dy > radius * radius)
+            continue;
+          Rectangle rect{sample.x + dx * CELL_SIZE - CELL_SIZE / 2.0f,
+                         sample.y + dy * CELL_SIZE - CELL_SIZE / 2.0f,
+                         CELL_SIZE, CELL_SIZE};
+          DrawRectangleLinesEx(rect, 1, col);
+          DrawRectangleRec(rect, Color{col.r, col.g, col.b, 40});
+        }
+      }
+    }
   }
+}
+
+Color UI::GetSpellColor(const Spell &spell) const {
+  std::uint32_t hash = 2166136261u;
+  for (char c : spell.name) {
+    hash ^= static_cast<unsigned char>(c);
+    hash *= 16777619u;
+  }
+  int r = static_cast<int>((hash >> 24) & 0xFF) % 156 + 100;
+  int g = static_cast<int>((hash >> 16) & 0xFF) % 156 + 100;
+  int b = static_cast<int>((hash >> 8) & 0xFF) % 156 + 100;
+  return Color{static_cast<unsigned char>(r), static_cast<unsigned char>(g),
+               static_cast<unsigned char>(b), 255};
 }
 
 bool UI::IsMouseOverPanel() const {
