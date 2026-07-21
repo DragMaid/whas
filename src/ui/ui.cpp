@@ -7,6 +7,25 @@
 #include <cmath>
 #include <cstdint>
 
+namespace {
+
+Vector2 ComputeSpellAimDirection(const Vector2 &spellOrigin, const Vector2 &mousePos) {
+  Vector2 screenOrigin = {spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
+                          spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+  Vector2 mouseDirPixels = {mousePos.x - screenOrigin.x,
+                            mousePos.y - screenOrigin.y};
+  Vector2 mouseDirCells = {mouseDirPixels.x / CELL_SIZE,
+                           mouseDirPixels.y / CELL_SIZE};
+  float dirLen = std::sqrt(mouseDirCells.x * mouseDirCells.x +
+                           mouseDirCells.y * mouseDirCells.y);
+  if (dirLen > 0.0001f) {
+    return {mouseDirCells.x / dirLen, mouseDirCells.y / dirLen};
+  }
+  return {1.0f, 0.0f};
+}
+
+} // namespace
+
 UI::UI() {
   rlImGuiSetup(true);
 
@@ -74,29 +93,14 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
     Vector2 mousePos = GetMousePosition();
     Vector2 mouseCell = GetMouseCell();
 
+    if (m_isAimingSpell) {
+      m_spellAimDir = ComputeSpellAimDirection(m_spellOrigin, mousePos);
+    }
+
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
       if (m_isAimingSpell) {
         // Fire the spell
         if (!IsMouseOverPanel()) {
-          // Compute normalized aim in cell-space (cells, not pixels)
-          Vector2 screenOrigin = {
-              m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
-              m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
-          Vector2 mouseDirPixels = {mousePos.x - screenOrigin.x,
-                                    mousePos.y - screenOrigin.y};
-          // convert to cell-space direction before normalizing
-          Vector2 mouseDirCells = {mouseDirPixels.x / CELL_SIZE,
-                                   mouseDirPixels.y / CELL_SIZE};
-          float dirLen = std::sqrt(mouseDirCells.x * mouseDirCells.x +
-                                   mouseDirCells.y * mouseDirCells.y);
-          if (dirLen > 0.0001f) {
-            m_spellAimDir.x = mouseDirCells.x / dirLen;
-            m_spellAimDir.y = mouseDirCells.y / dirLen;
-          } else {
-            m_spellAimDir = {1.0f, 0.0f};
-          }
-
-          // Cast the spell from cell-space origin (center of cell)
           Vector2 spellOrigin = {m_spellOrigin.x + 0.5f,
                                  m_spellOrigin.y + 0.5f};
           sim.CastSpell(m_availableSpells[m_selectedSpellIndex], spellOrigin,
@@ -438,7 +442,10 @@ void UI::DrawSpellAimPreview(const Simulation &sim) {
 
   Vector2 screenOrigin = {m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
                           m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+  Vector2 mousePos = GetMousePosition();
+  DrawLineEx(screenOrigin, mousePos, 2.0f, BLUE);
   DrawCircleLines((int)screenOrigin.x, (int)screenOrigin.y, 10, BLUE);
+  DrawCircleV(mousePos, 4.0f, BLUE);
 
   if (m_selectedSpellIndex >= 0 &&
       m_selectedSpellIndex < (int)m_availableSpells.size()) {

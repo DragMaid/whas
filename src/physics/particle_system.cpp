@@ -123,7 +123,7 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
         break;
       }
 
-      // ApplyActiveSpellEffects(p, ctx);
+      ApplyActiveSpellEffects(p, ctx);
 
       const Cell &target = grid.Get(tx, ty);
       if (target.element != Element::AIR) {

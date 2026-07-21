@@ -3,13 +3,12 @@
 #include "whas/physics/particle_system.h"
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 namespace {
 
-bool ContainsCell(const std::vector<Vector2> &cells, int x, int y) {
-  return std::any_of(cells.begin(), cells.end(), [&](const Vector2 &cell) {
-    return static_cast<int>(cell.x) == x && static_cast<int>(cell.y) == y;
-  });
+inline uint32_t EncodeCell(int x, int y) {
+  return (static_cast<uint32_t>(x) << 16) | static_cast<uint32_t>(y & 0xFFFFu);
 }
 
 } // namespace
@@ -156,50 +155,28 @@ std::vector<Vector2> SpellSystem::ComputeSpellWavePositions(
 
   float diameterCells = std::max(1.0f, diameter);
   int radius = static_cast<int>(std::ceil(diameterCells * 0.5f));
-  int stepCount = std::max(1, std::max(waveCount, particlesPerWave));
-  float stepSize = std::max(1.0f, range / static_cast<float>(stepCount));
+  int stepCount = std::max(1, waveCount * particlesPerWave);
+  std::unordered_set<uint32_t> visited;
+  visited.reserve(stepCount * (radius * 2 + 1) * (radius * 2 + 1));
 
-  for (int wave = 0; wave < waveCount; ++wave) {
-    for (int particle = 0; particle < particlesPerWave; ++particle) {
-      float progress = (wave * particlesPerWave + particle + 1) /
-                       static_cast<float>(waveCount * particlesPerWave);
-      progress = std::min(1.0f, progress);
-      Vector2 sample{origin.x + direction.x * range * progress,
-                     origin.y + direction.y * range * progress};
+  for (int step = 0; step < stepCount; ++step) {
+    float progress = (step + 0.5f) / static_cast<float>(stepCount);
+    Vector2 sample{origin.x + direction.x * range * progress,
+                   origin.y + direction.y * range * progress};
 
-      int cx = static_cast<int>(std::floor(sample.x));
-      int cy = static_cast<int>(std::floor(sample.y));
+    int cx = static_cast<int>(std::floor(sample.x));
+    int cy = static_cast<int>(std::floor(sample.y));
 
-      for (int dy = -radius; dy <= radius; ++dy) {
-        for (int dx = -radius; dx <= radius; ++dx) {
-          if (dx * dx + dy * dy > radius * radius)
-            continue;
-          int x = cx + dx;
-          int y = cy + dy;
-          if (ContainsCell(cells, x, y))
-            continue;
-          cells.push_back({static_cast<float>(x), static_cast<float>(y)});
-        }
-      }
-
-      if (stepSize > 1.0f) {
-        for (int i = 1; i < static_cast<int>(stepSize); ++i) {
-          Vector2 follow{origin.x + direction.x * range * (progress + i / stepSize),
-                         origin.y + direction.y * range * (progress + i / stepSize)};
-          int fx = static_cast<int>(std::floor(follow.x));
-          int fy = static_cast<int>(std::floor(follow.y));
-          for (int dy = -radius; dy <= radius; ++dy) {
-            for (int dx = -radius; dx <= radius; ++dx) {
-              if (dx * dx + dy * dy > radius * radius)
-                continue;
-              int x = fx + dx;
-              int y = fy + dy;
-              if (ContainsCell(cells, x, y))
-                continue;
-              cells.push_back({static_cast<float>(x), static_cast<float>(y)});
-            }
-          }
-        }
+    for (int dy = -radius; dy <= radius; ++dy) {
+      for (int dx = -radius; dx <= radius; ++dx) {
+        if (dx * dx + dy * dy > radius * radius)
+          continue;
+        int x = cx + dx;
+        int y = cy + dy;
+        uint32_t key = EncodeCell(x, y);
+        if (!visited.insert(key).second)
+          continue;
+        cells.push_back({static_cast<float>(x), static_cast<float>(y)});
       }
     }
   }

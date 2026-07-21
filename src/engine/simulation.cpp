@@ -167,7 +167,6 @@ void Simulation::CastSpell(const Spell &spell, Vector2 origin,
   float diameter = SpellSystem::ComputeSpellDiameter(spell);
   int waveCount = SpellSystem::ComputeSpellWaveCount(spell);
   int particlesPerWave = SpellSystem::ComputeSpellParticleCount(spell);
-  std::cout << "finished" << std::endl;
 
   SpellEffect effect;
   effect.spell = spell;
@@ -177,17 +176,13 @@ void Simulation::CastSpell(const Spell &spell, Vector2 origin,
   effect.speed = speed;
   effect.diameter = diameter;
   effect.waveSpacing = std::max(1.0f, range / std::max(1, waveCount));
-  // TODO: this is computationally heavy, remove it
   effect.affectedCells = SpellSystem::ComputeSpellWavePositions(
       spell, origin, direction, range, diameter, waveCount, particlesPerWave);
-  std::cout << "finished" << std::endl;
   effect.targetedElements = {SpellSystem::GetSpellElement(spell)};
-  std::cout << "finished" << std::endl;
   effect.color = {200, 120, 80, 255};
   effect.active = true;
   effect.particleCount = particlesPerWave;
   m_activeSpellEffects.push_back(effect);
-  std::cout << "finished" << std::endl;
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
