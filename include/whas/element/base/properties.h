@@ -46,6 +46,13 @@ struct ElementProperties {
   float restitution = 0.0f;
   float initialVx = 0.0f;
   float initialVy = 0.0f;
+
+  // Burning: once at ignitionTemp, each tick has this chance to catch fire,
+  // then burns for burnFuel seconds at burnTemp. 0 = not flammable.
+  float flammability = 0.0f;
+  float ignitionTemp = 0.0f;
+  float burnFuel = 0.0f;
+  float burnTemp = 0.0f;
 };
 
 using PropertiesArray =

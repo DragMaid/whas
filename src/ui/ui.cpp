@@ -60,42 +60,33 @@ constexpr float kParticleGravity = 20.0f;
 UI::UI() {
   rlImGuiSetup(true);
 
-  m_buttons[0] = {{8 + 0 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::WATER,
-                  "WATER",
-                  {64, 164, 223, 255}};
-  m_buttons[1] = {{8 + 1 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::EARTH,
-                  "EARTH",
-                  {100, 60, 20, 255}};
-  m_buttons[2] = {{8 + 2 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::FIRE,
-                  "FIRE",
-                  {220, 80, 0, 255}};
-  m_buttons[3] = {{8 + 3 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::STEAM,
-                  "STEAM",
-                  {180, 180, 200, 255}};
-  m_buttons[4] = {{8 + 4 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::CLOUD,
-                  "CLOUD",
-                  {220, 220, 255, 255}};
-  m_buttons[5] = {{8 + 5 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::ICE,
-                  "ICE",
-                  {150, 240, 255, 255}};
-  m_buttons[6] = {{8 + 6 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::SAND,
-                  "SAND",
-                  {220, 180, 100, 255}};
-  m_buttons[7] = {{8 + 7 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::ROCK,
-                  "ROCK",
-                  {80, 80, 80, 255}};
-  m_buttons[8] = {{8 + 8 * (BTN_W + BTN_PAD), PANEL_Y + 10, BTN_W, BTN_H},
-                  Element::AIR,
-                  "Eraser",
-                  {60, 60, 60, 255}};
+  struct Material {
+    Element element;
+    const char *label;
+    Color col;
+  };
+  static constexpr Material kMaterials[] = {
+      {Element::WATER, "WATER", {64, 164, 223, 255}},
+      {Element::EARTH, "EARTH", {100, 60, 20, 255}},
+      {Element::FIRE, "FIRE", {220, 80, 0, 255}},
+      {Element::STEAM, "STEAM", {180, 180, 200, 255}},
+      {Element::CLOUD, "CLOUD", {220, 220, 255, 255}},
+      {Element::ICE, "ICE", {150, 240, 255, 255}},
+      {Element::SAND, "SAND", {220, 180, 100, 255}},
+      {Element::ROCK, "ROCK", {80, 80, 80, 255}},
+      {Element::WOOD, "WOOD", {120, 78, 40, 255}},
+      {Element::GRASS, "GRASS", {70, 150, 55, 255}},
+      {Element::AIR, "Eraser", {60, 60, 60, 255}},
+  };
+  static_assert(std::size(kMaterials) == std::size(decltype(m_buttons){}));
+  for (size_t i = 0; i < std::size(kMaterials); ++i) {
+    const Material &m = kMaterials[i];
+    m_buttons[i] = {{(float)(8 + i * (BTN_W + BTN_PAD)), PANEL_Y + 10,
+                     (float)BTN_W, (float)BTN_H},
+                    m.element,
+                    m.label,
+                    m.col};
+  }
 
   m_spellButton = {(float)(WINDOW_WIDTH - SPELL_BTN_W - 8), 8.0f,
                    (float)SPELL_BTN_W, (float)SPELL_BTN_H};

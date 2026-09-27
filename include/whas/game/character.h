@@ -31,12 +31,27 @@ struct Character {
   float hp = 100.0f;
   float maxHp = 100.0f;
 
+  // Burning: each stretch of contact with fire adds a stack, each stack deals
+  // damage every tick. Water clears them; they cool off between turns.
+  static constexpr int MAX_BURN_STACKS = 5;
+  static constexpr int TICKS_PER_STACK = 12; // contact needed for one stack
+  static constexpr float BURN_DPS = 2.5f;    // per stack
+  int burnStacks = 0;
+  int burnExposure = 0; // ticks in fire towards the next stack
+
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.
   void Step(const Simulation &sim, CharacterInput input, float dt);
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);
+
+  // One tick of burning against the current grid: gain or clear stacks and
+  // take the damage. Deterministic, part of lockstep state.
+  void UpdateBurn(const Simulation &sim, float dt);
+  // Called at the end of every turn
+  void CoolBurn() { burnStacks = burnStacks > 2 ? burnStacks - 2 : 0; }
+  bool Burning() const { return burnStacks > 0; }
 
   Rectangle Bounds() const { return {pos.x, pos.y, WIDTH, HEIGHT}; }
   Vector2 Center() const {

@@ -62,7 +62,7 @@ private:
     Color col;
   };
 
-  Button m_buttons[9];
+  Button m_buttons[11];
   Rectangle m_spellButton{};
   SpellEditor m_spellEditor;
 

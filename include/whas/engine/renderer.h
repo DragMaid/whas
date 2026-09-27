@@ -10,4 +10,5 @@ public:
 
 private:
   Color CellColor(const Cell &c) const;
+  Color BaseCellColor(const Cell &c) const;
 };

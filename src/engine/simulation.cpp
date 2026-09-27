@@ -212,6 +212,7 @@ uint64_t Simulation::StateHash() const {
     f.Add(c.lifetime);
     f.Add(c.hardness);
     f.Add(c.moisture);
+    f.Add(c.flags);
   }
   const_cast<ParticleSystem &>(m_particles).ForEachActive([&](Particle &p) {
     f.AddVec(p.pos);

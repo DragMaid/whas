@@ -237,6 +237,8 @@ void Game::UpdateExecuting(Simulation &sim) {
   sim.Update(TurnController::TICK_DT);
   ApplyHits(sim);
   ApplyGusts(sim);
+  for (Slot &slot : m_slots)
+    slot.character.UpdateBurn(sim, TurnController::TICK_DT);
 
   if (!m_turn.Advance())
     FinishTurn(sim);
@@ -244,6 +246,8 @@ void Game::UpdateExecuting(Simulation &sim) {
 
 void Game::FinishTurn(Simulation &sim) {
   m_turnNumber++;
+  for (Slot &slot : m_slots)
+    slot.character.CoolBurn();
 
   if (!m_slots[LOCAL].character.Alive()) {
     m_state = RoundState::Defeated;
@@ -285,8 +289,11 @@ void Game::ApplyHits(Simulation &sim) {
   for (const ParticleHit &hit : sim.GetParticleSystem().TakeHits()) {
     for (Slot &slot : m_slots) {
       Character &c = slot.character;
-      if (c.id == hit.targetId)
-        c.hp = std::max(0.0f, c.hp - hit.power * DAMAGE_PER_POWER);
+      if (c.id != hit.targetId)
+        continue;
+      c.hp = std::max(0.0f, c.hp - hit.power * DAMAGE_PER_POWER);
+      if (hit.element == Element::WATER)
+        c.burnStacks = 0;
     }
   }
 }
@@ -374,6 +381,23 @@ void Game::DrawCharacter(const Character &c, Color color, bool drawHp) const {
   // Eye to show facing
   float eyeX = r.x + r.width * (c.facing > 0 ? 0.7f : 0.3f);
   DrawCircleV({eyeX, r.y + r.height * 0.25f}, 1.5f, Color{20, 20, 30, color.a});
+
+  // Flames wrapping the body, more of them the more stacks there are
+  if (c.Burning()) {
+    int frame = static_cast<int>(GetTime() * 14.0);
+    BeginBlendMode(BLEND_ADDITIVE);
+    for (int i = 0; i < 3 + c.burnStacks * 2; ++i) {
+      uint32_t h = (uint32_t)(i * 2654435761u) ^ (uint32_t)(frame * 40503u);
+      h ^= h >> 15;
+      float fx = r.x + (h % 100) / 100.0f * r.width;
+      float fy = r.y + r.height * (0.2f + ((h >> 8) % 80) / 100.0f);
+      float size = 2.0f + ((h >> 16) % 4);
+      DrawTriangle({fx, fy - size * 2.2f}, {fx - size, fy}, {fx + size, fy},
+                   Color{255, (unsigned char)(90 + (h >> 20) % 120), 20,
+                         (unsigned char)(150 * color.a / 255)});
+    }
+    EndBlendMode();
+  }
 
   if (!drawHp)
     return;

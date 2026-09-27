@@ -76,6 +76,8 @@ set(SOURCES
     src/element/cloud.cpp
     src/element/ice.cpp
     src/element/sand.cpp
+    src/element/burning.cpp
+    src/element/smoke.cpp
 
     src/engine/simulation.cpp
     src/engine/renderer.cpp
@@ -160,6 +162,7 @@ if(WHAS_BUILD_TESTS)
 
     add_executable(whas_tests
         tests/determinism_test.cpp
+        tests/burning_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
 endif()

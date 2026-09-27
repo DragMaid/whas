@@ -11,6 +11,9 @@ enum class Element : uint8_t {
   ICE = 6,
   SAND = 7,
   ROCK = 8,
+  WOOD = 9,
+  GRASS = 10,
+  SMOKE = 11,
 
   COUNT
 };
@@ -35,6 +38,12 @@ inline const char *ElementName(Element element) {
     return "SAND";
   case Element::ROCK:
     return "ROCK";
+  case Element::WOOD:
+    return "WOOD";
+  case Element::GRASS:
+    return "GRASS";
+  case Element::SMOKE:
+    return "SMOKE";
   default:
     return "UNKNOWN";
   }

@@ -14,6 +14,7 @@ struct ParticleHit {
     int targetId;
     int ownerId;
     float power;
+    Element element; // what hit: water puts out burning characters
 };
 
 // A particle spawn queued by a worker thread (see ElementContext)

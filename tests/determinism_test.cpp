@@ -26,6 +26,11 @@ void BuildScene(Simulation &sim) {
   sim.Paint(260, 140, Element::ICE, 6);
   sim.Paint(160, 140, Element::FIRE, 5);
   sim.Paint(280, 40, Element::STEAM, 6);
+  // A burning grove: grass on the floor and a wooden pillar next to the fire
+  for (int x = 140; x < 200; ++x)
+    sim.Paint(x, GRID_H - 8, Element::GRASS, 0);
+  for (int y = GRID_H - 30; y < GRID_H - 8; ++y)
+    sim.Paint(170, y, Element::WOOD, 1);
 }
 
 // Runs the scene and returns the state hash after every frame

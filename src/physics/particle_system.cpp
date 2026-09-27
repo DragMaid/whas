@@ -168,7 +168,7 @@ bool ParticleSystem::HitHurtbox(const Particle &p) {
   for (const Hurtbox &box : m_hurtboxes) {
     if (box.id == p.owner || !CheckCollisionPointRec(p.pos, box.bounds))
       continue;
-    m_hits.push_back({box.id, p.owner, p.power});
+    m_hits.push_back({box.id, p.owner, p.power, p.element});
     return true;
   }
   return false;

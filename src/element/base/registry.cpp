@@ -13,6 +13,9 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
     ElementsImpl::UpdateIce,
     ElementsImpl::UpdateSand,
     nullptr, // Rock
+    ElementsImpl::UpdateWood,
+    ElementsImpl::UpdateGrass,
+    ElementsImpl::UpdateSmoke,
 };
 
 void ElementUpdateRegistry::Update(Element element, int x, int y,

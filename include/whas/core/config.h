@@ -47,6 +47,16 @@ struct FireConfig {
   int sparkChance = 4;
   float sparkTempScale = 0.6f;
   float sparkLifetimeScale = 0.5f;
+
+  // Heat a fire cell adds to each touching flammable, ice or water cell per tick
+  float contactHeat = 25.0f;
+  // Chance per tick a burning cell puts a flame in the air above it
+  float flameChance = 0.35f;
+  float smokeChance = 0.04f;
+  // Chance per tick fire scorches a touching earth/rock/sand cell
+  float charChance = 0.02f;
+  // Temperature a burning cell drops to when water puts it out
+  float extinguishTemp = 60.0f;
 };
 
 struct SteamConfig {
