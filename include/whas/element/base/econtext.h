@@ -13,5 +13,4 @@ struct ElementContext {
   const SimulationConfig &config;
   uint32_t frameIndex;
   class ParticleSystem &particles;
-  std::vector<SpellEffect> *activeSpellEffects = nullptr;
 };

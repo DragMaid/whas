@@ -3,6 +3,7 @@
 #include "whas/element/base/econtext.h"
 #include "whas/world/grid.h"
 #include <box2d/box2d.h>
+#include <raylib.h>
 #include <cstdint>
 #include <vector>
 
@@ -37,6 +38,10 @@ public:
                   float dt);
 
   void DrawDebug();
+
+  // Push the body that owns a grid cell (cell.bodyID), impulse and point in
+  // cell units. Unknown ids are ignored.
+  void ApplyImpulse(int32_t cellBodyID, Vector2 impulse, Vector2 point);
 
   // Extract rigid bodies from the grid (for initial or new dynamic bodies)
   void ExtractDynamicBodies(Grid &grid, ElementContext &ctx,

@@ -6,7 +6,7 @@
 #include "whas/physics/heat_system.h"
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
-#include <iostream>
+#include <utility>
 
 Simulation::Simulation()
     : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config), m_particles(),
@@ -42,10 +42,7 @@ void Simulation::Update(float dt, bool isPainting) {
                      m_rng,
                      m_frameConfig,
                      m_frameCounter,
-                     m_particles,
-                     &m_activeSpellEffects};
-
-  // 0. Spell particles are updated as part of the normal particle system.
+                     m_particles};
 
   // 1. Damage check — detect erased/painted-over body pixels and release them
   m_rigidBodies.PreUpdate(m_grid, ctx);
@@ -69,7 +66,8 @@ void Simulation::Update(float dt, bool isPainting) {
   // 4. Clear, mesh, step, displace, sync
   m_rigidBodies.PostUpdate(m_grid, ctx, m_particles, m_frameConfig, dt);
 
-  // 5. Particle update
+  // 5. Spell emission, then particle update
+  SpellSystem::TickEffects(m_activeSpellEffects, ctx, m_rigidBodies, dt);
   m_particles.Update(m_grid, ctx, dt);
 
   // 6. Heat & pressure propagation
@@ -105,8 +103,7 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
                        threadRng,
                        m_frameConfig,
                        currentFrame,
-                       m_particles,
-                       &m_activeSpellEffects};
+                       m_particles};
 
     for (int pass = 0; pass < 4; ++pass) {
       int passX = pass % 2;
@@ -160,28 +157,16 @@ void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
 void Simulation::UpdateElements() {}
 
 void Simulation::CastSpell(const Spell &spell, Vector2 origin,
-                           Vector2 mouseDirection) {
-  Vector2 direction = SpellSystem::ComputeSpellDirection(spell, mouseDirection);
-  float range = SpellSystem::ComputeSpellRange(spell);
-  float speed = SpellSystem::ComputeSpellSpeed(spell);
-  float diameter = SpellSystem::ComputeSpellDiameter(spell);
-  int waveCount = SpellSystem::ComputeSpellWaveCount(spell);
-  int particlesPerWave = SpellSystem::ComputeSpellParticleCount(spell);
-
+                           Vector2 aimDirection, int owner) {
   SpellEffect effect;
-  effect.spell = spell;
+  effect.stats = SpellSystem::Evaluate(spell);
+  // Flight moves the caster, which the game layer handles
+  if (!effect.stats.valid || effect.stats.kind == SpellKind::Flight)
+    return;
+  effect.timeRemaining = effect.stats.duration;
   effect.origin = origin;
-  effect.direction = direction;
-  effect.range = range;
-  effect.speed = speed;
-  effect.diameter = diameter;
-  effect.waveSpacing = std::max(1.0f, range / std::max(1, waveCount));
-  effect.affectedCells = SpellSystem::ComputeSpellWavePositions(
-      spell, origin, direction, range, diameter, waveCount, particlesPerWave);
-  effect.targetedElements = {SpellSystem::GetSpellElement(spell)};
-  effect.color = {200, 120, 80, 255};
-  effect.active = true;
-  effect.particleCount = particlesPerWave;
+  effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
+  effect.owner = owner;
   m_activeSpellEffects.push_back(effect);
 }
 
@@ -216,6 +201,17 @@ void Simulation::Erase(int cx, int cy, int brushRadius) {
       m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
     }
   }
+}
+
+void Simulation::Reset() {
+  // Erasing body cells makes the rigid body system drop those bodies on the
+  // next update, the same as when the player erases them by hand
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (m_grid.Get(x, y).element != Element::AIR)
+        Erase(x, y, 0);
+  m_particles.Clear();
+  m_activeSpellEffects.clear();
 }
 
 void Simulation::CollectStatistics() {

@@ -1,8 +1,8 @@
 #include "whas/physics/particle_system.h"
 #include "whas/constants.h"
+#include "whas/core/config.h"
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
-#include "whas/spell/spell_system.h"
 #include "whas/world/grid.h"
 #include <algorithm>
 #include <cmath>
@@ -12,165 +12,231 @@ ParticleSystem::ParticleSystem(int maxParticles)
   m_particles.resize(maxParticles);
 }
 
-void ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
-                           float remainingDistance, bool spellActive,
-                           bool isProjectile) {
+Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
+                                float remainingDistance, float power,
+                                bool isProjectile, int owner) {
   for (auto &p : m_particles) {
     if (!p.active) {
       p.pos = pos;
       p.vel = vel;
       p.element = element;
       p.active = true;
-      p.spellActive = spellActive;
       p.isProjectile = isProjectile;
       p.remainingDistance = remainingDistance;
-      return;
+      p.power = power;
+      p.owner = owner;
+      p.temperature = 0.0f;
+      return &p;
     }
   }
+  return nullptr;
 }
 
 namespace {
 
-void ResolveParticleCollision(Particle &p, Grid &grid, ElementContext &ctx,
-                              int tx, int ty) {
-  const Cell &target = grid.Get(tx, ty);
-  const auto &targetProps =
-      ctx.config.elements[static_cast<size_t>(target.element)];
+// Loose rock would immediately be re-extracted and crumbled by the rigid body
+// system, so it settles as rubble instead.
+Element DepositedElement(Element element) {
+  return element == Element::ROCK ? Element::SAND : element;
+}
 
-  if (targetProps.passable)
-    return;
+// How impacts spend a projectile's power
+struct ImpactTuning {
+  float granularCostScale = 0.3f; // shoving loose grains is cheaper than breaking
+  float granularSlowdown = 0.85f;
+  float solidSlowdown = 0.6f;
+  float ejectaSpeedScale = 0.25f; // debris kicked back at this share of speed
+  float ejectaSpreadDeg = 50.0f;
+  float ejectaLift = 8.0f;
+};
 
-  const auto &sourceProps = ctx.config.elements[static_cast<size_t>(p.element)];
-  float mass = sourceProps.defaultMass > 0.0f ? sourceProps.defaultMass : 1.0f;
-  float speedSq = p.vel.x * p.vel.x + p.vel.y * p.vel.y;
-  float kineticEnergy = 0.5f * mass * speedSq;
+constexpr ImpactTuning kImpact;
 
-  if (kineticEnergy >= target.hardness) {
-    Cell air = ElementFactory::Create(Element::AIR, ctx.config);
-    grid.Get(tx, ty) = air;
-    ctx.chunks.WakeChunkAt(tx, ty, ctx.frameIndex, true);
-
-    float remainingEnergy = kineticEnergy - target.hardness;
-    float newSpeed = (remainingEnergy > 0.0f)
-                         ? std::sqrt((2.0f * remainingEnergy) / mass)
-                         : 0.0f;
-    float speed = std::sqrt(speedSq);
-    float scale = (speed > 0.001f) ? newSpeed / speed : 0.0f;
-    p.vel.x *= scale;
-    p.vel.y *= scale;
-  } else {
-    if (std::abs(p.vel.x) > std::abs(p.vel.y)) {
-      p.vel.x = 0.0f;
-    } else {
-      p.vel.y = 0.0f;
-    }
-    p.spellActive = false;
+// Broken solids leave loose rubble rather than floating chunks
+Element RubbleOf(Element element) {
+  switch (element) {
+  case Element::EARTH:
+  case Element::ROCK:
+    return Element::SAND;
+  default:
+    return element;
   }
 }
 
-bool ParticleInSpellEffect(const Particle &p, const SpellEffect &effect) {
-  int tx = static_cast<int>(std::floor(p.pos.x));
-  int ty = static_cast<int>(std::floor(p.pos.y));
-  return std::any_of(effect.affectedCells.begin(), effect.affectedCells.end(),
-                     [&](const Vector2 &cell) {
-                       return static_cast<int>(cell.x) == tx &&
-                              static_cast<int>(cell.y) == ty;
-                     });
+float RandomUnit(ElementContext &ctx) {
+  return (ctx.rng() % 10001) / 10000.0f;
 }
 
-void ApplyActiveSpellEffects(Particle &p, ElementContext &ctx) {
-  if (!ctx.activeSpellEffects)
+// A projectile hitting a solid cell. Loose grains (sand) get shoved along as
+// particles; rigid material (earth, rock, ice) breaks into rubble that is
+// kicked back out of the hole. Either way the projectile pays for it in power
+// and speed. Returns false when the projectile can't get through.
+bool TryImpact(Particle &p, Grid &grid, ElementContext &ctx, int tx, int ty) {
+  Cell &target = grid.Get(tx, ty);
+  const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
+  bool granular = props.mobile && props.solid;
+  float cost = granular ? target.hardness * kImpact.granularCostScale
+                        : target.hardness;
+  if (p.power < cost)
+    return false;
+  p.power -= cost;
+
+  Vector2 center{tx + 0.5f, ty + 0.5f};
+  Vector2 debrisVel;
+  if (granular) {
+    // Momentum shared by mass: light projectiles barely move heavy grains
+    float pm = ElementMass(ctx.config, p.element);
+    float gm = ElementMass(ctx.config, target.element);
+    float share = pm / (pm + gm);
+    debrisVel = {p.vel.x * share, p.vel.y * share - RandomUnit(ctx) * 3.0f};
+    p.vel.x *= kImpact.granularSlowdown;
+    p.vel.y *= kImpact.granularSlowdown;
+  } else {
+    float spread = (RandomUnit(ctx) * 2.0f - 1.0f) * kImpact.ejectaSpreadDeg *
+                   DEG2RAD;
+    float c = std::cos(spread), s = std::sin(spread);
+    Vector2 back{-p.vel.x * kImpact.ejectaSpeedScale,
+                 -p.vel.y * kImpact.ejectaSpeedScale};
+    debrisVel = {back.x * c - back.y * s,
+                 back.x * s + back.y * c - kImpact.ejectaLift};
+    p.vel.x *= kImpact.solidSlowdown;
+    p.vel.y *= kImpact.solidSlowdown;
+  }
+
+  Element debris = granular ? target.element : RubbleOf(target.element);
+  float temperature = target.temperature;
+  target = ElementFactory::Create(Element::AIR, ctx.config);
+  ctx.chunks.WakeChunkAt(tx, ty, ctx.frameIndex, props.staticTerrain);
+  if (Particle *d = ctx.particles.Spawn(center, debrisVel, debris))
+    d->temperature = temperature;
+  return true;
+}
+
+// Turn the particle back into a grid cell at the nearest free spot, searching
+// outward ring by ring (upper cells first) so displaced material piles up
+// instead of vanishing when it lands somewhere crowded
+void Deposit(Particle &p, Grid &grid, ElementContext &ctx) {
+  constexpr int kMaxRadius = 8;
+  p.active = false;
+  if (p.element == Element::AIR)
     return;
-  for (SpellEffect &effect : *ctx.activeSpellEffects) {
-    if (!effect.active)
-      continue;
-    if (!ParticleInSpellEffect(p, effect))
-      continue;
-    if (std::find(effect.targetedElements.begin(),
-                  effect.targetedElements.end(),
-                  p.element) == effect.targetedElements.end()) {
-      continue;
+
+  int px = static_cast<int>(std::floor(p.pos.x));
+  int py = static_cast<int>(std::floor(p.pos.y));
+
+  for (int r = 0; r <= kMaxRadius; ++r) {
+    for (int dy = -r; dy <= r; ++dy) {
+      for (int dx = -r; dx <= r; ++dx) {
+        if (std::max(std::abs(dx), std::abs(dy)) != r)
+          continue; // ring only
+        int x = px + dx;
+        int y = py + dy;
+        if (!grid.InBounds(x, y) || grid.Get(x, y).element != Element::AIR)
+          continue;
+
+        Element element = DepositedElement(p.element);
+        Cell cell = ElementFactory::Create(element, ctx.config);
+        if (p.temperature > 0.0f)
+          cell.temperature = p.temperature;
+        if (element == Element::FIRE && p.temperature > 0.0f) {
+          // Hotter fire carries more fuel and burns longer
+          const auto &fire = ctx.config.elements[static_cast<size_t>(element)];
+          float scale = std::clamp(p.temperature / fire.defaultTemperature,
+                                   1.0f, ctx.config.fire.maxFuelScale);
+          cell.lifetime *= scale;
+        }
+        grid.Get(x, y) = cell;
+        const auto &props = ctx.config.elements[static_cast<size_t>(element)];
+        ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, props.staticTerrain);
+        return;
+      }
     }
-    SpellSystem::ApplySpellEffectToParticle(p, effect, ctx);
   }
 }
 
 } // namespace
+
+bool ParticleSystem::HitHurtbox(const Particle &p) {
+  for (const Hurtbox &box : m_hurtboxes) {
+    if (box.id == p.owner || !CheckCollisionPointRec(p.pos, box.bounds))
+      continue;
+    m_hits.push_back({box.id, p.owner, p.power});
+    return true;
+  }
+  return false;
+}
 
 void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
   for (auto &p : m_particles) {
     if (!p.active)
       continue;
 
-    Vector2 movement = {p.vel.x * dt, p.vel.y * dt};
-    p.vel.y += ctx.config.world.gravity * 20.0f * dt;
-    movement = {p.vel.x * dt, p.vel.y * dt};
+    bool flying = p.isProjectile && p.remainingDistance > 0.0f;
+    if (!flying)
+      p.vel.y += ctx.config.world.gravity * 20.0f * dt;
 
+    Vector2 movement = {p.vel.x * dt, p.vel.y * dt};
     float travelDistance =
         std::sqrt(movement.x * movement.x + movement.y * movement.y);
     int steps = std::max(1, (int)std::ceil(travelDistance));
     Vector2 stepDelta = {movement.x / steps, movement.y / steps};
+    float stepLength = travelDistance / steps;
 
-    bool alive = true;
-    for (int step = 0; step < steps && alive; ++step) {
+    for (int step = 0; step < steps; ++step) {
       Vector2 nextPos = {p.pos.x + stepDelta.x, p.pos.y + stepDelta.y};
       int tx = (int)std::floor(nextPos.x);
       int ty = (int)std::floor(nextPos.y);
 
       if (!grid.InBounds(tx, ty)) {
-        p.active = false;
-        alive = false;
+        // The world edge acts as a wall
+        Deposit(p, grid, ctx);
         break;
       }
 
-      ApplyActiveSpellEffects(p, ctx);
-
       const Cell &target = grid.Get(tx, ty);
-      if (target.element != Element::AIR) {
-        ResolveParticleCollision(p, grid, ctx, tx, ty);
-        if (p.spellActive) {
-          p.pos = nextPos;
-          continue;
+      const auto &targetProps =
+          ctx.config.elements[static_cast<size_t>(target.element)];
+      if (target.element != Element::AIR && !targetProps.passable) {
+        bool flyingNow = p.isProjectile && p.remainingDistance > 0.0f;
+        // Projectiles slip through liquids rather than erasing them
+        bool liquid = targetProps.mobile && !targetProps.solid;
+        bool penetrated =
+            flyingNow && (liquid || TryImpact(p, grid, ctx, tx, ty));
+        // Liquid projectiles splash apart on impact: they can knock out one
+        // cell but don't keep boring through like solid ones
+        const auto &selfProps =
+            ctx.config.elements[static_cast<size_t>(p.element)];
+        if (penetrated && !liquid && selfProps.mobile && !selfProps.solid)
+          p.power = 0.0f;
+        if (!penetrated) {
+          Deposit(p, grid, ctx);
+          break;
         }
-
-        alive = false;
-        break;
       }
 
       p.pos = nextPos;
+
+      if (p.isProjectile && p.remainingDistance > 0.0f && HitHurtbox(p)) {
+        p.active = false;
+        break;
+      }
+
+      if (p.isProjectile) {
+        p.remainingDistance -= stepLength;
+        if (p.remainingDistance <= 0.0f) {
+          // Out of range: the spell lets go and the element falls naturally
+          p.isProjectile = false;
+          p.power = 0.0f;
+        }
+      }
     }
-
-    if (!alive)
-      continue;
   }
+}
 
-  if (ctx.activeSpellEffects) {
-    auto &effects = *ctx.activeSpellEffects;
-    effects.erase(
-        std::remove_if(effects.begin(), effects.end(),
-                       [&](SpellEffect &effect) {
-                         if (!effect.active)
-                           return true;
-                         if (!effect.hadTargetInZone)
-                           return false;
-                         bool hasTargetInZone = false;
-                         for (const auto &p : m_particles) {
-                           if (!p.active)
-                             continue;
-                           if (std::find(effect.targetedElements.begin(),
-                                         effect.targetedElements.end(),
-                                         p.element) ==
-                               effect.targetedElements.end())
-                             continue;
-                           if (ParticleInSpellEffect(p, effect)) {
-                             hasTargetInZone = true;
-                             break;
-                           }
-                         }
-                         return !hasTargetInZone;
-                       }),
-        effects.end());
-  }
+void ParticleSystem::Clear() {
+  for (auto &p : m_particles)
+    p.active = false;
+  m_hits.clear();
 }
 
 void ParticleSystem::Draw() {
@@ -190,6 +256,15 @@ void ParticleSystem::Draw() {
         break;
       case Element::ROCK:
         color = {100, 100, 100, 255};
+        break;
+      case Element::FIRE:
+        color = {240, 110, 20, 255};
+        break;
+      case Element::ICE:
+        color = {160, 230, 255, 255};
+        break;
+      case Element::STEAM:
+        color = {200, 200, 215, 255};
         break;
       default:
         color = WHITE;

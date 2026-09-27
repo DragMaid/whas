@@ -1,29 +1,62 @@
 #pragma once
 #include "whas/core/element.h"
+#include <utility>
 #include <vector>
 #include <raylib.h>
+
+// Something spell projectiles can hit that isn't part of the grid
+struct Hurtbox {
+    int id;
+    Rectangle bounds; // cells
+};
+
+struct ParticleHit {
+    int targetId;
+    int ownerId;
+    float power;
+};
 
 struct Particle {
     Vector2 pos;
     Vector2 vel;
     Element element;
     bool active = false;
-    bool spellActive = false;
+    // Spell projectiles fly straight until remainingDistance runs out and are
+    // the only particles allowed to break cells (spending power per cell).
     bool isProjectile = false;
     float remainingDistance = 0.0f;
+    float power = 0.0f;
+    int owner = -1; // hurtbox id that cast it; never hits its owner
+    float temperature = 0.0f; // heat it lands with; 0 keeps the element default
 };
 
 class ParticleSystem {
 public:
-    ParticleSystem(int maxParticles = 2000);
-    
-    void Spawn(Vector2 pos, Vector2 vel, Element element,
-               float remainingDistance = 0.0f, bool spellActive = false,
-               bool isProjectile = false);
+    ParticleSystem(int maxParticles = 6000);
+
+    // Returns the new particle, or nullptr when the pool is full
+    Particle *Spawn(Vector2 pos, Vector2 vel, Element element,
+                    float remainingDistance = 0.0f, float power = 0.0f,
+                    bool isProjectile = false, int owner = -1);
     void Update(struct Grid& grid, struct ElementContext& ctx, float dt);
     void Draw();
+    void Clear();
+
+    template <typename Fn> void ForEachActive(Fn &&fn) {
+        for (auto &p : m_particles)
+            if (p.active)
+                fn(p);
+    }
+
+    void SetHurtboxes(std::vector<Hurtbox> hurtboxes) { m_hurtboxes = std::move(hurtboxes); }
+    // Hits recorded since the last call
+    std::vector<ParticleHit> TakeHits() { return std::exchange(m_hits, {}); }
 
 private:
+    bool HitHurtbox(const Particle &p);
+
     std::vector<Particle> m_particles;
+    std::vector<Hurtbox> m_hurtboxes;
+    std::vector<ParticleHit> m_hits;
     int m_maxParticles;
 };

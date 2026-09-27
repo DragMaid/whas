@@ -28,6 +28,8 @@ public:
 
   void Paint(int cx, int cy, Element element, int brushRadius);
   void Erase(int cx, int cy, int brushRadius);
+  // Empty the world: every cell, particle and in-flight spell
+  void Reset();
 
   const Cell &GetCell(int x, int y) const { return m_grid.Get(x, y); }
 
@@ -38,14 +40,16 @@ public:
 
   // Runtime Tuning
   SimulationConfig &GetConfig() { return m_config; }
+  const SimulationConfig &GetConfig() const { return m_config; }
   RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
   ParticleSystem &GetParticleSystem() { return m_particles; }
   const std::vector<SpellEffect> &GetActiveSpellEffects() const {
     return m_activeSpellEffects;
   }
 
-  // Spell casting
-  void CastSpell(const Spell &spell, Vector2 origin, Vector2 mouseDirection);
+  // Spell casting; owner is the caster's hurtbox id so it can't hit itself
+  void CastSpell(const Spell &spell, Vector2 origin, Vector2 aimDirection,
+                 int owner = -1);
 
 private:
   SimulationConfig m_config;      // Editable source

@@ -12,6 +12,70 @@ SpellEditor::SpellEditor() {
   RefreshSavedSpells();
 }
 
+namespace {
+
+void AddArrow(ImDrawList *dl, ImVec2 from, ImVec2 dir, float length,
+              ImU32 color, float thickness) {
+  ImVec2 tip{from.x + dir.x * length, from.y + dir.y * length};
+  dl->AddLine(from, tip, color, thickness);
+  float head = std::min(12.0f, length * 0.4f);
+  ImVec2 back{tip.x - dir.x * head, tip.y - dir.y * head};
+  ImVec2 side{-dir.y * head * 0.5f, dir.x * head * 0.5f};
+  dl->AddTriangleFilled(tip, {back.x + side.x, back.y + side.y},
+                        {back.x - side.x, back.y - side.y}, color);
+}
+
+ImU32 ToImU32(Color c) { return IM_COL32(c.r, c.g, c.b, c.a); }
+
+} // namespace
+
+Color SpellEditor::BalanceColor(float imbalance) {
+  if (imbalance < SpellSystem::BALANCED_THRESHOLD)
+    return {60, 200, 90, 255};
+  float t = std::clamp(imbalance, 0.0f, 1.0f);
+  return {255, static_cast<unsigned char>(170 - 140 * t), 30, 255};
+}
+
+void SpellEditor::DrawStats(const SpellStats &stats) {
+  if (!stats.valid) {
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                       "Needs exactly one known sigil");
+    return;
+  }
+  Color c = BalanceColor(stats.imbalance);
+  switch (stats.kind) {
+  case SpellKind::Flight:
+    ImGui::Text("Wind: carries the caster");
+    break;
+  case SpellKind::Gust:
+    ImGui::Text("Gust: pushes everything in its path");
+    break;
+  default:
+    ImGui::Text("Element: %s", ElementName(stats.element));
+    break;
+  }
+  ImGui::TextColored(ImVec4(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, 1.0f),
+                     "Balance: %.0f%%  Offset: %+.0f deg",
+                     (1.0f - stats.imbalance) * 100.0f,
+                     stats.offsetRad * RAD2DEG);
+  if (stats.kind == SpellKind::Flight) {
+    ImGui::Text("Launch: %.0f cells/s", stats.launchSpeed);
+    return;
+  }
+  ImGui::Text("Speed: %.0f cells/s", stats.speed);
+  ImGui::Text("Range: %.0f cells", stats.range);
+  if (stats.kind == SpellKind::Gust) {
+    ImGui::Text("Force: %.0f  Duration: %.2fs", stats.force, stats.duration);
+    ImGui::Text("Width: %.1f cells", stats.diameter);
+    return;
+  }
+  ImGui::Text("Density: %.2f  Power: %.0f", stats.density, stats.power);
+  ImGui::Text("Diameter: %.1f  Particles: %d", stats.diameter,
+              stats.particleCount);
+  if (stats.temperature > 0.0f)
+    ImGui::Text("Heat: %.0f C", stats.temperature);
+}
+
 void SpellEditor::RefreshSavedSpells() { m_savedSpells = m_store.LoadAll(); }
 
 const SvgAsset *SpellEditor::GetAssetForGlyph(const PlacedGlyph &glyph) const {
@@ -148,6 +212,15 @@ bool SpellEditor::TryPlaceAt(Vector2 spellPos) {
     return false;
   }
 
+  if (glyph.kind == GlyphKind::Sigil &&
+      std::any_of(m_currentSpell.glyphs.begin(), m_currentSpell.glyphs.end(),
+                  [](const PlacedGlyph &g) {
+                    return g.kind == GlyphKind::Sigil;
+                  })) {
+    m_statusMessage = "A spell can only hold one sigil.";
+    return false;
+  }
+
   m_currentSpell.glyphs.push_back(glyph);
   m_isPlacing = false;
   m_paletteAssetId.clear();
@@ -202,6 +275,8 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     }
     DrawGlyphLines(dl, *asset, glyph, canvasOrigin, canvasCenter, color, 2.0f);
   }
+
+  DrawVectorOverlay(dl, canvasOrigin, canvasCenter);
 
   ImGui::SetCursorScreenPos(canvasOrigin);
   ImGui::InvisibleButton("##spell_canvas", canvasSize);
@@ -271,6 +346,42 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
       // Validation still updates for feedback elsewhere.
     }
   }
+}
+
+void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
+                                    ImVec2 canvasCenter) {
+  ImVec2 center = SpellToCanvasSpace(canvasOrigin, canvasCenter, {0, 0});
+
+  // "Up" on the circle is where the caster aims
+  ImVec2 aimMark{center.x, center.y - SPELL_OUTER_RADIUS + 6.0f};
+  dl->AddTriangleFilled({aimMark.x, aimMark.y - 8.0f},
+                        {aimMark.x - 6.0f, aimMark.y + 4.0f},
+                        {aimMark.x + 6.0f, aimMark.y + 4.0f},
+                        IM_COL32(90, 90, 200, 200));
+
+  for (const auto &glyph : m_currentSpell.glyphs) {
+    if (glyph.kind != GlyphKind::Sign)
+      continue;
+    float rad = glyph.rotationDeg * DEG2RAD;
+    ImVec2 dir{std::sin(rad), -std::cos(rad)};
+    ImVec2 from = SpellToCanvasSpace(canvasOrigin, canvasCenter, glyph.position);
+    AddArrow(dl, from, dir, 30.0f * glyph.scale, IM_COL32(70, 110, 220, 200),
+             2.0f);
+  }
+
+  SpellStats stats = SpellSystem::Evaluate(m_currentSpell);
+  if (stats.totalMagnitude <= 0.0f)
+    return;
+
+  ImU32 color = ToImU32(BalanceColor(stats.imbalance));
+  float netLen = std::hypot(stats.netLocal.x, stats.netLocal.y);
+  if (stats.imbalance < SpellSystem::BALANCED_THRESHOLD || netLen < 0.001f) {
+    dl->AddCircle(center, 10.0f, color, 24, 3.0f);
+    return;
+  }
+  ImVec2 dir{stats.netLocal.x / netLen, stats.netLocal.y / netLen};
+  AddArrow(dl, center, dir, std::min(SPELL_INNER_RADIUS * 0.8f, netLen * 60.0f),
+           color, 4.0f);
 }
 
 void SpellEditor::DrawPalette() {
@@ -427,8 +538,8 @@ void SpellEditor::DrawOverlay() {
       if (a->kind == GlyphKind::Sigil) sigilCount++;
       if (!IsPlacementValid(g, i)) { anyInvalid = true; }
     }
-    if (signCount == 0 || sigilCount == 0) {
-      m_statusMessage = "Spell must contain at least one sign and one sigil.";
+    if (signCount == 0 || sigilCount != 1) {
+      m_statusMessage = "Spell must contain at least one sign and exactly one sigil.";
     } else if (anyInvalid) {
       m_statusMessage = "Spell contains invalid glyph placements (red).";
     } else {
@@ -464,6 +575,8 @@ void SpellEditor::DrawOverlay() {
   ImGui::SameLine();
 
   ImGui::BeginChild("RightPanel", ImVec2(rightW, 0), true);
+  if (ImGui::CollapsingHeader("Spell Stats", ImGuiTreeNodeFlags_DefaultOpen))
+    DrawStats(SpellSystem::Evaluate(m_currentSpell));
   DrawEditPanel();
   DrawPalette();
   DrawSavedSpells();

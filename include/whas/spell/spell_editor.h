@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whas/spell/spell_store.h"
+#include "whas/spell/spell_system.h"
 #include "whas/spell/spell_types.h"
 #include "whas/spell/svg_library.h"
 #include <imgui.h>
@@ -17,12 +18,18 @@ public:
   void Open() { m_open = true; }
   void Close() { m_open = false; }
 
+  // Shared with the casting UI
+  static Color BalanceColor(float imbalance);
+  static void DrawStats(const SpellStats &stats);
+
 private:
   void DrawOverlay();
   void DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize);
   void DrawPalette();
   void DrawEditPanel();
   void DrawSavedSpells();
+  void DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
+                         ImVec2 canvasCenter);
 
   void DrawAssetThumbnail(const SvgAsset &asset, bool selected);
   void DrawGlyphLines(ImDrawList *dl, const SvgAsset &asset,

@@ -40,5 +40,4 @@ struct PlacedGlyph {
 struct Spell {
   std::string name;
   std::vector<PlacedGlyph> glyphs;
-  float diameter = 5.0f;
 };
