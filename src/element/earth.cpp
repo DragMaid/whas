@@ -7,16 +7,16 @@ namespace ElementsImpl {
 
 void UpdateEarth(int x, int y, ElementContext &ctx) {
   const auto& eConfig = ctx.config.earth;
-  Cell src = ctx.currentGrid.GetCurrent(x, y);
+  Cell src = ctx.grid.Get(x, y);
 
   const int dx4[] = {0, 0, -1, 1};
   const int dy4[] = {-1, 1, 0, 0};
   for (int i = 0; i < 4; ++i) {
     int nx = x + dx4[i], ny = y + dy4[i];
-    if (!ctx.currentGrid.InBounds(nx, ny))
+    if (!ctx.grid.InBounds(nx, ny))
       continue;
     
-    if (ctx.currentGrid.GetCurrent(nx, ny).element == Element::FIRE) {
+    if (ctx.grid.Get(nx, ny).element == Element::FIRE) {
       src.hardness = std::max(0.0f, src.hardness - eConfig.fireHardnessLoss);
     }
   }

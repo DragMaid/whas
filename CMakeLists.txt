@@ -1,9 +1,11 @@
 cmake_minimum_required(VERSION 4.0)
-project(whas VERSION 0.1.0 LANGUAGES CXX)
+project(whas VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# No C++20 modules here; the dependency scan trips an assertion in ninja 1.13
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # Raylib dependency
 include(FetchContent)
@@ -28,6 +30,28 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(rlImGui)
 
+FetchContent_Declare(
+    box2d
+    GIT_REPOSITORY https://github.com/erincatto/box2d.git
+    # Pinned: main renames APIs (b2Body_ApplyMassFromShapes -> UpdateMassFromShapes)
+    GIT_TAG 956ce4e1e8acddd05a21102629e268ff9321ec50
+)
+FetchContent_MakeAvailable(box2d)
+
+FetchContent_Declare(
+    nanosvg
+    GIT_REPOSITORY https://github.com/memononen/nanosvg.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(nanosvg)
+
+FetchContent_Declare(
+    json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(json)
+
 set(SOURCES
     src/element/base/factory.cpp
     src/element/base/properties.cpp
@@ -41,6 +65,9 @@ set(SOURCES
     src/physics/heat_system.cpp
     src/physics/pressure_system.cpp
     src/physics/fluid_movement_system.cpp
+    src/physics/rigid_body_system.cpp
+    src/physics/geometry_utils.cpp
+    src/physics/particle_system.cpp
 
     src/element/fire.cpp
     src/element/water.cpp
@@ -48,11 +75,22 @@ set(SOURCES
     src/element/steam.cpp
     src/element/cloud.cpp
     src/element/ice.cpp
+    src/element/sand.cpp
 
     src/engine/simulation.cpp
     src/engine/renderer.cpp
 
     src/ui/ui.cpp
+
+    src/spell/spell_geometry.cpp
+    src/spell/svg_library.cpp
+    src/spell/spell_store.cpp
+    src/spell/spell_editor.cpp
+    src/spell/spell_system.cpp
+
+    src/game/character.cpp
+    src/game/turn_controller.cpp
+    src/game/game.cpp
 )
 
 set(IMGUI_DIR ${imgui_SOURCE_DIR})
@@ -78,11 +116,13 @@ target_include_directories(whas
     $<INSTALL_INTERFACE:include>
     ${IMGUI_DIR}
     ${RLIMGUI_DIR}
+    ${nanosvg_SOURCE_DIR}/src
 )
+target_link_libraries(whas PUBLIC box2d nanosvg nlohmann_json::nlohmann_json)
 
 add_executable(whasg src/main.cpp)
 # target_link_libraries(whasg PRIVATE whas)
 # target_link_libraries(whasg PRIVATE raylib rlimgui imgui)
-target_link_libraries(whasg PRIVATE whas raylib rlimgui imgui)
+target_link_libraries(whasg PRIVATE whas raylib rlimgui imgui box2d)
 
 install(TARGETS whasg DESTINATION bin)

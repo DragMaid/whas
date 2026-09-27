@@ -2,7 +2,6 @@
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
 #include "whas/element/base/implementations.h"
-#include "whas/element/base/properties.h"
 #include "whas/physics/movement_system.h"
 #include <algorithm>
 
@@ -33,28 +32,27 @@ static bool HandleCloudFormation(int x, int y, Cell &src, const SteamConfig &sCo
 
 static void UpdateVelocity(Cell &src, const SteamConfig &sConfig) {
   // Buoyancy: hotter steam rises faster
-  src.velocityY = sConfig.buoyancyBase - (src.temperature - sConfig.condensationTemp) * sConfig.buoyancyTempScale;
+  src.vy = sConfig.buoyancyBase - (src.temperature - sConfig.condensationTemp) * sConfig.buoyancyTempScale;
   
   // Drift: random horizontal movement
-  src.velocityX += (static_cast<float>(std::rand() % 100) / 100.0f - 0.5f) * sConfig.driftStrength;
-  src.velocityX = std::clamp(src.velocityX, -sConfig.maxDrift, sConfig.maxDrift);
+  src.vx += (static_cast<float>(std::rand() % 100) / 100.0f - 0.5f) * sConfig.driftStrength;
+  src.vx = std::clamp(src.vx, -sConfig.maxDrift, sConfig.maxDrift);
 }
 
 static bool TryBuoyancyMove(int x, int y, Cell &src, ElementContext &ctx) {
-  float absVY = std::abs(src.velocityY);
+  float absVY = std::abs(src.vy);
   if (absVY < 0.1f) return false;
 
-  int dir = (src.velocityY > 0.0f) ? 1 : -1;
+  int dir = (src.vy > 0.0f) ? 1 : -1;
   int steps = std::max(1, static_cast<int>(absVY));
   int furthestY = y;
 
   for (int s = 1; s <= steps; ++s) {
     int ty = y + s * dir;
-    if (!ctx.currentGrid.InBounds(x, ty)) break;
+    if (!ctx.grid.InBounds(x, ty)) break;
     
-    const Cell &target = ctx.currentGrid.GetCurrent(x, ty);
-    const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
-    if (props.passable) {
+    const Cell &target = ctx.grid.Get(x, ty);
+    if (MovementSystem::CanDisplace(src, target, ctx)) {
       furthestY = ty;
     } else {
       break;
@@ -68,20 +66,19 @@ static bool TryBuoyancyMove(int x, int y, Cell &src, ElementContext &ctx) {
 }
 
 static bool TryDriftMove(int x, int y, Cell &src, ElementContext &ctx) {
-  float absVX = std::abs(src.velocityX);
+  float absVX = std::abs(src.vx);
   if (absVX < 0.1f) return false;
 
-  int dir = (src.velocityX > 0.0f) ? 1 : -1;
+  int dir = (src.vx > 0.0f) ? 1 : -1;
   int steps = std::max(1, static_cast<int>(absVX));
   int furthestX = x;
 
   for (int s = 1; s <= steps; ++s) {
     int tx = x + s * dir;
-    if (!ctx.currentGrid.InBounds(tx, y)) break;
+    if (!ctx.grid.InBounds(tx, y)) break;
 
-    const Cell &target = ctx.currentGrid.GetCurrent(tx, y);
-    const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
-    if (props.passable) {
+    const Cell &target = ctx.grid.Get(tx, y);
+    if (MovementSystem::CanDisplace(src, target, ctx)) {
       furthestX = tx;
     } else {
       break;
@@ -96,7 +93,7 @@ static bool TryDriftMove(int x, int y, Cell &src, ElementContext &ctx) {
 
 void UpdateSteam(int x, int y, ElementContext &ctx) {
   const auto &sConfig = ctx.config.steam;
-  Cell src = ctx.currentGrid.GetCurrent(x, y);
+  Cell src = ctx.grid.Get(x, y);
 
   // if (HandleCondensation(x, y, src, sConfig, ctx)) return;
   if (HandleCloudFormation(x, y, src, sConfig, ctx)) return;

@@ -11,15 +11,17 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
     ElementsImpl::UpdateSteam,
     ElementsImpl::UpdateCloud,
     ElementsImpl::UpdateIce,
+    ElementsImpl::UpdateSand,
+    nullptr, // Rock
 };
 
 void ElementUpdateRegistry::Update(Element element, int x, int y,
                                    ElementContext &ctx) {
-  Cell &cell = ctx.currentGrid.GetCurrent(x, y);
+  Cell &cell = ctx.grid.Get(x, y);
   const auto &props = ctx.config.elements[static_cast<size_t>(element)];
 
   // Standardized Lifetime System
-  if (props.lifetimeDecay > 0.0f && cell.lifetime >= 0.0f) {
+  if (cell.bodyID == -1 && props.lifetimeDecay > 0.0f && cell.lifetime >= 0.0f) {
     cell.lifetime -= props.lifetimeDecay;
     if (cell.lifetime <= 0.0f) {
       Cell air = ElementFactory::Create(Element::AIR, ctx.config);

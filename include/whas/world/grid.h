@@ -7,25 +7,20 @@ class Grid {
 public:
   Grid(const SimulationConfig& config);
 
-  void Swap();
-  void ClearNext();
+  // Get cell based on x, y position
+  Cell& Get(int x, int y);
+  const Cell& Get(int x, int y) const;
 
-  // Get current cell based on x, y position
-  // Const overload variation provided
-  Cell& GetCurrent(int x, int y);
-  const Cell& GetCurrent(int x, int y) const;
-
-  Cell& GetNext(int x, int y);
-  const Cell& GetNext(int x, int y) const;
+  // Legacy accessors (mapping to Get for compatibility during migration)
+  Cell& GetCurrent(int x, int y) { return Get(x, y); }
+  const Cell& GetCurrent(int x, int y) const { return Get(x, y); }
 
   bool InBounds(int x, int y) const;
 
-  std::vector<Cell>& GetCurrentBuffer() { return m_current; }
-  std::vector<Cell>& GetNextBuffer() { return m_next; }
+  std::vector<Cell>& GetBuffer() { return m_cells; }
   std::vector<float>& GetPressureBuffer() { return m_pressure; }
 
 private:
-  std::vector<Cell> m_current;
-  std::vector<Cell> m_next;
+  std::vector<Cell> m_cells;
   std::vector<float> m_pressure;
 };

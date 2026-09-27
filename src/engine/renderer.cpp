@@ -21,6 +21,10 @@ void Renderer::DrawWorld(const Simulation &sim) {
       DrawRectangle(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE, col);
     }
   }
+
+  // Draw particles (needs to cast away const for Draw() if it's not marked const, 
+  // but it calls raylib DrawPixel which is global anyway)
+  const_cast<Simulation&>(sim).GetParticleSystem().Draw();
 }
 
 void Renderer::DrawDebugOverlay(const Simulation &sim) {
@@ -118,6 +122,12 @@ Color Renderer::CellColor(const Cell &c) const {
     Color deepCold = Color{100, 180, 240, 255};         // Deep glacial blue
     Color melting = Color{230, 245, 255, 230}; // Bright, frosty white-blue
     return LerpColor(deepCold, melting, t);
+  }
+  case Element::SAND: {
+    return Color{220, 180, 100, 255}; // Sand yellow
+  }
+  case Element::ROCK: {
+    return Color{100, 100, 100, 255}; // Rock gray
   }
   default:
     return BLACK;

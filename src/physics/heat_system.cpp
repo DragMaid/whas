@@ -3,7 +3,7 @@
 #include <algorithm>
 
 void HeatSystem::Propagate(int x, int y, ElementContext &ctx, float dt) {
-  Cell &source = ctx.currentGrid.GetNext(x, y);
+  Cell &source = ctx.grid.Get(x, y);
   const ElementProperties &srcProps =
       ctx.config.elements[static_cast<size_t>(source.element)];
 
@@ -16,10 +16,10 @@ void HeatSystem::Propagate(int x, int y, ElementContext &ctx, float dt) {
     int nx = x + dx[i];
     int ny = y + dy[i];
 
-    if (!ctx.currentGrid.InBounds(nx, ny))
+    if (!ctx.grid.InBounds(nx, ny))
       continue;
 
-    const Cell &target = ctx.currentGrid.GetNext(nx, ny);
+    const Cell &target = ctx.grid.Get(nx, ny);
     const ElementProperties &dstProps =
         ctx.config.elements[static_cast<size_t>(target.element)];
 
@@ -31,7 +31,9 @@ void HeatSystem::Propagate(int x, int y, ElementContext &ctx, float dt) {
 
   // Update temperature based on heat capacity
   // We use a small factor to keep simulation stable
-  source.temperature += (netHeatFlux * dt / srcProps.thermal.heatCapacity);
+  const float TRANSFER_SPEED = 3.0f;
+  source.temperature +=
+      netHeatFlux * dt / srcProps.thermal.heatCapacity * TRANSFER_SPEED;
 
   // Apply cooling rate (return to default temp)
   float defaultTemp = srcProps.defaultTemperature;

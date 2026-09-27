@@ -1,6 +1,8 @@
 #pragma once
+#include <algorithm>
 #include "whas/element/base/properties.h"
 #include "whas/physics/fluid_properties.h"
+
 struct WorldConfig {
   float gravity = 1.0f;
   float pressureEq = 0.15f;
@@ -39,6 +41,9 @@ struct CloudConfig {
 
 struct FireConfig {
   float minTemp = 200.0f;
+  float burnTemp = 800.0f;
+  // hotter-than-default fire burns this much longer
+  float maxFuelScale = 2.5f; 
   int sparkChance = 4;
   float sparkTempScale = 0.6f;
   float sparkLifetimeScale = 0.5f;
@@ -62,7 +67,6 @@ struct EarthConfig {
 struct IceConfig {
   float meltPoint = 0.0f;
   int meltChance = 10;
-  float fireHeatGain = 2.0f;
 };
 
 struct SimulationConfig {
@@ -80,3 +84,10 @@ struct SimulationConfig {
   // Constructor defined in property registration
   SimulationConfig();
 };
+
+// Mass of one cell of an element for pushes and impacts. Massless elements
+// (fire, cloud) still get a small mass so forces stay finite.
+inline float ElementMass(const SimulationConfig &config, Element element) {
+  return std::max(0.05f,
+                  config.elements[static_cast<std::size_t>(element)].defaultMass);
+}

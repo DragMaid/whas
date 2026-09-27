@@ -15,8 +15,16 @@ Cell ElementFactory::Create(Element element, const SimulationConfig& config) {
   c.lifetime = props.defaultLifetime;
   c.moisture = props.defaultMoisture;
 
-  c.velocityX = props.velocityX;
-  c.velocityY = props.velocityY;
+  c.vx = props.initialVx;
+  c.vy = props.initialVy;
+  
+  // Explicitly initialize metadata
+  c.lastUpdateFrame = 0;
+  c.bodyID = -1;
+  c.triangleID = -1;
+  c.u = 0.0f;
+  c.v = 0.0f;
+  c.isStatic = false;
 
   return c;
 }

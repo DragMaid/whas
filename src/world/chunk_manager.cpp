@@ -18,27 +18,31 @@ void ChunkManager::BeginFrame() {
   }
 }
 
-void ChunkManager::WakeChunkAt(int x, int y) {
+void ChunkManager::WakeChunkAt(int x, int y, uint32_t frameIndex, bool staticChange) {
   int cx = x / CHUNK_SIZE;
   int cy = y / CHUNK_SIZE;
   if (cx < 0 || cx >= CHUNK_COLS || cy < 0 || cy >= CHUNK_ROWS)
     return;
 
-  GetChunk(cx, cy).Wake();
-  WakeNeighbourChunks(cx, cy);
+  Chunk& c = GetChunk(cx, cy);
+  c.Wake();
+  c.lastChangeFrame = frameIndex;
+  if (staticChange) c.lastStaticChangeFrame = frameIndex;
+  WakeNeighbourChunks(cx, cy, frameIndex, staticChange);
 }
 
-// -1, 0, 1 for both y axis and x axis
-// making a total of 9 directions (8 around and 1 self)
-// wake all of them together
-void ChunkManager::WakeNeighbourChunks(int cx, int cy) {
+void ChunkManager::WakeNeighbourChunks(int cx, int cy, uint32_t frameIndex, bool staticChange) {
   for (int dy = -1; dy <= 1; ++dy) {
     for (int dx = -1; dx <= 1; ++dx) {
       int nx = cx + dx;
       int ny = cy + dy;
 
-      if (nx >= 0 && nx < CHUNK_COLS && ny >= 0 && ny < CHUNK_ROWS)
-        m_chunks[ny * CHUNK_COLS + nx].Wake();
+      if (nx >= 0 && nx < CHUNK_COLS && ny >= 0 && ny < CHUNK_ROWS) {
+        Chunk& c = m_chunks[ny * CHUNK_COLS + nx];
+        c.Wake();
+        c.lastChangeFrame = frameIndex;
+        if (staticChange) c.lastStaticChangeFrame = frameIndex;
+      }
     }
   }
 }

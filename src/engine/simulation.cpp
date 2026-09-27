@@ -4,142 +4,220 @@
 #include "whas/element/base/factory.h"
 #include "whas/element/base/registry.h"
 #include "whas/physics/heat_system.h"
-#include "whas/physics/movement_system.h"
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
+#include <utility>
 
 Simulation::Simulation()
-    : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config) {}
+    : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config), m_particles(),
+      m_syncBarrier(std::thread::hardware_concurrency() + 1,
+                    [this]() { m_currentPass++; }) {
 
-void Simulation::Update(float dt) {
+  int numThreads = std::thread::hardware_concurrency();
+  // int numThreads = 1;
+  for (int i = 0; i < numThreads; ++i) {
+    m_workers.emplace_back(
+        [this, i](std::stop_token st) { WorkerLoop(i, st); });
+  }
+}
 
-  // TODO: disable all chunk activation later
-  std::vector<Chunk> &allChunks = m_chunks.GetChunks();
-  for (Chunk &c : allChunks)
-    c.Wake();
+Simulation::~Simulation() {
+  m_running = false;
+  m_wakeCv.notify_all();
+}
 
-  m_grid.ClearNext();
+void Simulation::Update(float dt, bool isPainting) {
+  m_lastDt = dt;
+  m_frameCounter++;
+
+  // BeginFrame marks chunk dirty flags — must happen before PreUpdate so that
+  // UpdateWorldMeshes (called from PostUpdate) sees accurate
+  // lastStaticChangeFrame values and can skip unchanged chunks correctly (FIX
+  // 2).
   m_chunks.BeginFrame();
-
-  // Per-frame snapshotting for determinism and hot-reload safety
   m_frameConfig = m_config;
 
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
+  ElementContext ctx{m_grid,
+                     m_chunks,
+                     m_rng,
+                     m_frameConfig,
+                     m_frameCounter,
+                     m_particles};
+
+  // 1. Damage check — detect erased/painted-over body pixels and release them
+  m_rigidBodies.PreUpdate(m_grid, ctx);
+
   PressureSystem::Update(ctx);
 
-  // TODO: if the element perform multitep then the the further
-  // processing will hence be skipped
-  UpdateElements();
-  UpdatePhysics(dt);
+  // 2. Run falling-sand simulation on worker threads
+  m_workerFrame = m_frameCounter;
+  m_wakeCv.notify_all();
 
-  // Swap next state with current state
-  m_grid.Swap();
-  CollectStatistics();
-}
-
-void Simulation::UpdateElements() {
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
-
-  // Shuffling the chunk indicies
-  std::vector<int> chunkOrder;
-  const std::vector<Chunk> &allChunks = m_chunks.GetChunks();
-  for (int i = 0; i < (int)allChunks.size(); ++i)
-    if (allChunks[i].active)
-      chunkOrder.push_back(i);
-  std::shuffle(chunkOrder.begin(), chunkOrder.end(), m_rng);
-
-  for (int i : chunkOrder) {
-    int chunkCol = i % CHUNK_COLS;
-    int chunkRow = i / CHUNK_COLS;
-
-    int x0 = chunkCol * CHUNK_SIZE;
-    int y0 = chunkRow * CHUNK_SIZE;
-
-    int x1 = std::min(x0 + CHUNK_SIZE, GRID_W);
-    int y1 = std::min(y0 + CHUNK_SIZE, GRID_H);
-
-    std::vector<std::pair<int, int>> cells;
-    for (int y = y0; y < y1; ++y)
-      for (int x = x0; x < x1; ++x)
-        cells.emplace_back(x, y);
-    std::shuffle(cells.begin(), cells.end(), m_rng);
-
-    for (const auto &[x, y] : cells) {
-      if (m_grid.GetNext(x, y).updated)
-        continue;
-
-      const Cell &source = m_grid.GetCurrent(x, y);
-      if (source.element == Element::AIR)
-        MovementSystem::Carry(x, y, ctx);
-      else
-        ElementUpdateRegistry::Update(source.element, x, y, ctx);
-    }
-
-    int count = 0;
-    for (int y = y0; y < y1; y++)
-      for (int x = x0; x < x1; ++x)
-        if (m_grid.GetNext(x, y).element != Element::AIR)
-          ++count;
-    m_chunks.SetActiveCount(chunkCol, chunkRow, count);
+  for (int p = 0; p < 5; ++p) {
+    m_syncBarrier.arrive_and_wait();
   }
 
-  for (int i = 0; i < GRID_W * GRID_H; ++i)
-    if (!m_grid.GetNextBuffer()[i].updated)
-      m_grid.GetNextBuffer()[i] = m_grid.GetCurrentBuffer()[i];
-}
+  // 3. Extract new rigid bodies from freshly painted pixels (skip while
+  // painting to avoid extracting a body from an incomplete stroke).
+  if (!isPainting) {
+    m_rigidBodies.ExtractDynamicBodies(m_grid, ctx, m_particles);
+  }
 
-void Simulation::UpdatePhysics(float dt) {
-  ElementContext ctx{m_grid, m_chunks, m_rng, m_frameConfig};
+  // 4. Clear, mesh, step, displace, sync
+  m_rigidBodies.PostUpdate(m_grid, ctx, m_particles, m_frameConfig, dt);
+
+  // 5. Spell emission, then particle update
+  SpellSystem::TickEffects(m_activeSpellEffects, ctx, m_rigidBodies, dt);
+  m_particles.Update(m_grid, ctx, dt);
+
+  // 6. Heat & pressure propagation
+  // TODO: this doesnt gain anything from the parallelism
+  // TODO: re-consider this realistic heat transfer system later
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
-      const Cell &source = m_grid.GetCurrent(x, y);
       HeatSystem::Propagate(x, y, ctx, dt);
       PressureSystem::Propagate(x, y, ctx);
     }
   }
+
+  CollectStatistics();
+}
+
+void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
+  uint32_t lastFrame = 0;
+  int numThreads = std::thread::hardware_concurrency();
+
+  while (!stopToken.stop_requested() && m_running) {
+    {
+      std::unique_lock<std::mutex> lock(m_wakeMutex);
+      m_wakeCv.wait(lock,
+                    [&] { return m_workerFrame > lastFrame || !m_running; });
+    }
+    if (!m_running)
+      break;
+
+    uint32_t currentFrame = m_workerFrame;
+    std::mt19937 threadRng(currentFrame + threadIdx);
+    ElementContext ctx{m_grid,
+                       m_chunks,
+                       threadRng,
+                       m_frameConfig,
+                       currentFrame,
+                       m_particles};
+
+    for (int pass = 0; pass < 4; ++pass) {
+      int passX = pass % 2;
+      int passY = pass / 2;
+
+      for (int i = threadIdx; i < CHUNK_COLS * CHUNK_ROWS; i += numThreads) {
+        int cx = i % CHUNK_COLS;
+        int cy = i / CHUNK_COLS;
+        if (cx % 2 == passX && cy % 2 == passY) {
+          if (m_chunks.GetChunk(cx, cy).active) {
+            UpdateChunk(i, ctx);
+          }
+        }
+      }
+      m_syncBarrier.arrive_and_wait();
+    }
+
+    m_syncBarrier.arrive_and_wait();
+    lastFrame = currentFrame;
+  }
+}
+
+void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
+  int chunkCol = chunkIdx % CHUNK_COLS;
+  int chunkRow = chunkIdx / CHUNK_COLS;
+
+  int x0 = chunkCol * CHUNK_SIZE;
+  int y0 = chunkRow * CHUNK_SIZE;
+  int x1 = std::min(x0 + CHUNK_SIZE, GRID_W);
+  int y1 = std::min(y0 + CHUNK_SIZE, GRID_H);
+
+  for (int y = y1 - 1; y >= y0; --y) {
+    for (int x = x0; x < x1; ++x) {
+      Cell &c = m_grid.Get(x, y);
+      if (c.lastUpdateFrame == ctx.frameIndex)
+        continue;
+      if (c.element == Element::AIR)
+        continue;
+      ElementUpdateRegistry::Update(c.element, x, y, ctx);
+    }
+  }
+
+  int count = 0;
+  for (int y = y0; y < y1; y++)
+    for (int x = x0; x < x1; ++x)
+      if (m_grid.Get(x, y).element != Element::AIR)
+        ++count;
+  m_chunks.SetActiveCount(chunkCol, chunkRow, count);
+}
+
+void Simulation::UpdateElements() {}
+
+void Simulation::CastSpell(const Spell &spell, Vector2 origin,
+                           Vector2 aimDirection, int owner) {
+  SpellEffect effect;
+  effect.stats = SpellSystem::Evaluate(spell);
+  // Flight moves the caster, which the game layer handles
+  if (!effect.stats.valid || effect.stats.kind == SpellKind::Flight)
+    return;
+  effect.timeRemaining = effect.stats.duration;
+  effect.origin = origin;
+  effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
+  effect.owner = owner;
+  m_activeSpellEffects.push_back(effect);
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
-
-  // TODO: set the debug mode to invoke the singular paint here
-  bool debug = false;
-  if (debug) {
-    int x = cx;
-    int y = cy;
-    Cell c = ElementFactory::Create(element, m_config);
-    m_grid.GetCurrent(x, y) = c;
-    m_grid.GetNext(x, y) = c;
-    m_chunks.WakeChunkAt(x, y);
-    return;
-  }
-
   for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
     for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
       if (dx * dx + dy * dy > brushRadius * brushRadius)
         continue;
-
-      int x = cx + dx;
-      int y = cy + dy;
-
+      int x = cx + dx, y = cy + dy;
       if (!m_grid.InBounds(x, y))
         continue;
-
       Cell c = ElementFactory::Create(element, m_config);
-      m_grid.GetCurrent(x, y) = c;
-      m_grid.GetNext(x, y) = c;
-      m_chunks.WakeChunkAt(x, y);
+      m_grid.Get(x, y) = c;
+      const auto &props = m_config.elements[static_cast<size_t>(element)];
+      m_chunks.WakeChunkAt(x, y, m_frameCounter, props.staticTerrain);
     }
   }
 }
 
 void Simulation::Erase(int cx, int cy, int brushRadius) {
-  Paint(cx, cy, Element::AIR, brushRadius);
+  for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
+    for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
+      if (dx * dx + dy * dy > brushRadius * brushRadius)
+        continue;
+      int x = cx + dx, y = cy + dy;
+      if (!m_grid.InBounds(x, y))
+        continue;
+      const Cell &c = m_grid.Get(x, y);
+      const auto &props = m_config.elements[static_cast<size_t>(c.element)];
+      bool wasStatic = props.staticTerrain;
+      m_grid.Get(x, y) = ElementFactory::Create(Element::AIR, m_config);
+      m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
+    }
+  }
+}
+
+void Simulation::Reset() {
+  // Erasing body cells makes the rigid body system drop those bodies on the
+  // next update, the same as when the player erases them by hand
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (m_grid.Get(x, y).element != Element::AIR)
+        Erase(x, y, 0);
+  m_particles.Clear();
+  m_activeSpellEffects.clear();
 }
 
 void Simulation::CollectStatistics() {
   m_particleCount = 0;
   double pSum = 0.0, tSum = 0.0;
-  for (const auto &c : m_grid.GetCurrentBuffer()) {
+  for (const auto &c : m_grid.GetBuffer()) {
     if (c.element != Element::AIR) {
       ++m_particleCount;
       pSum += c.pressure;
