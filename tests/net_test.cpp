@@ -144,3 +144,28 @@ TEST_CASE("two clients play a whole match through the server", "[.e2e]") {
   // Both clients ended in the same world
   REQUIRE(Match::Hash(a.sim, a.state) == Match::Hash(b.sim, b.state));
 }
+
+// A sparring partner for trying online play by hand:
+//   WHAS_SERVER=ws://localhost:8080/ws whas_tests "[.bot]"
+// then press Quick match in the game.
+TEST_CASE("bot opponent waits in the queue and plays one match", "[.bot]") {
+  const char *url = std::getenv("WHAS_SERVER");
+  REQUIRE(url);
+  using Phase = LockstepClient::Phase;
+  std::string dir = std::string(WHAS_SOURCE_DIR) + "/build/e2e";
+  std::filesystem::create_directories(dir);
+  Bot bot(dir + "/bot.json");
+  bot.client.Connect(url);
+  auto until = [&](auto done, int seconds) {
+    auto end = std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+    while (std::chrono::steady_clock::now() < end && !done()) {
+      bot.Tick();
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return done();
+  };
+  REQUIRE(until([&] { return bot.client.GetPhase() == Phase::Ready; }, 10));
+  bot.client.QuickMatch();
+  REQUIRE(until([&] { return bot.client.GetPhase() == Phase::MatchOver; }, 1800));
+  REQUIRE(bot.client.Desyncs() == 0);
+}

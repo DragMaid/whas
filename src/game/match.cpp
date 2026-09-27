@@ -22,8 +22,7 @@ uint64_t RoundSeed(uint64_t matchSeed, int round) {
 
 State BeginRound(Simulation &sim, uint64_t matchSeed, int round) {
   uint64_t seed = RoundSeed(matchSeed, round);
-  sim.Reset();
-  sim.SetSeed(seed);
+  sim.Restart(seed);
   ArenaGen::Arena arena = ArenaGen::Generate(sim, seed);
 
   State state;

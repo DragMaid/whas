@@ -6,7 +6,10 @@
 #include "whas/spell/spell_library.h"
 #include "whas/spell/spell_system.h"
 #include "whas/ui/spell_thumbnails.h"
+#include <array>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <raylib.h>
 #include <string>
 #include <vector>
@@ -36,7 +39,11 @@ struct UIState {
   int ticksFree = 180;        // channel time left, for greying out slots
   int matchRound = -1;        // >= 0 in a match: that round's deck is locked
 
+  // Online matches play by the default rules: tuning sliders are hidden
+  bool configLocked = false;
+
   // Requests from the bar, handled by main
+  bool menuRequested = false;
   bool timeToggleRequested = false;
   bool resetAvatarRequested = false;
   bool sandboxRequested = false; // "Test in sandbox" from the editor
@@ -59,6 +66,20 @@ public:
   void SetGameMode(bool enabled);
   // Spell in the selected hotbar slot (null for an empty slot)
   const Spell *GetSelectedSpell() const;
+  int GetSelectedSlot() const { return m_selectedSlot; }
+
+  // Online: the hotbar shows the round's cards as the server locked them
+  void SetMatchSpells(std::array<std::optional<Spell>, DECK_SLOTS> spells) {
+    m_matchSpells = std::move(spells);
+    m_hasMatchSpells = true;
+  }
+  void ClearMatchSpells() { m_hasMatchSpells = false; }
+
+  // Extra ImGui windows (the play menu, replay controls) drawn each frame
+  void SetOverlay(std::function<void()> draw) { m_overlay = std::move(draw); }
+
+  SpellLibrary &Library() { return m_library; }
+  DeckBook &Decks() { return m_decks; }
   // Beam preview plus aim-vs-cast arrows, origin in (fractional) cells.
   // worldGravity is the config's world gravity, for the falling arcs.
   void DrawAimIndicator(const Spell &spell, Vector2 originCells, Vector2 aimDir,
@@ -101,6 +122,9 @@ private:
   std::unique_ptr<SpellThumbnails> m_thumbnails;
 
   int m_selectedSlot = 0;
+  std::array<std::optional<Spell>, DECK_SLOTS> m_matchSpells{};
+  bool m_hasMatchSpells = false;
+  std::function<void()> m_overlay;
   // "Test in sandbox" puts a spell in slot 1 without touching saved decks
   std::string m_testSpellRef;
   const UIState *m_lastState = nullptr;

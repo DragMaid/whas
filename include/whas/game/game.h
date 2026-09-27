@@ -4,10 +4,13 @@
 #include "whas/game/turn_controller.h"
 #include <array>
 #include <cstdint>
+#include <string>
+#include <utility>
 
 class Simulation;
 class UI;
 struct UIState;
+class LockstepClient;
 
 // Game mode: a best-of-3 duel of simultaneous turns against the simulation.
 // The rules live in Match (shared with replays and lockstep peers); this
@@ -21,12 +24,24 @@ public:
   // Start a fresh match (new arena from the seed, round 1)
   void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0);
 
+  // Online: the client runs the turn flow (the server's clock, both plans,
+  // hashes); the game lets the local player plan in between and shows it
+  void StartOnline(Simulation &sim, UI &ui, LockstepClient &client);
+  bool IsOnline() const { return m_online != nullptr; }
+  // Back to the sandbox after an online match
+  void LeaveOnline(UI &ui);
+  // The online match is over and the player pressed Enter
+  bool TakeExitRequest() { return std::exchange(m_exitRequested, false); }
+
   // Handle input and advance the world when a turn is executing. Reads the
   // action bar's requests from state and publishes the clock to it.
   void Update(Simulation &sim, UI &ui, UIState &state);
   void Draw(const Simulation &sim, const UI &ui) const;
 
   const Match::State &GetMatch() const { return m_match; }
+  // The network client builds rounds into this even before the game has
+  // switched to online mode (several messages can arrive in one frame)
+  Match::State &NetState() { return m_match; }
 
   // For the action bar's time-stop button
   enum class ClockState { Waiting, Running, Stopped, Executing, Over };
@@ -51,7 +66,9 @@ private:
   Character &LocalCharacter() { return m_match.characters[m_local]; }
 
   void Update(Simulation &sim, UI &ui);
+  void UpdateOnline(Simulation &sim, UI &ui);
   void BeginRound(Simulation &sim, int round);
+  PlannedCast MakeCast(const Spell &spell, Vector2 aim) const;
   void ResetOpponent(Simulation &sim);
   void BeginPlanning(Simulation &sim);
   void EnterWaiting();
@@ -83,6 +100,12 @@ private:
   // Planning clock paused: nothing moves, casts queue at the current spot
   bool m_paused = true;
   int m_turnNumber = 1;
+  LockstepClient *m_online = nullptr;
+  bool m_submitted = false;   // online: this turn's plan is committed
+  int m_plannedTurn = -1;     // online: round * 1000 + turn being planned
+  int m_seenRoundEnds = 0;
+  bool m_exitRequested = false;
+  std::string m_noticeText;
   const char *m_notice = nullptr;
   float m_noticeTime = 0.0f;
   const char *m_banner = nullptr;

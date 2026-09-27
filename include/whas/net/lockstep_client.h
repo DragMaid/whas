@@ -21,6 +21,9 @@ struct MatchCard {
 };
 using RoundCards = std::array<std::optional<MatchCard>, DECK_SLOTS>;
 
+// A round's six cards from the server's JSON (null entries = empty slots)
+RoundCards ParseRoundCards(const nlohmann::json &cards);
+
 // The client side of the online protocol (docs/protocol.md), without any
 // drawing or input: the game UI and headless bots both drive it.
 //
@@ -104,6 +107,7 @@ public:
   const std::array<TurnPlan, 2> &Plans() const { return m_plans; }
   const std::array<int, 2> &RoundsWon() const { return m_roundsWon; }
   int LastRoundWinner() const { return m_lastRoundWinner; }
+  int RoundEnds() const { return m_roundEnds; } // bumps on every roundEnd
   int MatchWinner() const { return m_matchWinner; }
   const std::string &MatchEndReason() const { return m_matchEndReason; }
   int Desyncs() const { return m_desyncs; }
@@ -165,6 +169,7 @@ private:
   int m_execTick = 0;
   std::array<int, 2> m_roundsWon{};
   int m_lastRoundWinner = -1;
+  int m_roundEnds = 0;
   int m_matchWinner = -1;
   std::string m_matchEndReason;
   int m_desyncs = 0;

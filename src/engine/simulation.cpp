@@ -56,7 +56,11 @@ void Simulation::Update(float dt, bool isPainting) {
   PressureSystem::Update(ctx);
 
   // 2. Run falling-sand simulation on worker threads
-  m_workerFrame = m_frameCounter;
+  {
+    std::lock_guard lock(m_wakeMutex);
+    m_workerFrame = m_frameCounter;
+    ++m_workGeneration;
+  }
   m_wakeCv.notify_all();
 
   for (int p = 0; p < 5; ++p) {
@@ -91,19 +95,20 @@ void Simulation::Update(float dt, bool isPainting) {
 }
 
 void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
-  uint32_t lastFrame = 0;
+  uint64_t lastGeneration = 0;
   int numThreads = m_numThreads;
 
   while (!stopToken.stop_requested() && m_running) {
     {
       std::unique_lock<std::mutex> lock(m_wakeMutex);
       m_wakeCv.wait(lock,
-                    [&] { return m_workerFrame > lastFrame || !m_running; });
+                    [&] { return m_workGeneration > lastGeneration || !m_running; });
     }
     if (!m_running)
       break;
 
     uint32_t currentFrame = m_workerFrame;
+    lastGeneration = m_workGeneration;
     // Placeholder stream; UpdateChunk gives each chunk its own
     DetRng unused;
     ElementContext ctx{m_grid,
@@ -130,7 +135,6 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
     }
 
     m_syncBarrier.arrive_and_wait();
-    lastFrame = currentFrame;
   }
 }
 
@@ -294,6 +298,19 @@ void Simulation::Reset() {
         Erase(x, y, 0);
   m_particles.Clear();
   m_activeSpellEffects.clear();
+}
+
+void Simulation::Restart(uint64_t seed) {
+  m_grid = Grid(m_config);
+  m_chunks = ChunkManager();
+  m_rigidBodies.Reset();
+  m_particles.Clear();
+  m_particles.SetHurtboxes({});
+  m_activeSpellEffects.clear();
+  for (auto &spawns : m_chunkSpawns)
+    spawns.clear();
+  m_frameCounter = 0;
+  SetSeed(seed);
 }
 
 void Simulation::CollectStatistics() {

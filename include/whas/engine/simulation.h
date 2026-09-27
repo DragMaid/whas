@@ -49,6 +49,10 @@ public:
   void Erase(int cx, int cy, int brushRadius);
   // Empty the world: every cell, particle and in-flight spell
   void Reset();
+  // A brand-new world regardless of history: frame counter, chunks, rigid
+  // bodies and random streams all start over. Every match round starts here
+  // so peers with different pasts (one came from the sandbox) agree.
+  void Restart(uint64_t seed);
 
   const Cell &GetCell(int x, int y) const { return m_grid.Get(x, y); }
 
@@ -108,6 +112,9 @@ private:
   std::mutex m_wakeMutex;
   std::condition_variable m_wakeCv;
   std::atomic<uint32_t> m_workerFrame{0};
+  // Counts every Update, even across Restart (which sends the frame counter
+  // back to 0), so workers always see new work
+  std::atomic<uint64_t> m_workGeneration{0};
 
   void WorkerLoop(int threadIdx, std::stop_token stopToken);
   void UpdateChunk(int chunkIdx, const ElementContext &base);

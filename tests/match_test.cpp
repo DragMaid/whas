@@ -250,3 +250,28 @@ TEST_CASE("a snapshot brings a desynced peer back into lockstep", "[snapshot]") 
     REQUIRE(Match::Hash(simB, b) == before);
   }
 }
+
+TEST_CASE("a round starts identically whatever the world did before",
+          "[lockstep]") {
+  // One peer played in the sandbox before the match (frames, rigid bodies,
+  // particles, burning grass); the other starts fresh
+  Simulation used, fresh;
+  used.Paint(100, 100, Element::ROCK, 6);
+  used.Paint(160, 150, Element::WATER, 8);
+  used.Paint(200, 170, Element::GRASS, 3);
+  used.Paint(200, 165, Element::FIRE, 2);
+  for (int i = 0; i < 97; ++i)
+    used.Update(TurnController::TICK_DT);
+
+  Match::State a = Match::BeginRound(used, 31337, 0);
+  Match::State b = Match::BeginRound(fresh, 31337, 0);
+  REQUIRE(Match::Hash(used, a) == Match::Hash(fresh, b));
+
+  TurnPlan idle;
+  for (int turn = 0; turn < 2; ++turn) {
+    Match::ExecuteTurn(used, a, {&idle, &idle});
+    Match::ExecuteTurn(fresh, b, {&idle, &idle});
+    INFO("turn " << turn);
+    REQUIRE(Match::Hash(used, a) == Match::Hash(fresh, b));
+  }
+}

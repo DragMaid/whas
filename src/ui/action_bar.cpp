@@ -322,8 +322,16 @@ void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
 }
 
 void UI::DrawDeckPicker(UIState &state, ImVec2 pos, ImVec2 size) {
+  constexpr float playW = 58.0f;
   ImGui::SetCursorScreenPos(pos);
-  ImGui::SetNextItemWidth(size.x);
+  ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.32f, 0.12f, 1));
+  if (ImGui::Button("Play", {playW, 0}))
+    state.menuRequested = true;
+  ImGui::PopStyleColor();
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Practice match, online play, history and replays  (M)");
+  ImGui::SameLine(0, PAD);
+  ImGui::SetNextItemWidth(size.x - playW - PAD);
   bool inMatch = state.matchRound >= 0;
   const Deck *deck = HotbarDeck(state);
   std::string label = deck ? deck->name : "No deck";

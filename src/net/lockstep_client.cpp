@@ -43,13 +43,6 @@ std::optional<MatchCard> ParseCard(const json &j) {
   return card;
 }
 
-RoundCards ParseRound(const json &j) {
-  RoundCards cards{};
-  for (int i = 0; i < DECK_SLOTS && i < (int)j.size(); ++i)
-    cards[i] = ParseCard(j[i]);
-  return cards;
-}
-
 std::string RandomNonce() {
   std::random_device rd; // not simulation state: any randomness will do
   static const char *hex = "0123456789abcdef";
@@ -60,6 +53,13 @@ std::string RandomNonce() {
 }
 
 } // namespace
+
+RoundCards ParseRoundCards(const json &j) {
+  RoundCards cards{};
+  for (int i = 0; i < DECK_SLOTS && i < (int)j.size(); ++i)
+    cards[i] = ParseCard(j[i]);
+  return cards;
+}
 
 LockstepClient::LockstepClient(std::string buildId)
     : m_buildId(std::move(buildId)) {}
@@ -281,10 +281,11 @@ void LockstepClient::BeginRound(int round, const json &decks, Simulation &sim,
   for (int s = 0; s < 2; ++s) {
     if ((int)m_roundCards[s].size() <= round)
       m_roundCards[s].resize(round + 1);
-    m_roundCards[s][round] = ParseRound(decks.at(s));
+    m_roundCards[s][round] = ParseRoundCards(decks.at(s));
     m_cards[s] = m_roundCards[s][round];
   }
   m_round = round;
+  sim.GetConfig() = SimulationConfig{}; // online plays by the default rules
   state = Match::BeginRound(sim, m_seed, round);
   m_phase = Phase::Waiting;
 }
@@ -345,12 +346,13 @@ void LockstepClient::CatchUp(const json &msg, Simulation &sim,
     m_roundCards[s].clear();
     if (decks[s].is_array())
       for (const json &round : decks[s])
-        m_roundCards[s].push_back(ParseRound(round));
+        m_roundCards[s].push_back(ParseRoundCards(round));
   }
   m_roundsWon = msg.at("roundsWon").get<std::array<int, 2>>();
   const json &current = msg.at("current");
   int currentRound = current.at("round").get<int>();
 
+  sim.GetConfig() = SimulationConfig{};
   for (int r = 0; r <= currentRound && r < (int)m_roundCards[0].size(); ++r) {
     m_round = r;
     state = Match::BeginRound(sim, m_seed, r);
@@ -524,6 +526,7 @@ void LockstepClient::Handle(const json &msg, Simulation &sim,
     m_phase = Phase::Reporting;
   } else if (type == "roundEnd") {
     m_lastRoundWinner = msg.at("winner").get<int>();
+    ++m_roundEnds;
     m_roundsWon = msg.at("roundsWon").get<std::array<int, 2>>();
     m_phase = Phase::Waiting;
   } else if (type == "matchEnd") {

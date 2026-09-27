@@ -72,6 +72,8 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
     state.showConfigEditor = !state.showConfigEditor;
   if (IsKeyPressed(KEY_E))
     m_spellEditor.Open();
+  if (IsKeyPressed(KEY_M))
+    state.menuRequested = true;
 
   if (!m_gameMode && IsKeyPressed(KEY_TAB))
     state.tool = state.tool == SandboxTool::Draw ? SandboxTool::Cast
@@ -118,7 +120,7 @@ void UI::Draw(UIState &state, Simulation &sim) {
 
   rlImGuiBegin();
 
-  if (state.showConfigEditor && !m_spellEditor.IsOpen()) {
+  if (state.showConfigEditor && !state.configLocked && !m_spellEditor.IsOpen()) {
     DrawPropertyEditor(sim.GetConfig());
   }
 
@@ -128,6 +130,8 @@ void UI::Draw(UIState &state, Simulation &sim) {
       DrawInspector(sim);
   }
 
+  if (m_overlay && !m_spellEditor.IsOpen())
+    m_overlay();
   m_spellEditor.Draw();
   HandleEditorRequests(state);
 
@@ -463,6 +467,11 @@ const Deck *UI::HotbarDeck(const UIState &state) const {
 }
 
 const Spell *UI::SlotSpell(const UIState &state, int slot) const {
+  if (m_hasMatchSpells && state.matchRound >= 0) {
+    if (slot < 0 || slot >= DECK_SLOTS || !m_matchSpells[slot])
+      return nullptr;
+    return &*m_matchSpells[slot];
+  }
   if (slot == 0 && !m_testSpellRef.empty() && state.matchRound < 0)
     if (const Spell *s = m_library.Find(m_testSpellRef))
       return s;
