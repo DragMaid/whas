@@ -176,6 +176,8 @@ if(WHAS_BUILD_TESTS)
         tests/determinism_test.cpp
         tests/burning_test.cpp
         tests/match_test.cpp
+        tests/spell_golden_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
+    target_compile_definitions(whas_tests PRIVATE WHAS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

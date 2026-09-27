@@ -1,0 +1,32 @@
+# Local multiplayer backend: `docker compose up -d`, then point the game at
+# ws://localhost:8080/ws
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: whas
+      POSTGRES_USER: whas
+      POSTGRES_PASSWORD: whas
+    ports:
+      - "5432:5432"
+    volumes:
+      - whas-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whas"]
+      interval: 2s
+      retries: 20
+
+  server:
+    build:
+      context: server
+      dockerfile: Whas.Server/Dockerfile
+    environment:
+      ConnectionStrings__Whas: Host=db;Port=5432;Database=whas;Username=whas;Password=whas;Gss Encryption Mode=Disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  whas-db:

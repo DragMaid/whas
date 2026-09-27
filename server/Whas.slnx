@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Whas.Server.Tests/Whas.Server.Tests.csproj" />
+  <Project Path="Whas.Server/Whas.Server.csproj" />
+</Solution>
