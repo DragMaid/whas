@@ -52,6 +52,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
+# WebSocket + HTTP client for online play. Plain ws:// for now (a TLS
+# terminating proxy can sit in front of the server).
+set(USE_TLS OFF CACHE BOOL "" FORCE)
+set(USE_ZLIB OFF CACHE BOOL "" FORCE)
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    ixwebsocket
+    GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
+    GIT_TAG v12.0.1
+)
+FetchContent_MakeAvailable(ixwebsocket)
+
 set(SOURCES
     src/core/bytes.cpp
     src/engine/snapshot.cpp
@@ -106,6 +118,9 @@ set(SOURCES
     src/game/sandbox.cpp
 
     src/net/plan_codec.cpp
+    src/net/net_client.cpp
+    src/net/lockstep_client.cpp
+    src/core/sha256.cpp
     src/game/game.cpp
 )
 
@@ -155,7 +170,7 @@ target_include_directories(whas
     ${RLIMGUI_DIR}
     ${nanosvg_SOURCE_DIR}/src
 )
-target_link_libraries(whas PUBLIC box2d nanosvg nlohmann_json::nlohmann_json)
+target_link_libraries(whas PUBLIC box2d nanosvg nlohmann_json::nlohmann_json ixwebsocket)
 
 add_executable(whasg src/main.cpp)
 # target_link_libraries(whasg PRIVATE whas)
@@ -179,6 +194,7 @@ if(WHAS_BUILD_TESTS)
         tests/burning_test.cpp
         tests/match_test.cpp
         tests/spell_golden_test.cpp
+        tests/net_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
     target_compile_definitions(whas_tests PRIVATE WHAS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
