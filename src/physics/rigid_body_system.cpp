@@ -31,7 +31,16 @@ inline std::pair<int, int> ProjectToWorld(float lx, float ly, b2Vec2 pos,
 } // namespace
 
 // Constructor
-RigidBodySystem::RigidBodySystem() {
+RigidBodySystem::RigidBodySystem() { CreateWorld(); }
+
+void RigidBodySystem::Reset() {
+  b2DestroyWorld(m_worldId); // takes every body and mesh with it
+  m_bodies.clear();
+  m_chunkMeshes.clear();
+  CreateWorld();
+}
+
+void RigidBodySystem::CreateWorld() {
   b2WorldDef worldDef = b2DefaultWorldDef();
   // TODO: move this to config
   worldDef.gravity = {0.0f, 9.8f};

@@ -11,6 +11,7 @@
 #include "whas/spell/spell_system.h"
 #include "whas/core/det_rng.h"
 #include <thread>
+#include <cstdint>
 #include <vector>
 #include <barrier>
 #include <atomic>
@@ -34,6 +35,13 @@ public:
   // Hash of everything that affects future ticks: cells, particles, spell
   // effects and rigid bodies. Lockstep clients compare it after each turn.
   uint64_t StateHash() const;
+
+  // Everything StateHash covers except rigid bodies, which can't be copied
+  // out of Box2D: loading drops them and they are rebuilt from the cells.
+  // A desynced client and the reference both load the same snapshot, so
+  // they are identical again afterwards.
+  std::vector<uint8_t> SaveSnapshot() const;
+  bool LoadSnapshot(const std::vector<uint8_t> &data);
 
   void Update(float dt, bool isPainting = false);
 

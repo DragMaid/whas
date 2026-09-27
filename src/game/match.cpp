@@ -1,4 +1,5 @@
 #include "whas/game/match.h"
+#include "whas/core/bytes.h"
 #include "whas/core/det_rng.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
@@ -147,6 +148,62 @@ uint64_t Hash(const Simulation &sim, const State &state) {
     addI(c.burnExposure);
   }
   return h;
+}
+
+std::string EncodeSnapshot(const Simulation &sim, const State &state) {
+  ByteWriter out;
+  out.Put(state.seed);
+  out.Put(state.round);
+  out.Put(state.order);
+  for (const Character &c : state.characters) {
+    out.Put(c.id);
+    out.Put(c.pos);
+    out.Put(c.vel);
+    out.Put(c.pushX);
+    out.Put(c.grounded);
+    out.Put(c.facing);
+    out.Put(c.hp);
+    out.Put(c.maxHp);
+    out.Put(c.burnStacks);
+    out.Put(c.burnExposure);
+  }
+  std::vector<uint8_t> world = sim.SaveSnapshot();
+  out.Put(static_cast<uint32_t>(world.size()));
+  out.PutBytes(world.data(), world.size());
+  return Base64::Encode(out.Data());
+}
+
+bool DecodeSnapshot(const std::string &text, Simulation &sim, State &state) {
+  std::vector<uint8_t> bytes;
+  if (!Base64::Decode(text, bytes))
+    return false;
+  try {
+    ByteReader in(bytes);
+    State next;
+    next.seed = in.Get<uint64_t>();
+    next.round = in.Get<int>();
+    next.order = in.Get<std::array<int, PLAYERS>>();
+    for (Character &c : next.characters) {
+      c.id = in.Get<int>();
+      c.pos = in.Get<Vector2>();
+      c.vel = in.Get<Vector2>();
+      c.pushX = in.Get<float>();
+      c.grounded = in.Get<bool>();
+      c.facing = in.Get<int>();
+      c.hp = in.Get<float>();
+      c.maxHp = in.Get<float>();
+      c.burnStacks = in.Get<int>();
+      c.burnExposure = in.Get<int>();
+    }
+    uint32_t size = in.Get<uint32_t>();
+    const uint8_t *world = in.Take(size);
+    if (!in.Done() || !sim.LoadSnapshot({world, world + size}))
+      return false;
+    state = next;
+    return true;
+  } catch (const std::runtime_error &) {
+    return false;
+  }
 }
 
 } // namespace Match

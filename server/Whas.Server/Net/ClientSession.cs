@@ -11,7 +11,8 @@ namespace Whas.Server.Net;
 // ones are queued and written by a single sender so writes never interleave.
 public sealed class ClientSession(WebSocket socket, ILogger logger)
 {
-    public const int MaxMessageBytes = 256 * 1024;
+    // Room for a world snapshot during desync recovery
+    public const int MaxMessageBytes = 1024 * 1024;
 
     readonly Channel<string> _outbox = Channel.CreateBounded<string>(
         new BoundedChannelOptions(512) { FullMode = BoundedChannelFullMode.DropOldest });

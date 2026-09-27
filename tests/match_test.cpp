@@ -203,3 +203,50 @@ TEST_CASE("later rounds rebuild the arena identically on both peers",
   }
   REQUIRE(Match::Hash(simA, a) == Match::Hash(simB, b));
 }
+
+TEST_CASE("a snapshot brings a desynced peer back into lockstep", "[snapshot]") {
+  Library lib;
+  lib.spells[1] = MakeSpell("fire", 1.0f, 2);
+  lib.spells[2] = MakeSpell("water", 1.0f, 1);
+  lib.spells[3] = MakeSpell("gust", 1.0f, 2);
+  lib.spells[4] = MakeSpell("rock", 1.2f, 3);
+
+  Simulation simA, simB;
+  Match::State a = Match::BeginRound(simA, 4242, 0);
+  Match::State b = Match::BeginRound(simB, 4242, 0);
+  // Rock chunks break loose so rigid bodies are part of the story
+  simA.Paint(150, 100, Element::ROCK, 4);
+  simB.Paint(150, 100, Element::ROCK, 4);
+  for (int turn = 0; turn < 2; ++turn) {
+    TurnPlan p0 = MakePlan(lib, turn, 0), p1 = MakePlan(lib, turn, 1);
+    Match::ExecuteTurn(simA, a, {&p0, &p1});
+    Match::ExecuteTurn(simB, b, {&p0, &p1});
+  }
+  // B drifts: one cell differs
+  simB.Paint(10, 10, Element::SAND, 0);
+  REQUIRE(Match::Hash(simA, a) != Match::Hash(simB, b));
+
+  // A is the reference: both load A's snapshot
+  std::string snapshot = Match::EncodeSnapshot(simA, a);
+  INFO("snapshot " << snapshot.size() << " bytes");
+  REQUIRE(snapshot.size() < 200 * 1024);
+  REQUIRE(Match::DecodeSnapshot(snapshot, simB, b));
+  REQUIRE(Match::DecodeSnapshot(snapshot, simA, a));
+  REQUIRE(Match::Hash(simA, a) == Match::Hash(simB, b));
+
+  // ...and stay together from then on
+  for (int turn = 2; turn < 5; ++turn) {
+    TurnPlan p0 = MakePlan(lib, turn, 0), p1 = MakePlan(lib, turn, 1);
+    Match::ExecuteTurn(simA, a, {&p0, &p1});
+    Match::ExecuteTurn(simB, b, {&p0, &p1});
+    INFO("turn " << turn);
+    REQUIRE(Match::Hash(simA, a) == Match::Hash(simB, b));
+  }
+
+  SECTION("garbage is refused and leaves the world alone") {
+    uint64_t before = Match::Hash(simB, b);
+    REQUIRE_FALSE(Match::DecodeSnapshot("not base64!!", simB, b));
+    REQUIRE_FALSE(Match::DecodeSnapshot(snapshot.substr(0, snapshot.size() / 2), simB, b));
+    REQUIRE(Match::Hash(simB, b) == before);
+  }
+}

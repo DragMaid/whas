@@ -3,6 +3,7 @@
 #include "whas/game/turn_controller.h"
 #include <array>
 #include <cstdint>
+#include <string>
 
 class Simulation;
 
@@ -55,5 +56,10 @@ int RoundWinner(const State &state);
 
 // Everything lockstep clients compare after a turn
 uint64_t Hash(const Simulation &sim, const State &state);
+
+// World + characters as text for the "snapshot" message (desync recovery).
+// Both the reference and the desynced client load it, so they match again.
+std::string EncodeSnapshot(const Simulation &sim, const State &state);
+bool DecodeSnapshot(const std::string &text, Simulation &sim, State &state);
 
 } // namespace Match

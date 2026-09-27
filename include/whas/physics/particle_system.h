@@ -59,6 +59,10 @@ public:
                 fn(p);
     }
 
+    // Whole pool, for snapshots
+    std::vector<Particle> &Pool() { return m_particles; }
+    const std::vector<Particle> &Pool() const { return m_particles; }
+
     void SetHurtboxes(std::vector<Hurtbox> hurtboxes) { m_hurtboxes = std::move(hurtboxes); }
     // Hits recorded since the last call
     std::vector<ParticleHit> TakeHits() { return std::exchange(m_hits, {}); }

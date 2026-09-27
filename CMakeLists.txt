@@ -53,6 +53,8 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(json)
 
 set(SOURCES
+    src/core/bytes.cpp
+    src/engine/snapshot.cpp
     src/element/base/factory.cpp
     src/element/base/properties.cpp
     src/element/base/registry.cpp

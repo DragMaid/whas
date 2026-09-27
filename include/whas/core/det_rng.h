@@ -29,6 +29,14 @@ public:
   // [0, 1)
   float Unit() { return static_cast<float>((*this)() >> 8) * (1.0f / 16777216.0f); }
 
+  // For snapshots
+  uint64_t State() const { return m_state; }
+  static DetRng FromState(uint64_t state) {
+    DetRng r;
+    r.m_state = state;
+    return r;
+  }
+
   // SplitMix64 finalizer
   static uint64_t Mix(uint64_t z) {
     z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;

@@ -39,6 +39,11 @@ public:
 
   void DrawDebug();
 
+  // Drop every body and start an empty world (loading a snapshot). The grid
+  // must not reference bodies any more; terrain meshes rebuild on the next
+  // update and loose chunks are extracted again from the cells.
+  void Reset();
+
   // Hash of every dynamic body's transform and velocity (lockstep checks)
   uint64_t StateHash() const;
 
@@ -51,6 +56,7 @@ public:
                             class ParticleSystem &particles);
 
 private:
+  void CreateWorld();
   void UpdateWorldMeshes(Grid &grid, ElementContext &ctx);
   void ProcessDisplacement(Grid &grid, ElementContext &ctx,
                            class ParticleSystem &particles);
