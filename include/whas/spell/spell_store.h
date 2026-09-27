@@ -11,5 +11,8 @@ public:
   void EnsureDirectoryExists() const;
   std::vector<Spell> LoadAll() const;
   bool Save(const Spell &spell, std::string &errorOut) const;
+  // Delete the file for a spell reference (see SpellLibrary::RefOf)
+  bool Remove(const std::string &ref, std::string &errorOut) const;
+  bool Exists(const std::string &ref) const;
   std::string SanitizeFilename(const std::string &name) const;
 };

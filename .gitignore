@@ -2,3 +2,5 @@ build
 .vscode
 .aider*
 data/spells/
+data/decks/
+data/match_decks.json

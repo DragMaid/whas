@@ -83,18 +83,25 @@ set(SOURCES
     src/engine/renderer.cpp
 
     src/ui/ui.cpp
+    src/ui/spell_thumbnails.cpp
+    src/ui/action_bar.cpp
 
     src/spell/spell_geometry.cpp
     src/spell/svg_library.cpp
     src/spell/spell_store.cpp
     src/spell/spell_editor.cpp
+    src/spell/spell_editor_library.cpp
     src/spell/spell_system.cpp
     src/spell/spell_quant.cpp
+    src/spell/spell_library.cpp
+    src/spell/deck_store.cpp
 
     src/game/character.cpp
     src/game/turn_controller.cpp
     src/game/match.cpp
     src/game/arena_gen.cpp
+    src/game/character_draw.cpp
+    src/game/sandbox.cpp
 
     src/net/plan_codec.cpp
     src/game/game.cpp

@@ -7,6 +7,7 @@
 
 class Simulation;
 class UI;
+struct UIState;
 
 // Game mode: a best-of-3 duel of simultaneous turns against the simulation.
 // The rules live in Match (shared with replays and lockstep peers); this
@@ -20,8 +21,9 @@ public:
   // Start a fresh match (new arena from the seed, round 1)
   void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0);
 
-  // Handle input and advance the world when a turn is executing
-  void Update(Simulation &sim, UI &ui);
+  // Handle input and advance the world when a turn is executing. Reads the
+  // action bar's requests from state and publishes the clock to it.
+  void Update(Simulation &sim, UI &ui, UIState &state);
   void Draw(const Simulation &sim, const UI &ui) const;
 
   const Match::State &GetMatch() const { return m_match; }
@@ -48,6 +50,7 @@ private:
   int Opponent() const { return 1 - m_local; }
   Character &LocalCharacter() { return m_match.characters[m_local]; }
 
+  void Update(Simulation &sim, UI &ui);
   void BeginRound(Simulation &sim, int round);
   void ResetOpponent(Simulation &sim);
   void BeginPlanning(Simulation &sim);

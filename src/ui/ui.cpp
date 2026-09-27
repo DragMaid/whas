@@ -7,24 +7,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <string>
 
 namespace {
-
-Vector2 ComputeSpellAimDirection(const Vector2 &spellOrigin,
-                                 const Vector2 &mousePos) {
-  Vector2 screenOrigin = {spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
-                          spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
-  Vector2 mouseDirPixels = {mousePos.x - screenOrigin.x,
-                            mousePos.y - screenOrigin.y};
-  Vector2 mouseDirCells = {mouseDirPixels.x / CELL_SIZE,
-                           mouseDirPixels.y / CELL_SIZE};
-  float dirLen = std::sqrt(mouseDirCells.x * mouseDirCells.x +
-                           mouseDirCells.y * mouseDirCells.y);
-  if (dirLen > 0.0001f) {
-    return {mouseDirCells.x / dirLen, mouseDirCells.y / dirLen};
-  }
-  return {1.0f, 0.0f};
-}
 
 void DrawDashedLine(Vector2 a, Vector2 b, float dash, float thick,
                     Color color) {
@@ -59,208 +44,105 @@ constexpr float kParticleGravity = 20.0f;
 
 UI::UI() {
   rlImGuiSetup(true);
-
-  struct Material {
-    Element element;
-    const char *label;
-    Color col;
-  };
-  static constexpr Material kMaterials[] = {
-      {Element::WATER, "WATER", {64, 164, 223, 255}},
-      {Element::EARTH, "EARTH", {100, 60, 20, 255}},
-      {Element::FIRE, "FIRE", {220, 80, 0, 255}},
-      {Element::STEAM, "STEAM", {180, 180, 200, 255}},
-      {Element::CLOUD, "CLOUD", {220, 220, 255, 255}},
-      {Element::ICE, "ICE", {150, 240, 255, 255}},
-      {Element::SAND, "SAND", {220, 180, 100, 255}},
-      {Element::ROCK, "ROCK", {80, 80, 80, 255}},
-      {Element::WOOD, "WOOD", {120, 78, 40, 255}},
-      {Element::GRASS, "GRASS", {70, 150, 55, 255}},
-      {Element::AIR, "Eraser", {60, 60, 60, 255}},
-  };
-  static_assert(std::size(kMaterials) == std::size(decltype(m_buttons){}));
-  for (size_t i = 0; i < std::size(kMaterials); ++i) {
-    const Material &m = kMaterials[i];
-    m_buttons[i] = {{(float)(8 + i * (BTN_W + BTN_PAD)), PANEL_Y + 10,
-                     (float)BTN_W, (float)BTN_H},
-                    m.element,
-                    m.label,
-                    m.col};
-  }
-
-  m_spellButton = {(float)(WINDOW_WIDTH - SPELL_BTN_W - 8), 8.0f,
-                   (float)SPELL_BTN_W, (float)SPELL_BTN_H};
-
-  // Load available spells
-  m_availableSpells = m_spellStore.LoadAll();
+  m_library.Load();
+  std::vector<std::string> starter;
+  for (const Spell &spell : m_library.All())
+    starter.push_back(m_library.RefOf(spell));
+  m_decks.Load(starter);
+  m_spellEditor.Bind(&m_library, &m_decks);
+  m_thumbnails = std::make_unique<SpellThumbnails>(m_spellEditor.Glyphs());
+  m_spellEditor.SetThumbnails(m_thumbnails.get());
 }
 
-UI::~UI() { rlImGuiShutdown(); }
+UI::~UI() {
+  m_thumbnails.reset(); // textures before the GL context goes
+  rlImGuiShutdown();
+}
 
 void UI::HandleInput(UIState &state, Simulation &sim) {
-  if (m_spellEditor.IsOpen()) {
-    m_editorWasOpen = true;
+  (void)sim;
+  if (m_spellEditor.IsOpen())
     return;
-  }
-  if (m_editorWasOpen) {
-    m_editorWasOpen = false;
-    m_availableSpells = m_spellStore.LoadAll();
-    m_selectedSpellIndex = -1;
-    m_isAimingSpell = false;
-  }
-
-  if (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard)
+  if (ImGui::GetIO().WantCaptureKeyboard)
     return;
-
-  // Handle escape to cancel aiming
-  if (IsKeyPressed(KEY_ESCAPE)) {
-    m_isAimingSpell = false;
-  }
-
-  if (m_gameMode) {
-    // The character owns the mouse; only keep the debug toggles and editor
-    if (IsKeyPressed(KEY_F3))
-      state.debugOverlay = !state.debugOverlay;
-    if (IsKeyPressed(KEY_F4))
-      state.showConfigEditor = !state.showConfigEditor;
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-        CheckCollisionPointRec(GetMousePosition(), m_spellButton))
-      m_spellEditor.Open();
-    return;
-  }
-
-  // Spell casting input
-  if (m_selectedSpellIndex >= 0 &&
-      m_selectedSpellIndex < (int)m_availableSpells.size()) {
-    Vector2 mousePos = GetMousePosition();
-    Vector2 mouseCell = GetMouseCell();
-
-    if (m_isAimingSpell) {
-      m_spellAimDir = ComputeSpellAimDirection(m_spellOrigin, mousePos);
-    }
-
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-      if (m_isAimingSpell) {
-        // Fire the spell
-        if (!IsMouseOverPanel()) {
-          Vector2 spellOrigin = {m_spellOrigin.x + 0.5f,
-                                 m_spellOrigin.y + 0.5f};
-          sim.CastSpell(m_availableSpells[m_selectedSpellIndex], spellOrigin,
-                        m_spellAimDir);
-          m_isAimingSpell = false;
-        }
-      } else if (!IsMouseOverPanel()) {
-        // Start aiming
-        if (CheckCollisionPointRec(mousePos, m_spellButton)) {
-          m_spellEditor.Open();
-          return;
-        }
-        m_spellOrigin = mouseCell;
-        m_isAimingSpell = true;
-      }
-    }
-  }
-
-  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-    Vector2 m = GetMousePosition();
-    if (CheckCollisionPointRec(m, m_spellButton)) {
-      m_spellEditor.Open();
-      return;
-    }
-  }
-
-  if (IsKeyPressed(KEY_ONE))
-    state.selectedMaterial = Element::WATER;
-  if (IsKeyPressed(KEY_TWO))
-    state.selectedMaterial = Element::EARTH;
-  if (IsKeyPressed(KEY_THREE))
-    state.selectedMaterial = Element::FIRE;
-  if (IsKeyPressed(KEY_FOUR))
-    state.selectedMaterial = Element::STEAM;
-  if (IsKeyPressed(KEY_FIVE))
-    state.selectedMaterial = Element::CLOUD;
-  if (IsKeyPressed(KEY_SIX))
-    state.selectedMaterial = Element::ICE;
-  if (IsKeyPressed(KEY_SEVEN))
-    state.selectedMaterial = Element::SAND;
-  if (IsKeyPressed(KEY_EIGHT))
-    state.selectedMaterial = Element::ROCK;
-  if (IsKeyPressed(KEY_NINE))
-    state.selectedMaterial = Element::AIR;
 
   if (IsKeyPressed(KEY_F3))
     state.debugOverlay = !state.debugOverlay;
   if (IsKeyPressed(KEY_F4))
     state.showConfigEditor = !state.showConfigEditor;
+  if (IsKeyPressed(KEY_E))
+    m_spellEditor.Open();
 
-  float wheel = GetMouseWheelMove();
-  if (wheel != 0) {
-    state.brushRadius = std::clamp(state.brushRadius + (int)wheel, 1, 20);
-  }
+  if (!m_gameMode && IsKeyPressed(KEY_TAB))
+    state.tool = state.tool == SandboxTool::Draw ? SandboxTool::Cast
+                                                 : SandboxTool::Draw;
 
-  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-    Vector2 m = GetMousePosition();
-    for (const auto &btn : m_buttons) {
-      if (CheckCollisionPointRec(m, btn.rect)) {
-        state.selectedMaterial = btn.element;
-      }
+  bool drawing = !m_gameMode && state.tool == SandboxTool::Draw;
+  if (drawing) {
+    static constexpr Element kKeys[] = {
+        Element::WATER, Element::EARTH, Element::FIRE,
+        Element::STEAM, Element::CLOUD, Element::ICE,
+        Element::SAND,  Element::ROCK,  Element::AIR};
+    for (int i = 0; i < 9; ++i)
+      if (IsKeyPressed(KEY_ONE + i))
+        state.selectedMaterial = kKeys[i];
+    if (!ImGui::GetIO().WantCaptureMouse) {
+      float wheel = GetMouseWheelMove();
+      if (wheel != 0)
+        state.brushRadius =
+            std::clamp(state.brushRadius + (int)wheel, 1, 20);
+    }
+  } else {
+    for (int i = 0; i < DECK_SLOTS; ++i)
+      if (IsKeyPressed(KEY_ONE + i))
+        SelectSlot(i);
+    if (!ImGui::GetIO().WantCaptureMouse) {
+      float wheel = GetMouseWheelMove();
+      if (wheel != 0)
+        SelectSlot((m_selectedSlot - (int)wheel + DECK_SLOTS) % DECK_SLOTS);
     }
   }
 }
 
-void UI::DrawSpellButton() {
-  bool hovered = CheckCollisionPointRec(GetMousePosition(), m_spellButton);
-  DrawRectangleRec(m_spellButton, hovered ? Color{200, 200, 220, 255} : WHITE);
-  DrawRectangleLinesEx(m_spellButton, 2, BLACK);
-  const char *label = "Spells";
-  int textX = (int)m_spellButton.x + (SPELL_BTN_W - MeasureText(label, 14)) / 2;
-  int textY = (int)m_spellButton.y + (SPELL_BTN_H - 14) / 2;
-  DrawText(label, textX, textY, 14, BLACK);
+void UI::SelectSlot(int slot) {
+  m_selectedSlot = std::clamp(slot, 0, DECK_SLOTS - 1);
 }
 
 void UI::Draw(UIState &state, Simulation &sim) {
+  m_lastState = &state;
   if (state.debugOverlay) {
     sim.GetRigidBodySystem().DrawDebug();
   }
 
-  if (!m_gameMode) {
-    DrawRectangle(0, PANEL_Y, WINDOW_WIDTH, PANEL_HEIGHT,
-                  Color{30, 30, 40, 255});
-    DrawLine(0, PANEL_Y, WINDOW_WIDTH, PANEL_Y, DARKGRAY);
-
-    for (const auto &btn : m_buttons) {
-      bool selected = (state.selectedMaterial == btn.element);
-      DrawRectangleRec(btn.rect, selected ? WHITE : btn.col);
-      DrawRectangleLinesEx(btn.rect, 2, selected ? BLACK : DARKGRAY);
-
-      int textX = (int)btn.rect.x + (BTN_W - MeasureText(btn.label, 14)) / 2;
-      int textY = (int)btn.rect.y + (BTN_H - 14) / 2;
-      DrawText(btn.label, textX, textY, 14, selected ? BLACK : WHITE);
-    }
-
-    DrawText(TextFormat("Brush: %d", state.brushRadius), WINDOW_WIDTH - 120,
-             PANEL_Y + 20, 16, RAYWHITE);
-  }
-
-  DrawSpellButton();
-
   DrawActiveGusts(sim);
-  DrawSpellAimPreview(sim);
 
   rlImGuiBegin();
-
-  DrawSpellSelectionPanel();
 
   if (state.showConfigEditor && !m_spellEditor.IsOpen()) {
     DrawPropertyEditor(sim.GetConfig());
   }
 
-  if (!m_spellEditor.IsOpen())
-    DrawInspector(sim);
+  if (!m_spellEditor.IsOpen()) {
+    DrawActionBar(state);
+    if (state.debugOverlay)
+      DrawInspector(sim);
+  }
 
   m_spellEditor.Draw();
+  HandleEditorRequests(state);
 
   rlImGuiEnd();
+}
+
+void UI::HandleEditorRequests(UIState &state) {
+  std::string ref;
+  if (m_spellEditor.TakeTestRequest(ref)) {
+    m_testSpellRef = ref;
+    m_selectedSlot = 0;
+    state.tool = SandboxTool::Cast;
+    state.sandboxRequested = true;
+    m_spellEditor.Close();
+  }
 }
 
 void UI::DrawInspector(Simulation &sim) {
@@ -407,48 +289,6 @@ void UI::DrawElementPropertyEditor(SimulationConfig &config) {
 Vector2 UI::GetMouseCell() const {
   Vector2 m = GetMousePosition();
   return {std::floor(m.x / CELL_SIZE), std::floor(m.y / CELL_SIZE)};
-}
-
-void UI::DrawSpellSelectionPanel() {
-  if (ImGui::Begin("Spells", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-    ImGui::Text("Available Spells:");
-    for (int i = 0; i < (int)m_availableSpells.size(); ++i) {
-      bool selected = (m_selectedSpellIndex == i);
-      if (ImGui::Selectable(m_availableSpells[i].name.c_str(), selected)) {
-        m_selectedSpellIndex = i;
-        m_isAimingSpell = false;
-      }
-    }
-    ImGui::Separator();
-    if (m_selectedSpellIndex >= 0 &&
-        m_selectedSpellIndex < (int)m_availableSpells.size()) {
-      const Spell &spell = m_availableSpells[m_selectedSpellIndex];
-      SpellStats stats = SpellSystem::Evaluate(spell);
-      SpellEditor::DrawStats(stats);
-      ImGui::NewLine();
-      if (m_gameMode) {
-        ImGui::TextDisabled("Click in the world to queue this spell");
-      } else {
-        ImGui::BeginDisabled(!stats.valid);
-        if (ImGui::Button("Cast")) {
-          m_isAimingSpell = true;
-        }
-        ImGui::EndDisabled();
-      }
-    }
-    ImGui::End();
-  }
-}
-
-void UI::DrawSpellAimPreview(const Simulation &sim) {
-  if (!m_isAimingSpell)
-    return;
-  const Spell *spell = GetSelectedSpell();
-  if (!spell)
-    return;
-
-  DrawAimIndicator(*spell, {m_spellOrigin.x + 0.5f, m_spellOrigin.y + 0.5f},
-                   m_spellAimDir, sim.GetConfig().world.gravity);
 }
 
 void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
@@ -612,27 +452,40 @@ Color UI::GetSpellColor(const Spell &spell) const {
 }
 
 bool UI::IsMouseOverPanel() const {
-  return GetMouseY() >= PANEL_Y || ImGui::GetIO().WantCaptureMouse;
+  return GetMouseY() >= BAR_Y || ImGui::GetIO().WantCaptureMouse;
+}
+
+const Deck *UI::HotbarDeck(const UIState &state) const {
+  if (state.matchRound >= 0 && state.matchRound < MATCH_ROUNDS)
+    if (const Deck *d = m_decks.Find(m_decks.Match().deckIds[state.matchRound]))
+      return d;
+  return m_decks.Find(m_decks.ActiveId());
+}
+
+const Spell *UI::SlotSpell(const UIState &state, int slot) const {
+  if (slot == 0 && !m_testSpellRef.empty() && state.matchRound < 0)
+    if (const Spell *s = m_library.Find(m_testSpellRef))
+      return s;
+  const Deck *deck = HotbarDeck(state);
+  if (!deck || slot < 0 || slot >= DECK_SLOTS)
+    return nullptr;
+  return m_library.Find(deck->slots[slot]);
 }
 
 const Spell *UI::GetSelectedSpell() const {
-  if (m_selectedSpellIndex < 0 ||
-      m_selectedSpellIndex >= (int)m_availableSpells.size())
-    return nullptr;
-  return &m_availableSpells[m_selectedSpellIndex];
+  static const UIState kDefault;
+  return SlotSpell(m_lastState ? *m_lastState : kDefault, m_selectedSlot);
 }
 
 void UI::SetGameMode(bool enabled) {
   m_gameMode = enabled;
-  m_isAimingSpell = false;
+  // Match hotbars never carry the sandbox's test spell
+  if (enabled)
+    m_testSpellRef.clear();
 }
 
 bool UI::IsBlockingWorldInput() const {
   if (m_spellEditor.IsOpen())
-    return true;
-  if (m_isAimingSpell)
-    return true;
-  if (CheckCollisionPointRec(GetMousePosition(), m_spellButton))
     return true;
   return IsMouseOverPanel();
 }

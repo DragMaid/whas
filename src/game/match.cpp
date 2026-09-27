@@ -4,6 +4,7 @@
 #include "whas/game/arena_gen.h"
 #include <algorithm>
 #include <cstring>
+#include <span>
 
 namespace Match {
 
@@ -41,9 +42,9 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round) {
 
 namespace {
 
-void ApplyHits(Simulation &sim, State &state) {
+void ApplyHits(Simulation &sim, Character *chars, int count) {
   for (const ParticleHit &hit : sim.GetParticleSystem().TakeHits()) {
-    for (Character &c : state.characters) {
+    for (Character &c : std::span(chars, count)) {
       if (c.id != hit.targetId)
         continue;
       c.hp = std::max(0.0f, c.hp - hit.power * DAMAGE_PER_POWER);
@@ -54,11 +55,11 @@ void ApplyHits(Simulation &sim, State &state) {
 }
 
 // Gust fields push characters like everything else: acceleration = force/mass
-void ApplyGusts(const Simulation &sim, State &state) {
+void ApplyGusts(const Simulation &sim, Character *chars, int count) {
   for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
     if (effect.stats.kind != SpellKind::Gust)
       continue;
-    for (Character &c : state.characters) {
+    for (Character &c : std::span(chars, count)) {
       if (c.id == effect.owner)
         continue;
       float strength = SpellSystem::GustStrengthAt(effect, c.Center());
@@ -72,6 +73,13 @@ void ApplyGusts(const Simulation &sim, State &state) {
 }
 
 } // namespace
+
+void ApplyEffects(Simulation &sim, Character *characters, int count) {
+  ApplyHits(sim, characters, count);
+  ApplyGusts(sim, characters, count);
+  for (Character &c : std::span(characters, count))
+    c.UpdateBurn(sim, TurnController::TICK_DT);
+}
 
 void ExecuteTick(Simulation &sim, State &state,
                  const std::array<const TurnPlan *, PLAYERS> &plans,
@@ -88,10 +96,7 @@ void ExecuteTick(Simulation &sim, State &state,
   sim.GetParticleSystem().SetHurtboxes(std::move(hurtboxes));
 
   sim.Update(TurnController::TICK_DT);
-  ApplyHits(sim, state);
-  ApplyGusts(sim, state);
-  for (Character &c : state.characters)
-    c.UpdateBurn(sim, TurnController::TICK_DT);
+  ApplyEffects(sim, state.characters.data(), PLAYERS);
 }
 
 void EndTurn(State &state) {

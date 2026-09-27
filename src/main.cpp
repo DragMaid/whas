@@ -3,11 +3,13 @@
 #include "whas/engine/renderer.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/game.h"
+#include "whas/game/sandbox.h"
 #include "whas/ui/ui.h"
 
 int main() {
   SetConfigFlags(FLAG_MSAA_4X_HINT); // smooth vector lines
   InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Witch Hat Atelier Simulator");
+  SetExitKey(KEY_NULL); // Escape closes the spell editor, not the game
   SetTargetFPS(FPS);
 
   Simulation sim;
@@ -15,52 +17,35 @@ int main() {
   UI ui;
   UIState uiState;
   Game game;
+  Sandbox sandbox;
 
   while (!WindowShouldClose()) {
-    float dt = GetFrameTime();
-
-    // Input handling
     ui.HandleInput(uiState, sim);
 
     if (IsKeyPressed(KEY_F1))
       game.SetActive(!game.IsActive(), sim, ui);
-
-    if (game.IsActive()) {
-      // Turns drive the world clock: frozen while planning, fixed steps while
-      // executing
-      game.Update(sim, ui);
-    } else {
-      // World painting via mouse.
-      if (!ui.IsBlockingWorldInput()) {
-        Vector2 cell = ui.GetMouseCell();
-        int cx = (int)cell.x;
-        int cy = (int)cell.y;
-
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-          sim.Paint(cx, cy, uiState.selectedMaterial, uiState.brushRadius);
-
-        if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
-          sim.Erase(cx, cy, uiState.brushRadius);
-      }
-
-      // Simulation tick.
-      bool isPainting = IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !ui.IsBlockingWorldInput();
-      sim.Update(dt, isPainting);
+    // "Test in sandbox" from the spell editor
+    if (uiState.sandboxRequested) {
+      uiState.sandboxRequested = false;
+      if (game.IsActive())
+        game.SetActive(false, sim, ui);
     }
 
-    // Rendering
+    // A match drives the world in turns; the sandbox runs it in real time
+    if (game.IsActive())
+      game.Update(sim, ui, uiState);
+    else
+      sandbox.Update(sim, ui, uiState);
+
     BeginDrawing();
-
-    // Draw sky color
     ClearBackground(Color{15, 15, 20, 255});
-
-    // Actual drawing of the world
     renderer.DrawWorld(sim);
 
     if (game.IsActive())
       game.Draw(sim, ui);
+    else
+      sandbox.Draw(sim, ui, uiState);
 
-    // Draw bebugging layer if needed
     if (uiState.debugOverlay)
       renderer.DrawDebugOverlay(sim);
 

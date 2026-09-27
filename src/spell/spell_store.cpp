@@ -79,6 +79,21 @@ std::vector<Spell> SpellStore::LoadAll() const {
   return spells;
 }
 
+bool SpellStore::Exists(const std::string &ref) const {
+  return std::filesystem::exists(std::filesystem::path(SPELLS_DIR) /
+                                 (ref + ".json"));
+}
+
+bool SpellStore::Remove(const std::string &ref, std::string &errorOut) const {
+  std::error_code ec;
+  if (!std::filesystem::remove(
+          std::filesystem::path(SPELLS_DIR) / (ref + ".json"), ec)) {
+    errorOut = ec ? ec.message() : "Spell file not found.";
+    return false;
+  }
+  return true;
+}
+
 bool SpellStore::Save(const Spell &spell, std::string &errorOut) const {
   EnsureDirectoryExists();
 

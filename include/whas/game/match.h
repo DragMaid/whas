@@ -39,6 +39,10 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round);
 void ExecuteTick(Simulation &sim, State &state,
                  const std::array<const TurnPlan *, PLAYERS> &plans, int tick);
 
+// After a world step: projectile hits, gust pushes and burning for any set of
+// characters (the sandbox avatar uses this too)
+void ApplyEffects(Simulation &sim, Character *characters, int count);
+
 // After the last tick of a turn
 void EndTurn(State &state);
 

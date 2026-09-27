@@ -8,8 +8,19 @@
 SpellEditor::SpellEditor() {
   // TODO: move this into mutual configuration instead
   m_library.LoadFromDirectories("assets/signs", "assets/sigils");
-  m_store.EnsureDirectoryExists();
-  RefreshSavedSpells();
+}
+
+void SpellEditor::Bind(SpellLibrary *spells, DeckBook *decks) {
+  m_spells = spells;
+  m_decks = decks;
+}
+
+bool SpellEditor::TakeTestRequest(std::string &ref) {
+  if (m_testRef.empty())
+    return false;
+  ref = std::move(m_testRef);
+  m_testRef.clear();
+  return true;
 }
 
 namespace {
@@ -76,7 +87,6 @@ void SpellEditor::DrawStats(const SpellStats &stats) {
     ImGui::Text("Heat: %.0f C", stats.temperature);
 }
 
-void SpellEditor::RefreshSavedSpells() { m_savedSpells = m_store.LoadAll(); }
 
 const SvgAsset *SpellEditor::GetAssetForGlyph(const PlacedGlyph &glyph) const {
   return m_library.FindById(glyph.assetId);
@@ -482,94 +492,129 @@ void SpellEditor::DrawEditPanel() {
   }
 }
 
-// TODO: do this to show thumbnail
-void SpellEditor::DrawSavedSpells() {
-  if (!ImGui::CollapsingHeader("Saved Spells", ImGuiTreeNodeFlags_DefaultOpen))
-    return;
+void SpellEditor::OpenSpell(const Spell &spell) {
+  m_currentSpell = spell;
+  std::strncpy(m_nameBuffer, spell.name.c_str(), SPELL_NAME_MAX_LEN);
+  m_nameBuffer[SPELL_NAME_MAX_LEN] = '\0';
+  m_selectedGlyphIndex = -1;
+  m_isPlacing = false;
+  m_paletteAssetId.clear();
+  m_statusMessage.clear();
+  m_tab = Tab::Edit;
+  m_switchTab = true;
+}
 
-  ImGui::BeginChild("SavedSpellsList", ImVec2(0, 120), true);
-  if (m_savedSpells.empty()) {
-    ImGui::TextDisabled("No saved spells");
-  } else {
-    for (const Spell &s : m_savedSpells) {
-      if (ImGui::Selectable(s.name.c_str())) {
-        m_currentSpell = s;
-        std::strncpy(m_nameBuffer, s.name.c_str(), SPELL_NAME_MAX_LEN);
-        m_nameBuffer[SPELL_NAME_MAX_LEN] = '\0';
-        m_selectedGlyphIndex = -1;
-        m_isPlacing = false;
-        m_paletteAssetId.clear();
-      }
+void SpellEditor::SaveCurrent() {
+  int signCount = 0, sigilCount = 0;
+  bool anyInvalid = false;
+  for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
+    const PlacedGlyph &g = m_currentSpell.glyphs[i];
+    const SvgAsset *a = GetAssetForGlyph(g);
+    if (!a) {
+      anyInvalid = true;
+      break;
     }
+    if (a->kind == GlyphKind::Sign)
+      signCount++;
+    if (a->kind == GlyphKind::Sigil)
+      sigilCount++;
+    if (!IsPlacementValid(g, i))
+      anyInvalid = true;
   }
-  ImGui::EndChild();
+  if (signCount == 0 || sigilCount != 1) {
+    m_statusMessage =
+        "Spell must contain at least one sign and exactly one sigil.";
+  } else if (anyInvalid) {
+    m_statusMessage = "Spell contains invalid glyph placements (red).";
+  } else {
+    m_currentSpell.name = m_nameBuffer;
+    std::string err;
+    m_statusMessage = m_spells->Save(m_currentSpell, err) ? "Saved." : err;
+  }
 }
 
 void SpellEditor::DrawOverlay() {
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize({(float)WINDOW_WIDTH, (float)WINDOW_HEIGHT});
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.92f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.96f));
   ImGui::Begin("SpellEditorOverlay", nullptr,
                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
-  ImGui::Text("Spell Editor");
-  float buttonsWidth =
-      ImGui::CalcTextSize("Close").x + ImGui::GetStyle().FramePadding.x * 2 +
-      ImGui::GetStyle().ItemSpacing.x + ImGui::CalcTextSize("Save Spell").x +
-      ImGui::GetStyle().FramePadding.x * 2;
-
-  ImGui::SameLine(ImGui::GetContentRegionAvail().x - buttonsWidth +
-                  ImGui::GetCursorPosX());
-  if (ImGui::Button("Close")) {
+  // Close sits at the right of the tab row
+  float closeW = ImGui::CalcTextSize("Close (Esc)").x +
+                 ImGui::GetStyle().FramePadding.x * 2;
+  ImVec2 row = ImGui::GetCursorPos();
+  ImGui::SetCursorPos({ImGui::GetWindowWidth() - closeW - 10, row.y});
+  if (ImGui::Button("Close (Esc)") ||
+      (ImGui::IsKeyPressed(ImGuiKey_Escape) && !ImGui::IsAnyItemActive() &&
+       !m_openPopup)) {
     m_open = false;
     m_isPlacing = false;
   }
-  ImGui::SameLine();
-  if (ImGui::Button("Save Spell")) {
-    // Validate spell before saving
-    int signCount = 0, sigilCount = 0;
-    bool anyInvalid = false;
-    for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
-      const PlacedGlyph &g = m_currentSpell.glyphs[i];
-      const SvgAsset *a = GetAssetForGlyph(g);
-      if (!a) { anyInvalid = true; break; }
-      if (a->kind == GlyphKind::Sign) signCount++;
-      if (a->kind == GlyphKind::Sigil) sigilCount++;
-      if (!IsPlacementValid(g, i)) { anyInvalid = true; }
+  ImGui::SetCursorPos(row);
+
+  if (ImGui::BeginTabBar("EditorTabs")) {
+    ImGuiTabItemFlags editFlags =
+        m_switchTab && m_tab == Tab::Edit ? ImGuiTabItemFlags_SetSelected : 0;
+    ImGuiTabItemFlags libFlags = m_switchTab && m_tab == Tab::Library
+                                     ? ImGuiTabItemFlags_SetSelected
+                                     : 0;
+    m_switchTab = false;
+    if (ImGui::BeginTabItem("Edit spell", nullptr, editFlags)) {
+      m_tab = Tab::Edit;
+      ImGui::EndTabItem();
     }
-    if (signCount == 0 || sigilCount != 1) {
-      m_statusMessage = "Spell must contain at least one sign and exactly one sigil.";
-    } else if (anyInvalid) {
-      m_statusMessage = "Spell contains invalid glyph placements (red).";
-    } else {
-      m_currentSpell.name = m_nameBuffer;
-      std::string err;
-      if (m_store.Save(m_currentSpell, err)) {
-        m_statusMessage = "Saved.";
-        RefreshSavedSpells();
-      } else {
-        m_statusMessage = err;
-      }
+    if (ImGui::BeginTabItem("Library & decks", nullptr, libFlags)) {
+      m_tab = Tab::Library;
+      ImGui::EndTabItem();
     }
+    ImGui::EndTabBar();
+  }
+
+  if (m_tab == Tab::Library) {
+    DrawLibraryTab();
+    ImGui::End();
+    ImGui::PopStyleColor();
+    return;
   }
 
   ImGui::SetNextItemWidth(240);
   ImGui::InputText("Name", m_nameBuffer, SPELL_NAME_MAX_LEN + 1);
-  if (!m_statusMessage.empty())
+  ImGui::SameLine();
+  if (ImGui::Button("Save spell"))
+    SaveCurrent();
+  ImGui::SameLine();
+  if (ImGui::Button("New")) {
+    m_currentSpell = {};
+    m_nameBuffer[0] = '\0';
+    m_selectedGlyphIndex = -1;
+    m_statusMessage.clear();
+  }
+  ImGui::SameLine();
+  ImGui::BeginDisabled(!m_spells || !m_spells->Find(m_spells->RefOf(m_nameBuffer)));
+  if (ImGui::Button("Test in sandbox"))
+    m_testRef = m_spells->RefOf(m_nameBuffer);
+  ImGui::EndDisabled();
+  if (!m_statusMessage.empty()) {
+    ImGui::SameLine();
     ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.6f, 1.0f), "%s",
                        m_statusMessage.c_str());
+  }
 
   ImGui::Separator();
 
   float rightW = 280.0f;
   float leftW = ImGui::GetContentRegionAvail().x - rightW - 8.0f;
+  constexpr float stripH = 64.0f;
 
   ImGui::BeginChild("LeftPanel", ImVec2(leftW, 0), false);
   ImVec2 canvasOrigin = ImGui::GetCursorScreenPos();
   ImVec2 canvasSize = ImGui::GetContentRegionAvail();
-  canvasSize.y = std::max(canvasSize.y, SPELL_OUTER_RADIUS * 2.0f + 40.0f);
+  canvasSize.y -= stripH + 6.0f;
   DrawCanvas(canvasOrigin, canvasSize);
+  ImGui::SetCursorScreenPos({canvasOrigin.x, canvasOrigin.y + canvasSize.y + 6});
+  DrawPreviewStrip({leftW, stripH});
   ImGui::EndChild();
 
   ImGui::SameLine();
@@ -579,7 +624,6 @@ void SpellEditor::DrawOverlay() {
     DrawStats(SpellSystem::Evaluate(m_currentSpell));
   DrawEditPanel();
   DrawPalette();
-  DrawSavedSpells();
   ImGui::EndChild();
 
   ImGui::End();
