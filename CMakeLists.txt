@@ -108,7 +108,28 @@ add_library(rlimgui STATIC ${RLIMGUI_DIR}/rlImGui.cpp)
 target_include_directories(rlimgui PUBLIC ${RLIMGUI_DIR})
 target_link_libraries(rlimgui PUBLIC imgui raylib)
 
+# Lockstep multiplayer needs every client to compute the exact same floats:
+# no fused multiply-add contraction, no fast-math reassociation.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    set(WHAS_DETERMINISTIC_FP -ffp-contract=off -fno-fast-math)
+elseif(MSVC)
+    set(WHAS_DETERMINISTIC_FP /fp:precise)
+endif()
+target_compile_options(box2d PRIVATE ${WHAS_DETERMINISTIC_FP})
+
+# Identifies the simulation build; clients with different ids can't play
+# together because their floats may not match
+execute_process(
+    COMMAND git rev-parse --short HEAD
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    OUTPUT_VARIABLE WHAS_GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET)
+set(WHAS_SIM_BUILD_ID "${WHAS_GIT_HASH}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_SYSTEM_PROCESSOR}")
+
 add_library(whas ${SOURCES})
+target_compile_options(whas PUBLIC ${WHAS_DETERMINISTIC_FP})
+target_compile_definitions(whas PUBLIC WHAS_SIM_BUILD_ID="${WHAS_SIM_BUILD_ID}")
 target_compile_features(whas PUBLIC cxx_std_20)
 target_include_directories(whas
     PUBLIC
@@ -126,3 +147,19 @@ add_executable(whasg src/main.cpp)
 target_link_libraries(whasg PRIVATE whas raylib rlimgui imgui box2d)
 
 install(TARGETS whasg DESTINATION bin)
+
+# Headless tests (no window): determinism, spells, burning
+option(WHAS_BUILD_TESTS "Build the whas_tests target" ON)
+if(WHAS_BUILD_TESTS)
+    FetchContent_Declare(
+        Catch2
+        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+        GIT_TAG v3.8.1
+    )
+    FetchContent_MakeAvailable(Catch2)
+
+    add_executable(whas_tests
+        tests/determinism_test.cpp
+    )
+    target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
+endif()

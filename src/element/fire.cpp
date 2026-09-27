@@ -28,7 +28,7 @@ void UpdateFire(int x, int y, ElementContext &ctx) {
   }
 
   // Spontaneous Sparking
-  if (std::rand() % fConfig.sparkChance == 0) {
+  if (ctx.rng.Below(fConfig.sparkChance) == 0) {
     int uy = y - 1;
     if (ctx.grid.InBounds(x, uy)) {
       Cell spark = ElementFactory::Create(Element::FIRE, ctx.config);

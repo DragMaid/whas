@@ -12,6 +12,14 @@ ParticleSystem::ParticleSystem(int maxParticles)
   m_particles.resize(maxParticles);
 }
 
+void ParticleSystem::SpawnFrom(ElementContext &ctx, Vector2 pos, Vector2 vel,
+                               Element element) {
+  if (ctx.deferredSpawns)
+    ctx.deferredSpawns->push_back({pos, vel, element});
+  else
+    ctx.particles.Spawn(pos, vel, element);
+}
+
 Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
                                 float remainingDistance, float power,
                                 bool isProjectile, int owner) {

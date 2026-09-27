@@ -6,19 +6,25 @@
 #include "whas/physics/heat_system.h"
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
+#include <cstring>
+#include <type_traits>
 #include <utility>
 
-Simulation::Simulation()
-    : m_config(), m_frameConfig(), m_rng(42), m_grid(m_config), m_particles(),
-      m_syncBarrier(std::thread::hardware_concurrency() + 1,
-                    [this]() { m_currentPass++; }) {
+Simulation::Simulation(int workerThreads)
+    : m_config(), m_frameConfig(), m_rng(m_seed),
+      m_chunkSpawns(CHUNK_COLS * CHUNK_ROWS), m_grid(m_config), m_particles(),
+      m_numThreads(std::max(1, workerThreads)),
+      m_syncBarrier(m_numThreads + 1, [this]() { m_currentPass++; }) {
 
-  int numThreads = std::thread::hardware_concurrency();
-  // int numThreads = 1;
-  for (int i = 0; i < numThreads; ++i) {
+  for (int i = 0; i < m_numThreads; ++i) {
     m_workers.emplace_back(
         [this, i](std::stop_token st) { WorkerLoop(i, st); });
   }
+}
+
+void Simulation::SetSeed(uint64_t seed) {
+  m_seed = seed;
+  m_rng = DetRng(seed);
 }
 
 Simulation::~Simulation() {
@@ -56,6 +62,7 @@ void Simulation::Update(float dt, bool isPainting) {
   for (int p = 0; p < 5; ++p) {
     m_syncBarrier.arrive_and_wait();
   }
+  FlushWorkerSpawns();
 
   // 3. Extract new rigid bodies from freshly painted pixels (skip while
   // painting to avoid extracting a body from an incomplete stroke).
@@ -85,7 +92,7 @@ void Simulation::Update(float dt, bool isPainting) {
 
 void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
   uint32_t lastFrame = 0;
-  int numThreads = std::thread::hardware_concurrency();
+  int numThreads = m_numThreads;
 
   while (!stopToken.stop_requested() && m_running) {
     {
@@ -97,10 +104,11 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
       break;
 
     uint32_t currentFrame = m_workerFrame;
-    std::mt19937 threadRng(currentFrame + threadIdx);
+    // Placeholder stream; UpdateChunk gives each chunk its own
+    DetRng unused;
     ElementContext ctx{m_grid,
                        m_chunks,
-                       threadRng,
+                       unused,
                        m_frameConfig,
                        currentFrame,
                        m_particles};
@@ -126,7 +134,14 @@ void Simulation::WorkerLoop(int threadIdx, std::stop_token stopToken) {
   }
 }
 
-void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
+void Simulation::UpdateChunk(int chunkIdx, const ElementContext &base) {
+  // The stream depends on the chunk and frame, not the thread running it
+  DetRng rng(m_seed, (static_cast<uint64_t>(base.frameIndex) << 20) |
+                         static_cast<uint64_t>(chunkIdx));
+  ElementContext ctx{base.grid,   base.chunks,     rng,
+                     base.config, base.frameIndex, base.particles,
+                     &m_chunkSpawns[chunkIdx]};
+
   int chunkCol = chunkIdx % CHUNK_COLS;
   int chunkRow = chunkIdx / CHUNK_COLS;
 
@@ -155,6 +170,67 @@ void Simulation::UpdateChunk(int chunkIdx, ElementContext &ctx) {
 }
 
 void Simulation::UpdateElements() {}
+
+void Simulation::FlushWorkerSpawns() {
+  for (auto &spawns : m_chunkSpawns) {
+    for (const PendingSpawn &s : spawns)
+      m_particles.Spawn(s.pos, s.vel, s.element);
+    spawns.clear();
+  }
+}
+
+namespace {
+struct Fnv {
+  uint64_t h = 0xcbf29ce484222325ull;
+  template <typename T> void Add(const T &v) {
+    static_assert(std::is_trivially_copyable_v<T>);
+    unsigned char bytes[sizeof(T)];
+    std::memcpy(bytes, &v, sizeof(T));
+    for (unsigned char b : bytes) {
+      h ^= b;
+      h *= 0x100000001b3ull;
+    }
+  }
+  void AddVec(Vector2 v) { Add(v.x); Add(v.y); }
+};
+} // namespace
+
+uint64_t Simulation::StateHash() const {
+  // Field by field, so struct padding never leaks into the hash
+  Fnv f;
+  f.Add(m_frameCounter);
+  for (const Cell &c : m_grid.GetBuffer()) {
+    f.Add(static_cast<uint8_t>(c.element));
+    if (c.element == Element::AIR)
+      continue;
+    f.Add(c.temperature);
+    f.Add(c.pressure);
+    f.Add(c.mass);
+    f.Add(c.vx);
+    f.Add(c.vy);
+    f.Add(c.bodyID);
+    f.Add(c.lifetime);
+    f.Add(c.hardness);
+    f.Add(c.moisture);
+  }
+  const_cast<ParticleSystem &>(m_particles).ForEachActive([&](Particle &p) {
+    f.AddVec(p.pos);
+    f.AddVec(p.vel);
+    f.Add(static_cast<uint8_t>(p.element));
+    f.Add(p.remainingDistance);
+    f.Add(p.power);
+    f.Add(p.owner);
+  });
+  for (const SpellEffect &e : m_activeSpellEffects) {
+    f.Add(static_cast<uint8_t>(e.stats.kind));
+    f.AddVec(e.origin);
+    f.AddVec(e.direction);
+    f.Add(e.emitted);
+    f.Add(e.timeRemaining);
+  }
+  f.Add(m_rigidBodies.StateHash());
+  return f.h;
+}
 
 void Simulation::CastSpell(const Spell &spell, Vector2 origin,
                            Vector2 aimDirection, int owner) {

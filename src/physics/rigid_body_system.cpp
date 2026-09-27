@@ -1,3 +1,4 @@
+#include <cstring>
 #include "whas/physics/rigid_body_system.h"
 #include "raylib.h"
 #include "whas/constants.h"
@@ -633,4 +634,31 @@ void RigidBodySystem::DrawDebug() {
       }
     }
   }
+}
+
+uint64_t RigidBodySystem::StateHash() const {
+  uint64_t h = 0xcbf29ce484222325ull;
+  auto add = [&h](float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    for (int i = 0; i < 4; ++i) {
+      h ^= (bits >> (i * 8)) & 0xFF;
+      h *= 0x100000001b3ull;
+    }
+  };
+  for (const BodyData &body : m_bodies) {
+    if (!b2Body_IsValid(body.bodyId))
+      continue;
+    b2Vec2 p = b2Body_GetPosition(body.bodyId);
+    b2Rot r = b2Body_GetRotation(body.bodyId);
+    b2Vec2 v = b2Body_GetLinearVelocity(body.bodyId);
+    add(p.x);
+    add(p.y);
+    add(r.c);
+    add(r.s);
+    add(v.x);
+    add(v.y);
+    add(b2Body_GetAngularVelocity(body.bodyId));
+  }
+  return h;
 }

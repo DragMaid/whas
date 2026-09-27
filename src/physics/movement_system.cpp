@@ -87,7 +87,8 @@ bool MovementSystem::TryMove(int x, int y, int tx, int ty, Cell &moved,
         if (((float)(ctx.rng() % 100) / 100.0f) < splashChance) {
           Vector2 pVel = {(float)((ctx.rng() % 100) - 50) * 0.15f * intensity,
                           -speed * 0.4f - (float)(ctx.rng() % 100) * 0.1f};
-          ctx.particles.Spawn({(float)tx, (float)ty}, pVel, Element::WATER);
+          ParticleSystem::SpawnFrom(ctx, {(float)tx, (float)ty}, pVel,
+                                    Element::WATER);
           splashedAway = true;
         }
       }

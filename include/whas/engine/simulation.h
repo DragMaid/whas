@@ -1,4 +1,5 @@
 #pragma once
+#include "whas/constants.h"
 #include "whas/core/cell.h"
 #include "whas/core/config.h"
 #include "whas/core/element.h"
@@ -8,7 +9,7 @@
 #include "whas/physics/particle_system.h"
 #include "whas/spell/spell_types.h"
 #include "whas/spell/spell_system.h"
-#include <random>
+#include "whas/core/det_rng.h"
 #include <thread>
 #include <vector>
 #include <barrier>
@@ -21,8 +22,18 @@ struct ElementContext;
 
 class Simulation {
 public:
-  Simulation();
+  // Worker count is fixed rather than taken from the hardware; results don't
+  // depend on it, but it keeps performance the same on every machine
+  explicit Simulation(int workerThreads = SIM_THREADS);
   ~Simulation();
+
+  // Restart the random streams. Both lockstep clients use the match seed.
+  void SetSeed(uint64_t seed);
+  uint64_t GetSeed() const { return m_seed; }
+
+  // Hash of everything that affects future ticks: cells, particles, spell
+  // effects and rigid bodies. Lockstep clients compare it after each turn.
+  uint64_t StateHash() const;
 
   void Update(float dt, bool isPainting = false);
 
@@ -56,7 +67,10 @@ private:
   SimulationConfig m_frameConfig; // Per-frame snapshot
   uint32_t m_frameCounter = 0;
 
-  std::mt19937 m_rng;
+  uint64_t m_seed = 42;
+  DetRng m_rng; // main-thread stream
+  // Particles spawned by workers, per chunk, flushed in chunk order
+  std::vector<std::vector<PendingSpawn>> m_chunkSpawns;
 
   Grid m_grid;
   ChunkManager m_chunks;
@@ -73,6 +87,7 @@ private:
   void CollectStatistics();
 
   // Parallel Workers
+  int m_numThreads;
   std::vector<std::jthread> m_workers;
   std::barrier<std::function<void()>> m_syncBarrier;
   std::atomic<bool> m_running{true};
@@ -84,5 +99,6 @@ private:
   std::atomic<uint32_t> m_workerFrame{0};
 
   void WorkerLoop(int threadIdx, std::stop_token stopToken);
-  void UpdateChunk(int chunkIdx, ElementContext &ctx);
+  void UpdateChunk(int chunkIdx, const ElementContext &base);
+  void FlushWorkerSpawns();
 };

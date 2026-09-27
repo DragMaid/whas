@@ -16,6 +16,13 @@ struct ParticleHit {
     float power;
 };
 
+// A particle spawn queued by a worker thread (see ElementContext)
+struct PendingSpawn {
+    Vector2 pos;
+    Vector2 vel;
+    Element element;
+};
+
 struct Particle {
     Vector2 pos;
     Vector2 vel;
@@ -38,6 +45,9 @@ public:
     Particle *Spawn(Vector2 pos, Vector2 vel, Element element,
                     float remainingDistance = 0.0f, float power = 0.0f,
                     bool isProjectile = false, int owner = -1);
+    // Spawn now, or queue it when called from a worker thread
+    static void SpawnFrom(struct ElementContext &ctx, Vector2 pos, Vector2 vel,
+                          Element element);
     void Update(struct Grid& grid, struct ElementContext& ctx, float dt);
     void Draw();
     void Clear();

@@ -39,6 +39,9 @@ public:
 
   void DrawDebug();
 
+  // Hash of every dynamic body's transform and velocity (lockstep checks)
+  uint64_t StateHash() const;
+
   // Push the body that owns a grid cell (cell.bodyID), impulse and point in
   // cell units. Unknown ids are ignored.
   void ApplyImpulse(int32_t cellBodyID, Vector2 impulse, Vector2 point);
