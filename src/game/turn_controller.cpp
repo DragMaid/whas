@@ -1,0 +1,179 @@
+#include "whas/game/turn_controller.h"
+#include "whas/engine/simulation.h"
+#include <algorithm>
+#include <cmath>
+
+namespace {
+
+Vector2 FlightVelocity(const SpellStats &stats, Vector2 dir) {
+  return {dir.x * stats.launchSpeed, dir.y * stats.launchSpeed};
+}
+
+} // namespace
+
+void PlanPreview::Reset(const Character &start) {
+  end = start;
+  path.clear();
+  casts.clear();
+}
+
+// Simulate the next unpreviewed step of the plan
+void PlanPreview::Append(const Simulation &sim, const TurnPlan &plan,
+                         float dt) {
+  const PlanStep &step = plan.steps[path.size()];
+  for (const PlannedCast &cast : step.casts) {
+    SpellStats stats = SpellSystem::Evaluate(cast.spell);
+    Vector2 dir = SpellSystem::ResolveDirection(stats, cast.aim);
+    casts.push_back({cast.spell, end.Center(), dir, stats});
+    if (stats.kind == SpellKind::Flight)
+      end.Launch(FlightVelocity(stats, dir));
+  }
+  end.Step(sim, step.input, dt);
+  path.push_back(end.Center());
+}
+
+PlanPreview PreviewPlan(const Simulation &sim, const Character &start,
+                        const TurnPlan &plan, float dt) {
+  PlanPreview preview;
+  preview.Reset(start);
+  while (preview.path.size() < plan.steps.size())
+    preview.Append(sim, plan, dt);
+  return preview;
+}
+
+void TurnController::BeginPlanning(const Character &localPlayer) {
+  m_phase = Phase::Planning;
+  m_start = localPlayer;
+  m_plan.steps.clear();
+  m_preview.Reset(localPlayer);
+  m_segmentStarts.clear();
+  m_segmentBreak = true;
+  m_pending.clear();
+  m_channelTicks = 0;
+  m_execTick = 0;
+}
+
+int TurnController::CastTicks(const Spell &spell) {
+  SpellStats stats = SpellSystem::Evaluate(spell);
+  float seconds = 0.3f + stats.particleCount * 0.005f;
+  return std::max(1, static_cast<int>(std::round(seconds * TICKS_PER_SECOND)));
+}
+
+TurnController::CastResult TurnController::QueueCast(const Spell &spell,
+                                                     Vector2 aim) {
+  if (m_phase != Phase::Planning)
+    return CastResult::NoTime;
+
+  bool flight = SpellSystem::Evaluate(spell).kind == SpellKind::Flight;
+  if (flight && std::any_of(m_pending.begin(), m_pending.end(),
+                            [](const PlannedCast &c) {
+                              return SpellSystem::Evaluate(c.spell).kind ==
+                                     SpellKind::Flight;
+                            }))
+    return CastResult::SecondFlight;
+
+  int ticks = CastTicks(spell);
+  if (ticks > TicksFree())
+    return CastResult::NoTime;
+
+  m_pending.push_back({spell, aim});
+  m_channelTicks += ticks;
+  return CastResult::Queued;
+}
+
+void TurnController::FlowTick(const Simulation &sim, CharacterInput input) {
+  if (m_phase != Phase::Planning || Finished())
+    return;
+
+  PlanStep step;
+  step.casts = std::move(m_pending);
+  m_pending.clear();
+  if (m_channelTicks > 0) {
+    input = {}; // standing still while the cast is channelled
+    m_channelTicks--;
+  }
+  step.input = input;
+
+  // A new undo segment at every pause, every cast and every change of keys
+  bool newSegment = m_segmentBreak || m_plan.steps.empty() ||
+                    !step.casts.empty() ||
+                    !(m_plan.steps.back().input == input);
+  if (newSegment)
+    m_segmentStarts.push_back(m_plan.steps.size());
+  m_segmentBreak = false;
+
+  m_plan.steps.push_back(std::move(step));
+  m_preview.Append(sim, m_plan, TICK_DT);
+}
+
+void TurnController::Undo(const Simulation &sim) {
+  if (m_phase != Phase::Planning)
+    return;
+
+  if (!m_pending.empty()) {
+    m_channelTicks -= CastTicks(m_pending.back().spell);
+    m_pending.pop_back();
+    return;
+  }
+  if (m_segmentStarts.empty())
+    return;
+
+  size_t cut = m_segmentStarts.back();
+  m_segmentStarts.pop_back();
+  // Casts that fired at the start of the undone run go back to being queued,
+  // so undo steps back to the paused moment rather than losing them
+  m_pending = std::move(m_plan.steps[cut].casts);
+  m_plan.steps.resize(cut);
+  m_segmentBreak = true;
+
+  // Casts before the cut may still be channelling past it: replay the
+  // bookkeeping FlowTick does (casts owe time, each tick pays one)
+  int owed = 0;
+  for (const PlanStep &step : m_plan.steps) {
+    for (const PlannedCast &cast : step.casts)
+      owed += CastTicks(cast.spell);
+    owed = std::max(0, owed - 1);
+  }
+  for (const PlannedCast &cast : m_pending)
+    owed += CastTicks(cast.spell);
+  m_channelTicks = owed;
+  m_preview = PreviewPlan(sim, m_start, m_plan, TICK_DT);
+}
+
+void TurnController::Flush(const Simulation &sim) {
+  while (!Finished() && (!m_pending.empty() || m_channelTicks > 0))
+    FlowTick(sim, {});
+}
+
+void TurnController::BeginExecution() {
+  m_phase = Phase::Executing;
+  m_execTick = 0;
+}
+
+bool TurnController::Advance() {
+  if (m_phase != Phase::Executing || m_execTick >= TURN_TICKS)
+    return false;
+  return ++m_execTick < TURN_TICKS;
+}
+
+void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
+                                   Simulation &sim, Character &character) {
+  CharacterInput input{};
+  if (tick >= 0 && tick < static_cast<int>(plan.steps.size())) {
+    const PlanStep &step = plan.steps[tick];
+    input = step.input;
+    for (const PlannedCast &cast : step.casts) {
+      if (!character.Alive())
+        break;
+      SpellStats stats = SpellSystem::Evaluate(cast.spell);
+      if (stats.kind == SpellKind::Flight) {
+        Vector2 dir = SpellSystem::ResolveDirection(stats, cast.aim);
+        character.Launch(FlightVelocity(stats, dir));
+      } else {
+        sim.CastSpell(cast.spell, character.Center(), cast.aim, character.id);
+      }
+    }
+  }
+  // The fallen don't walk, but they still fall
+  character.Step(sim, character.Alive() ? input : CharacterInput{}, TICK_DT);
+}

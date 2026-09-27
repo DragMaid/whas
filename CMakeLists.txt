@@ -4,6 +4,8 @@ project(whas VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# No C++20 modules here; the dependency scan trips an assertion in ninja 1.13
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 # Raylib dependency
 include(FetchContent)
@@ -31,7 +33,8 @@ FetchContent_MakeAvailable(rlImGui)
 FetchContent_Declare(
     box2d
     GIT_REPOSITORY https://github.com/erincatto/box2d.git
-    GIT_TAG main
+    # Pinned: main renames APIs (b2Body_ApplyMassFromShapes -> UpdateMassFromShapes)
+    GIT_TAG 956ce4e1e8acddd05a21102629e268ff9321ec50
 )
 FetchContent_MakeAvailable(box2d)
 
@@ -84,6 +87,10 @@ set(SOURCES
     src/spell/spell_store.cpp
     src/spell/spell_editor.cpp
     src/spell/spell_system.cpp
+
+    src/game/character.cpp
+    src/game/turn_controller.cpp
+    src/game/game.cpp
 )
 
 set(IMGUI_DIR ${imgui_SOURCE_DIR})

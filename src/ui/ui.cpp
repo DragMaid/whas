@@ -3,13 +3,15 @@
 #include "raylib.h"
 #include "rlImGui.h"
 #include "whas/constants.h"
+#include "whas/game/character.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 
 namespace {
 
-Vector2 ComputeSpellAimDirection(const Vector2 &spellOrigin, const Vector2 &mousePos) {
+Vector2 ComputeSpellAimDirection(const Vector2 &spellOrigin,
+                                 const Vector2 &mousePos) {
   Vector2 screenOrigin = {spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
                           spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
   Vector2 mouseDirPixels = {mousePos.x - screenOrigin.x,
@@ -23,6 +25,35 @@ Vector2 ComputeSpellAimDirection(const Vector2 &spellOrigin, const Vector2 &mous
   }
   return {1.0f, 0.0f};
 }
+
+void DrawDashedLine(Vector2 a, Vector2 b, float dash, float thick,
+                    Color color) {
+  float len = std::hypot(b.x - a.x, b.y - a.y);
+  if (len < 0.001f)
+    return;
+  Vector2 dir{(b.x - a.x) / len, (b.y - a.y) / len};
+  for (float t = 0.0f; t < len; t += dash * 2.0f) {
+    float e = std::min(t + dash, len);
+    DrawLineEx({a.x + dir.x * t, a.y + dir.y * t},
+               {a.x + dir.x * e, a.y + dir.y * e}, thick, color);
+  }
+}
+
+void DrawArrow(Vector2 from, Vector2 dir, float length, float thick,
+               Color color) {
+  Vector2 tip{from.x + dir.x * length, from.y + dir.y * length};
+  DrawLineEx(from, tip, thick, color);
+  float head = std::min(12.0f, length * 0.35f);
+  Vector2 back{-dir.x * head, -dir.y * head};
+  Vector2 side{-dir.y * head * 0.5f, dir.x * head * 0.5f};
+  DrawTriangle(tip, {tip.x + back.x - side.x, tip.y + back.y - side.y},
+               {tip.x + back.x + side.x, tip.y + back.y + side.y}, color);
+  DrawTriangle(tip, {tip.x + back.x + side.x, tip.y + back.y + side.y},
+               {tip.x + back.x - side.x, tip.y + back.y - side.y}, color);
+}
+
+// Matches the gravity scale in ParticleSystem::Update
+constexpr float kParticleGravity = 20.0f;
 
 } // namespace
 
@@ -76,8 +107,16 @@ UI::UI() {
 UI::~UI() { rlImGuiShutdown(); }
 
 void UI::HandleInput(UIState &state, Simulation &sim) {
-  if (m_spellEditor.IsOpen())
+  if (m_spellEditor.IsOpen()) {
+    m_editorWasOpen = true;
     return;
+  }
+  if (m_editorWasOpen) {
+    m_editorWasOpen = false;
+    m_availableSpells = m_spellStore.LoadAll();
+    m_selectedSpellIndex = -1;
+    m_isAimingSpell = false;
+  }
 
   if (ImGui::GetIO().WantCaptureMouse || ImGui::GetIO().WantCaptureKeyboard)
     return;
@@ -85,6 +124,18 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
   // Handle escape to cancel aiming
   if (IsKeyPressed(KEY_ESCAPE)) {
     m_isAimingSpell = false;
+  }
+
+  if (m_gameMode) {
+    // The character owns the mouse; only keep the debug toggles and editor
+    if (IsKeyPressed(KEY_F3))
+      state.debugOverlay = !state.debugOverlay;
+    if (IsKeyPressed(KEY_F4))
+      state.showConfigEditor = !state.showConfigEditor;
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        CheckCollisionPointRec(GetMousePosition(), m_spellButton))
+      m_spellEditor.Open();
+    return;
   }
 
   // Spell casting input
@@ -181,25 +232,28 @@ void UI::Draw(UIState &state, Simulation &sim) {
     sim.GetRigidBodySystem().DrawDebug();
   }
 
-  DrawRectangle(0, PANEL_Y, WINDOW_WIDTH, PANEL_HEIGHT, Color{30, 30, 40, 255});
-  DrawLine(0, PANEL_Y, WINDOW_WIDTH, PANEL_Y, DARKGRAY);
+  if (!m_gameMode) {
+    DrawRectangle(0, PANEL_Y, WINDOW_WIDTH, PANEL_HEIGHT,
+                  Color{30, 30, 40, 255});
+    DrawLine(0, PANEL_Y, WINDOW_WIDTH, PANEL_Y, DARKGRAY);
 
-  for (const auto &btn : m_buttons) {
-    bool selected = (state.selectedMaterial == btn.element);
-    DrawRectangleRec(btn.rect, selected ? WHITE : btn.col);
-    DrawRectangleLinesEx(btn.rect, 2, selected ? BLACK : DARKGRAY);
+    for (const auto &btn : m_buttons) {
+      bool selected = (state.selectedMaterial == btn.element);
+      DrawRectangleRec(btn.rect, selected ? WHITE : btn.col);
+      DrawRectangleLinesEx(btn.rect, 2, selected ? BLACK : DARKGRAY);
 
-    int textX = (int)btn.rect.x + (BTN_W - MeasureText(btn.label, 14)) / 2;
-    int textY = (int)btn.rect.y + (BTN_H - 14) / 2;
-    DrawText(btn.label, textX, textY, 14, selected ? BLACK : WHITE);
+      int textX = (int)btn.rect.x + (BTN_W - MeasureText(btn.label, 14)) / 2;
+      int textY = (int)btn.rect.y + (BTN_H - 14) / 2;
+      DrawText(btn.label, textX, textY, 14, selected ? BLACK : WHITE);
+    }
+
+    DrawText(TextFormat("Brush: %d", state.brushRadius), WINDOW_WIDTH - 120,
+             PANEL_Y + 20, 16, RAYWHITE);
   }
-
-  DrawText(TextFormat("Brush: %d", state.brushRadius), WINDOW_WIDTH - 120,
-           PANEL_Y + 20, 16, RAYWHITE);
 
   DrawSpellButton();
 
-  DrawActiveSpellEffects(sim);
+  DrawActiveGusts(sim);
   DrawSpellAimPreview(sim);
 
   rlImGuiBegin();
@@ -250,7 +304,7 @@ void UI::DrawInspector(Simulation &sim) {
 
   ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "Cell [%d, %d]", cx, cy);
   ImGui::Separator();
-  ImGui::Text("Type: %s", GetElementName(cell.element));
+  ImGui::Text("Type: %s", ElementName(cell.element));
   ImGui::Text("Temp: %.1f C", cell.temperature);
   ImGui::Text("Pressure: %.2f", cell.pressure);
   ImGui::Text("Velocity: (%.2f, %.2f)", cell.vx, cell.vy);
@@ -262,31 +316,6 @@ void UI::DrawInspector(Simulation &sim) {
     ImGui::Text("Moisture: %.2f", cell.moisture);
 
   ImGui::End();
-}
-
-const char *UI::GetElementName(Element element) const {
-  switch (element) {
-  case Element::AIR:
-    return "AIR";
-  case Element::WATER:
-    return "WATER";
-  case Element::EARTH:
-    return "EARTH";
-  case Element::FIRE:
-    return "FIRE";
-  case Element::STEAM:
-    return "STEAM";
-  case Element::CLOUD:
-    return "CLOUD";
-  case Element::ICE:
-    return "ICE";
-  case Element::SAND:
-    return "SAND";
-  case Element::ROCK:
-    return "ROCK";
-  default:
-    return "UNKNOWN";
-  }
 }
 
 void UI::DrawPropertyEditor(SimulationConfig &config) {
@@ -403,75 +432,179 @@ void UI::DrawSpellSelectionPanel() {
     if (m_selectedSpellIndex >= 0 &&
         m_selectedSpellIndex < (int)m_availableSpells.size()) {
       const Spell &spell = m_availableSpells[m_selectedSpellIndex];
-      float range = SpellSystem::ComputeSpellRange(spell);
-      float speed = SpellSystem::ComputeSpellSpeed(spell);
-      int waves = SpellSystem::ComputeSpellWaveCount(spell);
-      int particles = SpellSystem::ComputeSpellParticleCount(spell);
-      ImGui::Text("Range: %.1f", range);
-      ImGui::Text("Speed: %.1f", speed);
-      ImGui::Text("Diameter: %.1f", SpellSystem::ComputeSpellDiameter(spell));
-      ImGui::Text("Waves: %d", waves);
-      ImGui::Text("Particles: %d", particles);
+      SpellStats stats = SpellSystem::Evaluate(spell);
+      SpellEditor::DrawStats(stats);
       ImGui::NewLine();
-      if (ImGui::Button("Cast")) {
-        m_isAimingSpell = true;
+      if (m_gameMode) {
+        ImGui::TextDisabled("Click in the world to queue this spell");
+      } else {
+        ImGui::BeginDisabled(!stats.valid);
+        if (ImGui::Button("Cast")) {
+          m_isAimingSpell = true;
+        }
+        ImGui::EndDisabled();
       }
     }
     ImGui::End();
   }
 }
 
-void UI::DrawActiveSpellEffects(const Simulation &sim) {
+void UI::DrawSpellAimPreview(const Simulation &sim) {
+  if (!m_isAimingSpell)
+    return;
+  const Spell *spell = GetSelectedSpell();
+  if (!spell)
+    return;
+
+  DrawAimIndicator(*spell, {m_spellOrigin.x + 0.5f, m_spellOrigin.y + 0.5f},
+                   m_spellAimDir, sim.GetConfig().world.gravity);
+}
+
+void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
+                       Vector2 castDir, Color color, float worldGravity) const {
+  Vector2 o{originCells.x * CELL_SIZE, originCells.y * CELL_SIZE};
+  Vector2 d = castDir;
+  Vector2 n{-d.y, d.x};
+  Color faint{color.r, color.g, color.b, (unsigned char)(color.a * 0.45f)};
+
+  auto at = [&](float along, float side) {
+    return Vector2{o.x + d.x * along + n.x * side,
+                   o.y + d.y * along + n.y * side};
+  };
+
+  // Dotted ballistic arc from p0 with velocity v (px/s) under gravity g (px/s^2)
+  auto drawArc = [&](Vector2 p0, Vector2 v, float g, float seconds,
+                     Color c) {
+    constexpr int kSegments = 16;
+    Vector2 prev = p0;
+    for (int i = 1; i <= kSegments; ++i) {
+      float t = seconds * i / kSegments;
+      Vector2 cur{p0.x + v.x * t, p0.y + v.y * t + 0.5f * g * t * t};
+      unsigned char alpha =
+          (unsigned char)(c.a * (1.0f - 0.7f * (float)i / kSegments));
+      if (i % 2 == 1)
+        DrawLineEx(prev, cur, 1.5f, Color{c.r, c.g, c.b, alpha});
+      prev = cur;
+    }
+  };
+
+  if (stats.kind == SpellKind::Flight) {
+    // Where the caster gets thrown (walking and drag ignored)
+    Vector2 v{d.x * stats.launchSpeed * CELL_SIZE,
+              d.y * stats.launchSpeed * CELL_SIZE};
+    drawArc(o, v, Character::GRAVITY * worldGravity * CELL_SIZE, 0.9f, color);
+    DrawCircleLines((int)o.x, (int)o.y, 8.0f, color);
+    return;
+  }
+
+  float length = stats.range * CELL_SIZE;
+  float halfWidth = std::max(2.0f, stats.diameter * 0.5f * CELL_SIZE);
+
+  if (stats.kind == SpellKind::Gust) {
+    // A wind field: dashed walls with chevrons blowing along it
+    DrawDashedLine(at(0, halfWidth), at(length, halfWidth), 6.0f, 1.5f, color);
+    DrawDashedLine(at(0, -halfWidth), at(length, -halfWidth), 6.0f, 1.5f,
+                   color);
+    float spacing = std::max(14.0f, length / 8.0f);
+    float chevron = std::min(halfWidth * 0.8f, 10.0f);
+    for (float t = spacing; t < length; t += spacing) {
+      DrawLineEx(at(t - chevron, chevron), at(t, 0), 1.5f, faint);
+      DrawLineEx(at(t - chevron, -chevron), at(t, 0), 1.5f, faint);
+    }
+    return;
+  }
+
+  // Element stream: beam edges and a dashed spine
+  DrawLineEx(at(0, halfWidth), at(length, halfWidth), 1.5f, color);
+  DrawLineEx(at(0, -halfWidth), at(length, -halfWidth), 1.5f, color);
+  DrawDashedLine(o, at(length, 0), 5.0f, 1.0f, faint);
+
+  // Chevron at the end of the straight flight
+  float head = std::max(8.0f, halfWidth * 1.6f);
+  Vector2 tip = at(length + head * 0.6f, 0);
+  DrawLineEx(at(length - head * 0.4f, halfWidth + head * 0.5f), tip, 2.0f,
+             color);
+  DrawLineEx(at(length - head * 0.4f, -halfWidth - head * 0.5f), tip, 2.0f,
+             color);
+
+  // Past its range the element keeps its momentum and falls
+  Vector2 vel{d.x * stats.speed * CELL_SIZE, d.y * stats.speed * CELL_SIZE};
+  drawArc(at(length, 0), vel, kParticleGravity * worldGravity * CELL_SIZE,
+          0.5f, faint);
+}
+
+void UI::DrawActiveGusts(const Simulation &sim) const {
+  float time = (float)GetTime();
   for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
-    if (!effect.active)
+    if (effect.stats.kind != SpellKind::Gust)
       continue;
-    Color col = GetSpellColor(effect.spell);
-    for (const Vector2 &cell : effect.affectedCells) {
-      Rectangle rect{cell.x * CELL_SIZE, cell.y * CELL_SIZE, CELL_SIZE,
-                     CELL_SIZE};
-      DrawRectangleLinesEx(rect, 1, col);
-      DrawRectangleRec(rect, Color{col.r, col.g, col.b, 45});
+    const SpellStats &s = effect.stats;
+    Vector2 d = effect.direction;
+    Vector2 n{-d.y, d.x};
+    float fade = std::clamp(effect.timeRemaining / std::max(0.01f, s.duration),
+                            0.0f, 1.0f);
+    Color c{225, 240, 255, (unsigned char)(170 * fade)};
+
+    // Streaks drifting along the field, staggered across its width
+    int lanes = std::max(2, (int)std::ceil(s.diameter / 2.0f));
+    float streak = 6.0f;
+    for (int lane = 0; lane < lanes; ++lane) {
+      float side = ((lane + 0.5f) / lanes - 0.5f) * s.diameter;
+      float phase = std::fmod(time * s.speed * 0.8f + lane * 7.3f, s.range);
+      for (float along = phase; along < s.range; along += 18.0f) {
+        Vector2 a{(effect.origin.x + d.x * along + n.x * side) * CELL_SIZE,
+                  (effect.origin.y + d.y * along + n.y * side) * CELL_SIZE};
+        Vector2 b{a.x - d.x * streak * CELL_SIZE, a.y - d.y * streak * CELL_SIZE};
+        DrawLineEx(b, a, 1.5f, c);
+      }
     }
   }
 }
 
-void UI::DrawSpellAimPreview(const Simulation &sim) {
-  (void)sim;
-  if (!m_isAimingSpell)
-    return;
+void UI::DrawAimIndicator(const Spell &spell, Vector2 originCells,
+                          Vector2 aimDir, float worldGravity) const {
+  SpellStats stats = SpellSystem::Evaluate(spell);
+  Vector2 castDir = SpellSystem::ResolveDirection(stats, aimDir);
 
-  Vector2 screenOrigin = {m_spellOrigin.x * CELL_SIZE + CELL_SIZE / 2.0f,
-                          m_spellOrigin.y * CELL_SIZE + CELL_SIZE / 2.0f};
+  DrawSpellBeam(stats, originCells, castDir, GetSpellColor(spell),
+                worldGravity);
+
+  Vector2 screenOrigin{originCells.x * CELL_SIZE, originCells.y * CELL_SIZE};
   Vector2 mousePos = GetMousePosition();
-  DrawLineEx(screenOrigin, mousePos, 2.0f, BLUE);
+  float mouseDist =
+      std::hypot(mousePos.x - screenOrigin.x, mousePos.y - screenOrigin.y);
+  float arrowLen = std::max(40.0f, mouseDist);
+
+  // Raw aim (faint) vs where the circle actually sends the spell (solid)
+  DrawDashedLine(screenOrigin, mousePos, 6.0f, 1.5f, Color{120, 160, 255, 140});
   DrawCircleLines((int)screenOrigin.x, (int)screenOrigin.y, 10, BLUE);
-  DrawCircleV(mousePos, 4.0f, BLUE);
+  DrawCircleV(mousePos, 3.0f, Color{120, 160, 255, 200});
 
-  if (m_selectedSpellIndex >= 0 &&
-      m_selectedSpellIndex < (int)m_availableSpells.size()) {
-    const Spell &spell = m_availableSpells[m_selectedSpellIndex];
-    Color col = GetSpellColor(spell);
-    float diameterCells =
-        std::max(1.0f, SpellSystem::ComputeSpellDiameter(spell));
-    float rangeCells = SpellSystem::ComputeSpellRange(spell) / CELL_SIZE;
-    int radius = std::max(1, static_cast<int>(std::ceil(diameterCells * 0.5f)));
+  Color balance = SpellEditor::BalanceColor(stats.imbalance);
+  DrawArrow(screenOrigin, castDir, arrowLen, 2.5f, balance);
 
-    for (int step = 0; step <= static_cast<int>(rangeCells); ++step) {
-      Vector2 sample = {screenOrigin.x + m_spellAimDir.x * step * CELL_SIZE,
-                        screenOrigin.y + m_spellAimDir.y * step * CELL_SIZE};
-      for (int dy = -radius; dy <= radius; ++dy) {
-        for (int dx = -radius; dx <= radius; ++dx) {
-          if (dx * dx + dy * dy > radius * radius)
-            continue;
-          Rectangle rect{sample.x + dx * CELL_SIZE - CELL_SIZE / 2.0f,
-                         sample.y + dy * CELL_SIZE - CELL_SIZE / 2.0f,
-                         CELL_SIZE, CELL_SIZE};
-          DrawRectangleLinesEx(rect, 1, col);
-          DrawRectangleRec(rect, Color{col.r, col.g, col.b, 40});
-        }
-      }
+  float offsetDeg = stats.offsetRad * RAD2DEG;
+  const char *label = "balanced";
+  if (std::abs(offsetDeg) >= 0.5f) {
+    // Arc from the aim to the cast direction
+    float aimAngle = std::atan2(aimDir.y, aimDir.x);
+    float arcRadius = std::min(48.0f, arrowLen * 0.6f);
+    constexpr int kArcSegments = 16;
+    Vector2 prev{screenOrigin.x + std::cos(aimAngle) * arcRadius,
+                 screenOrigin.y + std::sin(aimAngle) * arcRadius};
+    for (int i = 1; i <= kArcSegments; ++i) {
+      float a = aimAngle + stats.offsetRad * i / kArcSegments;
+      Vector2 cur{screenOrigin.x + std::cos(a) * arcRadius,
+                  screenOrigin.y + std::sin(a) * arcRadius};
+      DrawLineEx(prev, cur, 2.0f, balance);
+      prev = cur;
     }
+    label = TextFormat("%+.0f deg", offsetDeg);
   }
+
+  Vector2 labelPos{screenOrigin.x + castDir.x * (arrowLen + 10.0f),
+                   screenOrigin.y + castDir.y * (arrowLen + 10.0f)};
+  DrawText(label, (int)labelPos.x, (int)labelPos.y - 8, 16, balance);
 }
 
 Color UI::GetSpellColor(const Spell &spell) const {
@@ -489,6 +622,18 @@ Color UI::GetSpellColor(const Spell &spell) const {
 
 bool UI::IsMouseOverPanel() const {
   return GetMouseY() >= PANEL_Y || ImGui::GetIO().WantCaptureMouse;
+}
+
+const Spell *UI::GetSelectedSpell() const {
+  if (m_selectedSpellIndex < 0 ||
+      m_selectedSpellIndex >= (int)m_availableSpells.size())
+    return nullptr;
+  return &m_availableSpells[m_selectedSpellIndex];
+}
+
+void UI::SetGameMode(bool enabled) {
+  m_gameMode = enabled;
+  m_isAimingSpell = false;
 }
 
 bool UI::IsBlockingWorldInput() const {

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include <unordered_set>
 
 namespace {
 
@@ -35,6 +36,23 @@ RigidBodySystem::RigidBodySystem() {
   worldDef.gravity = {0.0f, 9.8f};
   m_worldId = b2CreateWorld(&worldDef);
   m_chunkMeshes.resize(CHUNK_COLS * CHUNK_ROWS);
+
+  // Walls around the grid so bodies can't leave the world (and vanish)
+  b2BodyDef boundsDef = b2DefaultBodyDef();
+  boundsDef.type = b2_staticBody;
+  b2BodyId bounds = b2CreateBody(m_worldId, &boundsDef);
+  b2ShapeDef wallDef = b2DefaultShapeDef();
+  constexpr float t = 2.0f; // wall half-thickness, in cells
+  const float w = static_cast<float>(GRID_W);
+  const float h = static_cast<float>(GRID_H);
+  const b2Polygon walls[] = {
+      b2MakeOffsetBox(w * 0.5f + t, t, {w * 0.5f, -t}, b2Rot_identity),
+      b2MakeOffsetBox(w * 0.5f + t, t, {w * 0.5f, h + t}, b2Rot_identity),
+      b2MakeOffsetBox(t, h * 0.5f + t, {-t, h * 0.5f}, b2Rot_identity),
+      b2MakeOffsetBox(t, h * 0.5f + t, {w + t, h * 0.5f}, b2Rot_identity),
+  };
+  for (const b2Polygon &wall : walls)
+    b2CreatePolygonShape(bounds, &wallDef, &wall);
 }
 
 // Destructor
@@ -210,12 +228,31 @@ void RigidBodySystem::UpdateWorldMeshes(Grid &grid, ElementContext &ctx) {
 
 void RigidBodySystem::ProcessDisplacement(Grid &grid, ElementContext &ctx,
                                           ParticleSystem &particles) {
+  // Loose material inside a body's new footprint must go somewhere, or
+  // SyncBackToGrid paints the body over it and it's lost. Fast bodies splash it
+  // out as particles; slow ones nudge it just outside their footprint.
+  constexpr float kSplashSpeed = 6.0f;
+  constexpr int kNudgeReach = 3;
+
+  auto rand01 = [&ctx]() { return (ctx.rng() % 10001) / 10000.0f; };
+
   for (auto &bd : m_bodies) {
     b2Vec2 pos = b2Body_GetPosition(bd.bodyId);
     b2Rot rot = b2Body_GetRotation(bd.bodyId);
     b2Vec2 vel = b2Body_GetLinearVelocity(bd.bodyId);
+    b2Vec2 center = b2Body_GetWorldCenter(bd.bodyId);
     float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
     float dragForce = 0.0f;
+
+    std::unordered_set<int64_t> footprint;
+    footprint.reserve(bd.originalPixels.size());
+    for (auto &p : bd.originalPixels) {
+      auto [wx, wy] = ProjectToWorld(p.first, p.second, pos, rot);
+      footprint.insert((int64_t)wx << 32 | (uint32_t)wy);
+    }
+    auto inFootprint = [&](int x, int y) {
+      return footprint.contains((int64_t)x << 32 | (uint32_t)y);
+    };
 
     for (auto &p : bd.originalPixels) {
       auto [wx, wy] = ProjectToWorld(p.first, p.second, pos, rot);
@@ -227,40 +264,79 @@ void RigidBodySystem::ProcessDisplacement(Grid &grid, ElementContext &ctx,
         continue;
 
       const auto &props = ctx.config.elements[static_cast<size_t>(c.element)];
-
-      // Convert box2D velocity to cell property speed
-      c.vx += vel.x * 0.2f;
-      c.vy += vel.y * 0.2f;
-      ctx.chunks.WakeChunkAt(wx, wy, ctx.frameIndex);
-
-      // TODO: this doesn't really seem to be working though
-      // Spawn particles if it hit particles like sand or water
-      bool displaced = false;
-      if (speed > 4.0f) {
-        float splashChance = (speed - 4.0f) * 0.15f;
-        if ((float)(ctx.rng() % 100) / 100.0f < splashChance) {
-          Vector2 pVel = {vel.x * 0.5f + (float)((ctx.rng() % 100) - 50) * 0.1f,
-                          vel.y * 0.5f - (float)(ctx.rng() % 100) * 0.15f};
-          particles.Spawn({(float)wx, (float)wy}, pVel, c.element);
-          c = ElementFactory::Create(Element::AIR, ctx.config);
-          displaced = true;
-        }
-      }
-
-      if (!displaced) {
-        Cell fluid = c;
-        if (MovementSystem::TryDisplace(wx, wy, fluid, ctx)) {
-          c = ElementFactory::Create(Element::AIR, ctx.config);
-        }
-      }
-
       dragForce += props.density * 0.0005f;
+
+      // Terrain is kept out by Box2D's static meshes; only loose material
+      // (water, sand, gases) gets pushed around here
+      if (!props.mobile)
+        continue;
+
+      Vector2 out{wx - center.x, wy - center.y};
+      float outLen = std::sqrt(out.x * out.x + out.y * out.y);
+      out = outLen > 0.001f ? Vector2{out.x / outLen, out.y / outLen}
+                            : Vector2{0.0f, -1.0f};
+
+      bool moved = false;
+      if (speed < kSplashSpeed) {
+        for (int k = 1; k <= kNudgeReach && !moved; ++k) {
+          int nx = wx + (int)std::round(out.x * k);
+          int ny = wy + (int)std::round(out.y * k);
+          if (!grid.InBounds(nx, ny) || inFootprint(nx, ny))
+            continue;
+          Cell &dest = grid.Get(nx, ny);
+          if (dest.element != Element::AIR)
+            continue;
+          dest = c;
+          dest.vx += vel.x * 0.2f;
+          dest.vy += vel.y * 0.2f;
+          dest.lastUpdateFrame = ctx.frameIndex;
+          ctx.chunks.WakeChunkAt(nx, ny, ctx.frameIndex);
+          moved = true;
+        }
+      }
+
+      if (!moved) {
+        // Splash: carry the body's motion plus an outward kick, starting just
+        // outside the footprint so it doesn't immediately land inside the body
+        Vector2 from{wx + 0.5f, wy + 0.5f};
+        for (int k = 1; k <= 8; ++k) {
+          int nx = wx + (int)std::round(out.x * k);
+          int ny = wy + (int)std::round(out.y * k);
+          if (!inFootprint(nx, ny)) {
+            from = {nx + 0.5f, ny + 0.5f};
+            break;
+          }
+        }
+        float kick = 3.0f + speed * 0.4f;
+        Vector2 pVel{vel.x * 0.6f + out.x * kick + (rand01() - 0.5f) * 4.0f,
+                     vel.y * 0.6f + out.y * kick - rand01() * 4.0f};
+        if (Particle *sp = particles.Spawn(from, pVel, c.element)) {
+          sp->temperature = c.temperature;
+          moved = true;
+        }
+      }
+
+      if (moved) {
+        c = ElementFactory::Create(Element::AIR, ctx.config);
+        ctx.chunks.WakeChunkAt(wx, wy, ctx.frameIndex);
+      }
     }
 
     if (dragForce > 0.0f && speed > 0.1f) {
       b2Vec2 drag = {-vel.x / speed * dragForce, -vel.y / speed * dragForce};
       b2Body_ApplyForceToCenter(bd.bodyId, drag, true);
     }
+  }
+}
+
+void RigidBodySystem::ApplyImpulse(int32_t cellBodyID, Vector2 impulse,
+                                   Vector2 point) {
+  for (auto &bd : m_bodies) {
+    if (MakeBodyID(bd.bodyId) != cellBodyID)
+      continue;
+    b2Body_ApplyLinearImpulse(bd.bodyId, {impulse.x, impulse.y},
+                              {point.x, point.y}, true);
+    return;
   }
 }
 
@@ -289,7 +365,17 @@ void RigidBodySystem::SyncBackToGrid(Grid &grid, ElementContext &ctx) {
         int lx = (int)std::round(p.first) - bd.minX;
         int ly = (int)std::round(p.second) - bd.minY;
         int idx = ly * maskW + lx;
-        c.element = bd.localElements[idx];
+        Element bodyElement = bd.localElements[idx];
+        if (c.element != bodyElement) {
+          // Cell is taking on the body's material; don't inherit the old
+          // cell's hardness (e.g. 0 from AIR), or anything can break it
+          const auto &bodyProps =
+              ctx.config.elements[static_cast<size_t>(bodyElement)];
+          c.hardness = bodyProps.defaultHardness;
+          c.density = bodyProps.density;
+          c.mass = bodyProps.defaultMass;
+        }
+        c.element = bodyElement;
         c.bodyID = selfID;
       }
     }
@@ -428,7 +514,7 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
 
       AddTriangulatedShapes(bodyId, mask, width, height, centerX - minX,
                             centerY - minY, props.density, props.restitution);
-      b2Body_ApplyMassFromShapes(bodyId);
+      b2Body_UpdateMassFromShapes(bodyId);
 
       // Update the body data from pre-calculated
       BodyData data;
