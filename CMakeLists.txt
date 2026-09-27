@@ -89,9 +89,14 @@ set(SOURCES
     src/spell/spell_store.cpp
     src/spell/spell_editor.cpp
     src/spell/spell_system.cpp
+    src/spell/spell_quant.cpp
 
     src/game/character.cpp
     src/game/turn_controller.cpp
+    src/game/match.cpp
+    src/game/arena_gen.cpp
+
+    src/net/plan_codec.cpp
     src/game/game.cpp
 )
 
@@ -163,6 +168,7 @@ if(WHAS_BUILD_TESTS)
     add_executable(whas_tests
         tests/determinism_test.cpp
         tests/burning_test.cpp
+        tests/match_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
 endif()

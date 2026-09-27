@@ -235,8 +235,13 @@ uint64_t Simulation::StateHash() const {
 
 void Simulation::CastSpell(const Spell &spell, Vector2 origin,
                            Vector2 aimDirection, int owner) {
+  CastSpell(SpellSystem::Evaluate(spell), origin, aimDirection, owner);
+}
+
+void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
+                           Vector2 aimDirection, int owner) {
   SpellEffect effect;
-  effect.stats = SpellSystem::Evaluate(spell);
+  effect.stats = stats;
   // Flight moves the caster, which the game layer handles
   if (!effect.stats.valid || effect.stats.kind == SpellKind::Flight)
     return;

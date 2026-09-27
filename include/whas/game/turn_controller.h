@@ -1,14 +1,21 @@
 #pragma once
 #include "whas/game/character.h"
 #include "whas/spell/spell_system.h"
+#include "whas/spell/spell_quant.h"
 #include "whas/spell/spell_types.h"
 #include <vector>
 
 class Simulation;
 
 struct PlannedCast {
-  Spell spell;
-  Vector2 aim; // unit direction chosen while planning
+  Spell spell;       // for drawing only; never evaluated during execution
+  SpellStats stats;  // authoritative: from the server, or SpellQuant::Canonical
+  int64_t spellId = 0; // server spell definition (0 offline)
+  SpellQuant::Aim aimQ; // aim as sent over the wire
+  Vector2 aim;       // DequantizeAim(aimQ): what the simulation uses
+
+  // Offline: stats computed locally with the server's rounding
+  static PlannedCast Local(const Spell &spell, Vector2 aim);
 };
 
 // One tick of input. Its casts fire at the start of the tick, before moving;
@@ -68,7 +75,7 @@ public:
   // Queue a cast to fire from where the ghost is now, on the next tick of the
   // clock. Nothing moves until the clock runs; the cast's channel time is then
   // spent standing still. Only one movement (wind) spell per pause.
-  CastResult QueueCast(const Spell &spell, Vector2 aim);
+  CastResult QueueCast(PlannedCast cast);
 
   // Run the clock one tick: pending casts fire, then the ghost moves (input is
   // ignored while channelling).
@@ -96,7 +103,9 @@ public:
   static void ApplyPlanTick(const TurnPlan &plan, int tick, Simulation &sim,
                             Character &character);
 
-  static int CastTicks(const Spell &spell);
+  // Clock time a cast spends channelling. Integer math on quantized stats, so
+  // the server (plan validation) computes exactly the same number.
+  static int CastTicks(const SpellStats &stats);
 
   int TicksUsed() const { return static_cast<int>(m_plan.steps.size()); }
   // Clock time not yet spoken for by movement or channelling

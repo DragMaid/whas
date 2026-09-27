@@ -61,6 +61,9 @@ public:
   // Spell casting; owner is the caster's hurtbox id so it can't hit itself
   void CastSpell(const Spell &spell, Vector2 origin, Vector2 aimDirection,
                  int owner = -1);
+  // Cast with stats handed in (lockstep play uses the server's stats)
+  void CastSpell(const SpellStats &stats, Vector2 origin, Vector2 aimDirection,
+                 int owner = -1);
 
 private:
   SimulationConfig m_config;      // Editable source

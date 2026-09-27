@@ -5,16 +5,15 @@
 #include "whas/spell/spell_system.h"
 #include "whas/ui/ui.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <string_view>
 
 namespace {
 
-// Damage dealt per unit of projectile power
-constexpr float DAMAGE_PER_POWER = 0.03f;
-
-// Keep characters above the (sandbox) toolbar area
-constexpr int FLOOR_TOP = 150;
-constexpr int FLOOR_BOTTOM = 164;
+constexpr Color LOCAL_COLOR{230, 230, 240, 255};
+constexpr Color OPPONENT_COLOR{220, 80, 80, 255};
+constexpr float ROUND_BANNER_SECONDS = 2.5f;
 
 Vector2 ToScreen(Vector2 cells) {
   return {cells.x * CELL_SIZE, cells.y * CELL_SIZE};
@@ -31,6 +30,12 @@ float WorldGravity(const Simulation &sim) {
   return sim.GetConfig().world.gravity;
 }
 
+// Offline matches get a fresh arena every time
+uint64_t OfflineSeed() {
+  return static_cast<uint64_t>(
+      std::chrono::steady_clock::now().time_since_epoch().count());
+}
+
 } // namespace
 
 void Game::SetActive(bool active, Simulation &sim, UI &ui) {
@@ -39,74 +44,100 @@ void Game::SetActive(bool active, Simulation &sim, UI &ui) {
   if (!active)
     return;
 
-  if (!m_arenaReady) {
-    m_slots[LOCAL].spawn = {60.0f, FLOOR_TOP - Character::HEIGHT};
-    m_slots[LOCAL].maxHp = 100.0f;
-    m_slots[LOCAL].color = {230, 230, 240, 255};
-    m_slots[OPPONENT].spawn = {240.0f, FLOOR_TOP - Character::HEIGHT};
-    m_slots[OPPONENT].maxHp = 200.0f;
-    m_slots[OPPONENT].color = {220, 80, 80, 255};
-
-    // Keep whatever was built in the sandbox; only fill empty ground
-    SetupTerrain(sim);
-    Respawn(sim, LOCAL);
-    Respawn(sim, OPPONENT);
-    m_arenaReady = true;
-  }
+  if (!m_arenaReady)
+    StartMatch(sim, OfflineSeed());
   EnterWaiting();
 }
 
-void Game::SetupTerrain(Simulation &sim) {
-  // A floor to stand on and a small earth mound between the two players.
-  // Only fills empty cells so sandbox work is kept.
-  for (int y = FLOOR_TOP; y <= FLOOR_BOTTOM; ++y)
-    for (int x = 0; x < GRID_W; ++x)
-      if (sim.GetCell(x, y).element == Element::AIR)
-        sim.Paint(x, y, Element::EARTH, 0);
-
-  for (int y = FLOOR_TOP - 12; y < FLOOR_TOP; ++y)
-    for (int x = 150; x < 158; ++x)
-      if (sim.GetCell(x, y).element == Element::AIR)
-        sim.Paint(x, y, Element::EARTH, 0);
+void Game::StartMatch(Simulation &sim, uint64_t seed, int localSlot) {
+  m_local = localSlot;
+  m_slots[Local()].color = LOCAL_COLOR;
+  m_slots[Opponent()].color = OPPONENT_COLOR;
+  m_roundsWon = {};
+  m_match.seed = seed;
+  BeginRound(sim, 0);
+  m_arenaReady = true;
 }
 
-void Game::ResetArena(Simulation &sim) {
-  sim.Reset();
-  SetupTerrain(sim);
-  Respawn(sim, LOCAL);
-  Respawn(sim, OPPONENT);
-  m_round = 1;
+void Game::BeginRound(Simulation &sim, int round) {
+  m_match = Match::BeginRound(sim, m_match.seed, round);
+  for (int i = 0; i < Match::PLAYERS; ++i)
+    m_spawns[i] = m_match.characters[i].pos;
   m_turnNumber = 1;
   m_state = RoundState::Playing;
   EnterWaiting();
 }
 
-void Game::Respawn(Simulation &sim, int slot) {
-  Slot &s = m_slots[slot];
-  Character c;
-  c.id = slot + 1; // hurtbox ids; 0 is never used
-  c.pos = s.spawn;
-  c.facing = slot == LOCAL ? 1 : -1;
-  c.maxHp = c.hp = s.maxHp;
-  c.Step(sim, {}, 0.0f); // resolve grounded before the first plan
-  s.character = c;
+// Offline practice: put the dummy back where it started, at full health
+void Game::ResetOpponent(Simulation &sim) {
+  Character &c = m_match.characters[Opponent()];
+  c.pos = m_spawns[Opponent()];
+  c.vel = {0.0f, 0.0f};
+  c.pushX = 0.0f;
+  c.hp = c.maxHp;
+  c.burnStacks = 0;
+  c.burnExposure = 0;
+  c.Step(sim, {}, 0.0f);
 }
 
 void Game::BeginPlanning(Simulation &sim) {
-  m_turn.BeginPlanning(m_slots[LOCAL].character);
+  m_turn.BeginPlanning(LocalCharacter());
 
   // The opponent's plan will arrive over the network; for now it's empty
-  Slot &opponent = m_slots[OPPONENT];
+  Slot &opponent = m_slots[Opponent()];
   opponent.plan = {};
-  opponent.preview = PreviewPlan(sim, opponent.character, opponent.plan,
-                                 TurnController::TICK_DT);
+  opponent.preview =
+      PreviewPlan(sim, m_match.characters[Opponent()], opponent.plan,
+                  TurnController::TICK_DT);
 }
 
 void Game::EnterWaiting() { m_waiting = true; }
 
 void Game::Commit() {
-  m_slots[LOCAL].plan = m_turn.LocalPlan();
+  m_slots[Local()].plan = m_turn.LocalPlan();
   m_turn.BeginExecution();
+}
+
+void Game::ToggleTime(Simulation &sim) {
+  if (m_state != RoundState::Playing)
+    return;
+  if (m_waiting) {
+    // Stop time: start planning this turn
+    m_waiting = false;
+    m_paused = true;
+    BeginPlanning(sim);
+    return;
+  }
+  if (m_turn.GetPhase() != TurnController::Phase::Planning)
+    return;
+  m_paused = !m_paused;
+  if (m_paused)
+    m_turn.MarkPause();
+}
+
+Game::ClockState Game::GetClockState() const {
+  if (m_state != RoundState::Playing)
+    return ClockState::Over;
+  if (m_waiting)
+    return ClockState::Waiting;
+  if (m_turn.GetPhase() == TurnController::Phase::Executing)
+    return ClockState::Executing;
+  return m_paused ? ClockState::Stopped : ClockState::Running;
+}
+
+float Game::TurnProgress() const {
+  if (m_waiting)
+    return 0.0f;
+  int ticks = m_turn.GetPhase() == TurnController::Phase::Executing
+                  ? m_turn.ExecutedTicks()
+                  : TurnController::TURN_TICKS - m_turn.TicksFree();
+  return static_cast<float>(ticks) / TurnController::TURN_TICKS;
+}
+
+int Game::TicksFree() const {
+  if (m_waiting)
+    return TurnController::TURN_TICKS;
+  return m_turn.TicksFree();
 }
 
 void Game::UpdateWaiting(Simulation &sim) {
@@ -114,16 +145,12 @@ void Game::UpdateWaiting(Simulation &sim) {
     return;
 
   if (IsKeyPressed(KEY_R)) {
-    Respawn(sim, OPPONENT);
+    ResetOpponent(sim);
     Notify("Opponent reset", 1.5f);
   }
 
-  // Stop time: start planning this turn
-  if (IsKeyPressed(KEY_SPACE)) {
-    m_waiting = false;
-    m_paused = true; // Space just stopped time
-    BeginPlanning(sim);
-  }
+  if (IsKeyPressed(KEY_SPACE))
+    ToggleTime(sim);
 }
 
 void Game::Notify(const char *text, float seconds) {
@@ -136,9 +163,14 @@ void Game::Update(Simulation &sim, UI &ui) {
   m_noticeTime = std::max(0.0f, m_noticeTime - frame);
   m_bannerTime = std::max(0.0f, m_bannerTime - frame);
 
-  if (m_state == RoundState::Defeated) {
+  if (m_state == RoundState::MatchOver) {
     if (IsKeyPressed(KEY_ENTER))
-      ResetArena(sim);
+      StartMatch(sim, OfflineSeed(), m_local);
+    return;
+  }
+  if (m_state == RoundState::RoundOver) {
+    if (m_bannerTime <= 0.0f)
+      BeginRound(sim, m_match.round + 1);
     return;
   }
 
@@ -155,7 +187,7 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
     return;
 
   if (IsKeyPressed(KEY_R)) {
-    Respawn(sim, OPPONENT);
+    ResetOpponent(sim);
     BeginPlanning(sim);
     m_paused = true;
     Notify("Opponent reset", 1.5f);
@@ -175,17 +207,14 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
   }
 
   // Pause / unpause the planning clock
-  if (IsKeyPressed(KEY_SPACE)) {
-    m_paused = !m_paused;
-    if (m_paused)
-      m_turn.MarkPause();
-  }
+  if (IsKeyPressed(KEY_SPACE))
+    ToggleTime(sim);
 
   if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !ui.IsBlockingWorldInput()) {
     const Spell *spell = ui.GetSelectedSpell();
     const Character &ghost = m_turn.LocalPreview().end;
     if (!spell) {
-      Notify("Select a spell in the Spells window first", 2.0f);
+      Notify("Pick a spell from the hotbar first (1-6)", 2.0f);
     } else if (!SpellSystem::Evaluate(*spell).valid) {
       Notify("That spell needs exactly one known sigil", 2.0f);
     } else {
@@ -195,7 +224,7 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
       float len = std::hypot(aim.x, aim.y);
       aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
                          : Vector2{(float)ghost.facing, 0.0f};
-      switch (m_turn.QueueCast(*spell, aim)) {
+      switch (m_turn.QueueCast(PlannedCast::Local(*spell, aim))) {
       case TurnController::CastResult::Queued:
         break;
       case TurnController::CastResult::NoTime:
@@ -224,78 +253,43 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
 }
 
 void Game::UpdateExecuting(Simulation &sim) {
-  int tick = m_turn.ExecutedTicks();
-  for (Slot &slot : m_slots)
-    TurnController::ApplyPlanTick(slot.plan, tick, sim, slot.character);
-
-  std::vector<Hurtbox> hurtboxes;
-  for (const Slot &slot : m_slots)
-    if (slot.character.Alive())
-      hurtboxes.push_back({slot.character.id, slot.character.Bounds()});
-  sim.GetParticleSystem().SetHurtboxes(std::move(hurtboxes));
-
-  sim.Update(TurnController::TICK_DT);
-  ApplyHits(sim);
-  ApplyGusts(sim);
-  for (Slot &slot : m_slots)
-    slot.character.UpdateBurn(sim, TurnController::TICK_DT);
-
+  Match::ExecuteTick(sim, m_match, {&m_slots[0].plan, &m_slots[1].plan},
+                     m_turn.ExecutedTicks());
   if (!m_turn.Advance())
     FinishTurn(sim);
 }
 
 void Game::FinishTurn(Simulation &sim) {
   m_turnNumber++;
-  for (Slot &slot : m_slots)
-    slot.character.CoolBurn();
+  Match::EndTurn(m_match);
 
-  if (!m_slots[LOCAL].character.Alive()) {
-    m_state = RoundState::Defeated;
-    m_banner = "DEFEATED";
-    m_bannerTime = 0.0f; // stays up until Enter
+  int winner = Match::RoundWinner(m_match);
+  if (winner < 0) {
+    EnterWaiting();
     return;
   }
 
-  if (!m_slots[OPPONENT].character.Alive()) {
-    m_round++;
-    Respawn(sim, OPPONENT);
-    m_banner = "VICTORY";
-    m_bannerTime = 2.5f;
+  if (winner < Match::PLAYERS)
+    m_roundsWon[winner]++;
+  int needed = Match::ROUNDS / 2 + 1;
+  bool over = m_roundsWon[0] >= needed || m_roundsWon[1] >= needed ||
+              m_match.round + 1 >= Match::ROUNDS;
+  bool won = winner == Local();
+  if (over) {
+    m_state = RoundState::MatchOver;
+    bool matchWon = m_roundsWon[Local()] > m_roundsWon[Opponent()];
+    bool draw = m_roundsWon[Local()] == m_roundsWon[Opponent()];
+    m_banner = draw ? "DRAW" : matchWon ? "VICTORY" : "DEFEATED";
+    m_bannerSub = "Press Enter for a new match";
+    m_bannerTime = 0.0f; // stays up until Enter
+    return;
   }
-
-  EnterWaiting();
-}
-
-// Gust fields push characters like everything else: acceleration = force/mass
-void Game::ApplyGusts(const Simulation &sim) {
-  for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
-    if (effect.stats.kind != SpellKind::Gust)
-      continue;
-    for (Slot &slot : m_slots) {
-      Character &c = slot.character;
-      if (c.id == effect.owner)
-        continue;
-      float strength = SpellSystem::GustStrengthAt(effect, c.Center());
-      if (strength <= 0.0f)
-        continue;
-      float dv = effect.stats.force * strength / Character::MASS *
-                 TurnController::TICK_DT;
-      c.Launch({effect.direction.x * dv, effect.direction.y * dv});
-    }
-  }
-}
-
-void Game::ApplyHits(Simulation &sim) {
-  for (const ParticleHit &hit : sim.GetParticleSystem().TakeHits()) {
-    for (Slot &slot : m_slots) {
-      Character &c = slot.character;
-      if (c.id != hit.targetId)
-        continue;
-      c.hp = std::max(0.0f, c.hp - hit.power * DAMAGE_PER_POWER);
-      if (hit.element == Element::WATER)
-        c.burnStacks = 0;
-    }
-  }
+  m_state = RoundState::RoundOver;
+  m_banner = winner == Match::PLAYERS ? "DOUBLE KO"
+             : won                    ? "ROUND WON"
+                                      : "ROUND LOST";
+  m_bannerSub = nullptr;
+  m_bannerTime = ROUND_BANNER_SECONDS;
 }
 
 void Game::Draw(const Simulation &sim, const UI &ui) const {
@@ -304,18 +298,18 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
 
   for (int i = 0; i < (int)m_slots.size(); ++i) {
     const Slot &slot = m_slots[i];
-    const Character &c = slot.character;
+    const Character &c = m_match.characters[i];
     Color body = c.Alive() ? slot.color : GRAY;
     // While planning, the real body is where the turn starts: draw it dimmed
     DrawCharacter(c, planning ? WithAlpha(body, 110) : body, true);
 
     if (!planning)
       continue;
-    if (i == LOCAL) {
-      DrawSlotPlan(slot, m_turn.LocalPreview(), sim, ui);
+    if (i == Local()) {
+      DrawSlotPlan(i, m_turn.LocalPreview(), sim, ui);
       DrawPendingCasts(sim, ui);
     } else {
-      DrawSlotPlan(slot, slot.preview, sim, ui);
+      DrawSlotPlan(i, slot.preview, sim, ui);
     }
   }
 
@@ -337,11 +331,12 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
   DrawBanner();
 }
 
-void Game::DrawSlotPlan(const Slot &slot, const PlanPreview &preview,
+void Game::DrawSlotPlan(int slotIndex, const PlanPreview &preview,
                         const Simulation &sim, const UI &ui) const {
+  const Slot &slot = m_slots[slotIndex];
   // Path as a thin polyline
   Color pathColor = WithAlpha(slot.color, 150);
-  Vector2 prev = ToScreen(slot.character.Center());
+  Vector2 prev = ToScreen(m_match.characters[slotIndex].Center());
   for (Vector2 p : preview.path) {
     Vector2 cur = ToScreen(p);
     DrawLineEx(prev, cur, 1.5f, pathColor);
@@ -365,9 +360,8 @@ void Game::DrawPendingCasts(const Simulation &sim, const UI &ui) const {
   // Casts queued during this pause fire from the ghost's current spot
   Vector2 origin = m_turn.LocalPreview().end.Center();
   for (const PlannedCast &cast : m_turn.PendingCasts()) {
-    SpellStats stats = SpellSystem::Evaluate(cast.spell);
-    Vector2 dir = SpellSystem::ResolveDirection(stats, cast.aim);
-    ui.DrawSpellBeam(stats, origin, dir,
+    Vector2 dir = SpellSystem::ResolveDirection(cast.stats, cast.aim);
+    ui.DrawSpellBeam(cast.stats, origin, dir,
                      WithAlpha(ui.GetSpellColor(cast.spell), 230),
                      WorldGravity(sim));
   }
@@ -418,8 +412,9 @@ void Game::DrawHud() const {
                       : !planning   ? "EXECUTING"
                       : m_paused    ? "PLANNING - TIME STOPPED"
                                     : "PLANNING - TIME FLOWING";
-  DrawText(TextFormat("ROUND %d   TURN %d  -  %s", m_round, m_turnNumber,
-                      phase),
+  DrawText(TextFormat("ROUND %d (%d-%d)   TURN %d  -  %s", m_match.round + 1,
+                      m_roundsWon[Local()], m_roundsWon[Opponent()],
+                      m_turnNumber, phase),
            (int)x, (int)y, 16, RAYWHITE);
   y += 20.0f;
 
@@ -432,7 +427,7 @@ void Game::DrawHud() const {
   int owed = 0;
   for (size_t i = 0; i < steps.size(); ++i) {
     for (const PlannedCast &cast : steps[i].casts)
-      owed += TurnController::CastTicks(cast.spell);
+      owed += TurnController::CastTicks(cast.stats);
     bool channelling = owed > 0;
     owed = std::max(0, owed - 1);
     Color c = channelling ? Color{255, 190, 70, 255} : Color{110, 160, 255, 255};
@@ -458,7 +453,7 @@ void Game::DrawHud() const {
   y += barH + 6.0f;
 
   if (m_state == RoundState::Playing && m_waiting)
-    DrawText("Space stop time  R reset opponent  F1 sandbox", (int)x, (int)y,
+    DrawText("Space stop time  R reset dummy  F1 sandbox", (int)x, (int)y,
              12, Color{190, 190, 210, 255});
   else if (m_state == RoundState::Playing && planning)
     DrawText(m_paused
@@ -473,19 +468,23 @@ void Game::DrawHud() const {
 }
 
 void Game::DrawBanner() const {
-  bool defeated = m_state == RoundState::Defeated;
-  if (!m_banner || (!defeated && m_bannerTime <= 0.0f))
+  bool sticky = m_state == RoundState::MatchOver;
+  if (!m_banner || (!sticky && m_bannerTime <= 0.0f))
     return;
 
-  Color color = defeated ? Color{230, 80, 80, 255} : Color{120, 230, 140, 255};
+  bool bad = m_banner[0] == 'D' || std::string_view(m_banner) == "ROUND LOST";
+  Color color = bad ? Color{230, 80, 80, 255} : Color{120, 230, 140, 255};
   constexpr int size = 64;
   int w = MeasureText(m_banner, size);
   int y = WINDOW_HEIGHT / 2 - 90;
   DrawRectangle(0, y - 16, WINDOW_WIDTH, size + 60, Color{10, 10, 15, 190});
   DrawText(m_banner, (WINDOW_WIDTH - w) / 2, y, size, color);
 
-  const char *sub = defeated ? "Press Enter to restart the arena"
-                             : TextFormat("Round %d", m_round);
+  const char *sub =
+      m_bannerSub ? m_bannerSub
+                  : TextFormat("Round %d of %d  (%d - %d)", m_match.round + 2,
+                               Match::ROUNDS, m_roundsWon[Local()],
+                               m_roundsWon[Opponent()]);
   int sw = MeasureText(sub, 20);
   DrawText(sub, (WINDOW_WIDTH - sw) / 2, y + size + 8, 20, RAYWHITE);
 }
