@@ -69,8 +69,9 @@ void PlayMenu::Draw() {
 
   ImGui::SetNextWindowPos({WINDOW_WIDTH * 0.5f, 120}, ImGuiCond_Appearing,
                           {0.5f, 0.0f});
-  ImGui::SetNextWindowSize({440, 0}, ImGuiCond_Appearing);
-  if (!ImGui::Begin("Play", &m_open, ImGuiWindowFlags_NoCollapse)) {
+  if (!ImGui::Begin("Play", &m_open,
+                    ImGuiWindowFlags_NoCollapse |
+                        ImGuiWindowFlags_AlwaysAutoResize)) {
     ImGui::End();
     return;
   }

@@ -18,7 +18,7 @@ public:
   void Draw(const Simulation &sim, const UI &ui, const UIState &state) const;
 
 private:
-  void EnsureAvatar(const Simulation &sim);
+  void EnsureAvatar(Simulation &sim);
   void PlaceAvatar(const Simulation &sim, Vector2 cellPos);
   void ResetAvatar(const Simulation &sim);
   void ToggleTime();

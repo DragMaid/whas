@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
+#include "whas/game/arena_gen.h"
 #include "whas/game/character_draw.h"
 #include "whas/game/match.h"
 #include "whas/ui/ui.h"
@@ -25,9 +26,15 @@ bool Contains(Rectangle r, Vector2 p) {
 
 } // namespace
 
-void Sandbox::EnsureAvatar(const Simulation &sim) {
+void Sandbox::EnsureAvatar(Simulation &sim) {
   if (m_hasAvatar)
     return;
+  // The bottom rows sit behind the action bar: give the world a rock bed
+  // there (as arenas have) so nothing rests out of sight
+  for (int y = ArenaGen::FLOOR_BOTTOM - 3; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (sim.GetCell(x, y).element == Element::AIR)
+        sim.Paint(x, y, Element::ROCK, 0);
   m_avatar = {};
   m_avatar.id = 1;
   m_avatar.maxHp = m_avatar.hp = Match::MAX_HP;
