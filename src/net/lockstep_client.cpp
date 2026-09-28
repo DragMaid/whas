@@ -2,6 +2,11 @@
 #include "whas/core/sha256.h"
 #include "whas/engine/simulation.h"
 #include <filesystem>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#endif
 #include <fstream>
 #include <random>
 
@@ -64,8 +69,43 @@ RoundCards ParseRoundCards(const json &j) {
 LockstepClient::LockstepClient(std::string buildId)
     : m_buildId(std::move(buildId)) {}
 
+LockstepClient::~LockstepClient() {
+#ifndef _WIN32
+  if (m_identityLock >= 0)
+    close(m_identityLock); // releases the lock
+#endif
+}
+
+void LockstepClient::ClaimIdentityFile() {
+  if (m_identityClaimed)
+    return;
+  m_identityClaimed = true;
+#ifndef _WIN32
+  std::filesystem::path base(m_identityFile);
+  if (base.has_parent_path())
+    std::filesystem::create_directories(base.parent_path());
+  for (int n = 1; n < 64; ++n) {
+    std::filesystem::path path = base;
+    if (n > 1)
+      path.replace_filename(base.stem().string() + "-" + std::to_string(n) +
+                            base.extension().string());
+    std::string lockPath = path.string() + ".lock";
+    int fd = open(lockPath.c_str(), O_CREAT | O_RDWR, 0644);
+    if (fd < 0)
+      break;
+    if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
+      m_identityLock = fd;
+      m_identityFile = path.string();
+      return;
+    }
+    close(fd); // another copy of the game is using this one
+  }
+#endif
+}
+
 void LockstepClient::Connect(const std::string &url) {
   m_url = url;
+  ClaimIdentityFile();
   LoadIdentity();
   m_phase = Phase::Connecting;
   m_net.Connect(url);

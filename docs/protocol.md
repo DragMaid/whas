@@ -146,8 +146,9 @@ Send `Authorization: Bearer <guest token>` with every request.
 
 ```sh
 docker compose up -d                        # Postgres + server on :8080
+cd server/Whas.Server && dotnet run          # or: the server alone on :8080 (needs the db container)
 ./build/whasg                               # Play (M) > Connect > Quick match
-./build/whasg --identity data/guest2.json   # a second player on the same machine
+./build/whasg                               # a second copy is automatically a different guest
 WHAS_SERVER=ws://localhost:8080/ws ./build/whas_tests "[.bot]"   # sparring bot
 ```
 

@@ -64,6 +64,11 @@ void PlayMenu::Draw() {
     else
       m_open = false;
   }
+  // Server replies and errors ("that's your own lobby"...) while not in a
+  // match; in a match the game shows them
+  if (!m_client.InMatch())
+    for (std::string &notice : m_client.TakeNotices())
+      m_status = std::move(notice);
   if (!m_open)
     return;
 
@@ -121,6 +126,10 @@ void PlayMenu::DrawOnline() {
     m_client.Disconnect();
   }
   ImGui::TextDisabled("Status: %s", PhaseName(phase));
+  if (m_client.PlayerId() != 0) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("  (you are guest #%lld)", (long long)m_client.PlayerId());
+  }
 
   if (phase == P::Queued) {
     if (ImGui::Button("Stop looking"))

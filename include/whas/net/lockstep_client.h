@@ -63,9 +63,16 @@ public:
   };
 
   explicit LockstepClient(std::string buildId = WHAS_SIM_BUILD_ID);
+  ~LockstepClient();
+  LockstepClient(const LockstepClient &) = delete;
+  LockstepClient &operator=(const LockstepClient &) = delete;
 
   // Tokens and server deck ids are kept per server in this file
-  void SetIdentityFile(const std::string &path) { m_identityFile = path; }
+  void SetIdentityFile(const std::string &path) {
+    m_identityFile = path;
+    m_identityClaimed = true; // chosen explicitly (--identity)
+  }
+  const std::string &IdentityFile() const { return m_identityFile; }
   void Connect(const std::string &url);
   void Disconnect();
   const std::string &Url() const { return m_url; }
@@ -136,6 +143,12 @@ private:
   std::string m_buildId;
   std::string m_url;
   std::string m_identityFile = "data/guest.json";
+  // Each running copy of the game needs its own guest: two windows sharing
+  // one token are the same player, and nobody is paired with themselves.
+  // The first free data/guest[-N].json is locked for as long as we run.
+  void ClaimIdentityFile();
+  bool m_identityClaimed = false;
+  int m_identityLock = -1;
   std::string m_token;
   std::map<std::string, int64_t> m_serverDecks; // local deck id -> server id
   int64_t m_playerId = 0;
