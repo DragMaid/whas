@@ -145,7 +145,21 @@ Send `Authorization: Bearer <guest token>` with every request.
 ## Running it
 
 ```sh
-docker compose up -d          # Postgres + server on :8080
-cd server && dotnet test      # evaluator goldens, plan validation, full matches (needs Docker)
-./build/whas_tests            # determinism, lockstep, burning, goldens
+docker compose up -d                        # Postgres + server on :8080
+./build/whasg                               # Play (M) > Connect > Quick match
+./build/whasg --identity data/guest2.json   # a second player on the same machine
+WHAS_SERVER=ws://localhost:8080/ws ./build/whas_tests "[.bot]"   # sparring bot
 ```
+
+Tests:
+
+```sh
+./build/whas_tests                    # determinism, lockstep, snapshots, burning, goldens, replay
+cd server && dotnet test              # evaluator goldens, plan validation, full matches (needs Docker)
+WHAS_SERVER=ws://localhost:8080/ws ./build/whas_tests "[.e2e]"   # two bots, one real match
+./build/whasg --replay match.json --verify   # re-simulate a replay from GET /api/matches/{id}/replay
+```
+
+`tests/replays/bot_match.json` is a real recorded match. If a deliberate
+simulation change stops it from reproducing, record a new one with the
+`[.e2e]` test and save its replay there.

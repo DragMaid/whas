@@ -30,6 +30,14 @@ static Color Scale(Color c, float k) {
 }
 
 void Renderer::DrawWorld(const Simulation &sim) {
+  if (m_worldTexture.id == 0) {
+    m_pixels.assign(GRID_W * GRID_H, BLANK);
+    Image image{m_pixels.data(), GRID_W, GRID_H, 1,
+                PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+    m_worldTexture = LoadTextureFromImage(image);
+    SetTextureFilter(m_worldTexture, TEXTURE_FILTER_POINT);
+  }
+
   int flickerFrame = static_cast<int>(GetTime() * 12.0);
   for (int y = 0; y < GRID_H; ++y) {
     for (int x = 0; x < GRID_W; ++x) {
@@ -37,9 +45,13 @@ void Renderer::DrawWorld(const Simulation &sim) {
       Color col = CellColor(c);
       if (c.element == Element::FIRE || (c.flags & CELL_BURNING))
         col = Scale(col, 0.75f + 0.45f * Flicker(x, y, flickerFrame));
-      DrawRectangle(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE, col);
+      m_pixels[y * GRID_W + x] = col;
     }
   }
+  UpdateTexture(m_worldTexture, m_pixels.data());
+  DrawTexturePro(m_worldTexture, {0, 0, (float)GRID_W, (float)GRID_H},
+                 {0, 0, (float)(GRID_W * CELL_SIZE), (float)(GRID_H * CELL_SIZE)},
+                 {0, 0}, 0.0f, WHITE);
 
   // Additive glow around flames: one soft disc per 2x2 block that has fire
   BeginBlendMode(BLEND_ADDITIVE);

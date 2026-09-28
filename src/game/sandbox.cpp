@@ -12,7 +12,10 @@
 namespace {
 
 constexpr Color AVATAR_COLOR{230, 230, 240, 255};
-constexpr int MAX_TICKS_PER_FRAME = 4; // don't spiral after a hitch
+// One world step per frame at most. Catching up with extra steps makes a
+// slow frame slower still, and the game never recovers; when a step takes
+// longer than a frame the sandbox runs in slow motion instead.
+constexpr int MAX_TICKS_PER_FRAME = 1;
 
 Vector2 MouseCell() {
   Vector2 m = GetMousePosition();
@@ -137,8 +140,8 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
       m_accumulator -= TurnController::TICK_DT;
       ++steps;
     }
-    if (steps == MAX_TICKS_PER_FRAME)
-      m_accumulator = 0.0f;
+    // Time we couldn't keep up with is dropped, not owed
+    m_accumulator = std::min(m_accumulator, TurnController::TICK_DT);
   }
 
   state.clock = m_stopped ? ClockLook::Stopped : ClockLook::Running;

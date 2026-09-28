@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 4.0)
 project(whas VERSION 0.1.0 LANGUAGES C CXX)
 
+# An unset build type means no optimisation at all, which makes the sand
+# simulation roughly 4x slower than a frame allows
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -159,7 +165,7 @@ execute_process(
     OUTPUT_VARIABLE WHAS_GIT_HASH
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET)
-set(WHAS_SIM_BUILD_ID "${WHAS_GIT_HASH}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_SYSTEM_PROCESSOR}")
+set(WHAS_SIM_BUILD_ID "${WHAS_GIT_HASH}-${CMAKE_CXX_COMPILER_ID}-${CMAKE_CXX_COMPILER_VERSION}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_BUILD_TYPE}")
 
 add_library(whas ${SOURCES})
 target_compile_options(whas PUBLIC ${WHAS_DETERMINISTIC_FP})
@@ -199,6 +205,7 @@ if(WHAS_BUILD_TESTS)
         tests/spell_golden_test.cpp
         tests/net_test.cpp
         tests/replay_test.cpp
+        tests/bench_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
     target_compile_definitions(whas_tests PRIVATE WHAS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
