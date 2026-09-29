@@ -9,8 +9,8 @@ public static class SpellValidator
     const float OuterRadius = 250.0f;
     const float MinScale = 0.1f, MaxScale = 3.0f;
     // Layered spells (spell_types.h)
-    const float LayerCoreRadius = 160.0f;
-    const float ComponentScaleMin = 0.2f, ComponentScaleMax = 0.5f;
+    const float LayerCoreRadius = 175.0f;
+    const float ComponentScaleMin = 0.2f, ComponentScaleMax = 0.7f;
 
     static readonly HashSet<string> KnownSigils =
         ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "dragon"];

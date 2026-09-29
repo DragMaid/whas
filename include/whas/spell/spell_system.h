@@ -89,7 +89,7 @@ bool SignInvertible(const std::string &assetId);
 
 SpellStats Evaluate(const Spell &spell);
 
-// How much an embedded spell of this scale is worth (0.5..1.25)
+// How much an embedded spell of this scale is worth (0.5..1)
 float ComponentEffectiveness(float scale);
 
 // Rotate the aim direction by the spell's sign offset

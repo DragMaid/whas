@@ -40,6 +40,18 @@ void AddArrow(ImDrawList *dl, ImVec2 from, ImVec2 dir, float length,
 
 ImU32 ToImU32(Color c) { return IM_COL32(c.r, c.g, c.b, c.a); }
 
+// An open ring around `center` (canvas position of the spell's centre)
+void AddRing(ImDrawList *dl, const SpellGeometry::Ring &ring, ImVec2 center,
+             ImU32 color, float thickness) {
+  auto points = SpellGeometry::RingPoints(ring);
+  std::vector<ImVec2> screen;
+  screen.reserve(points.size());
+  for (Vector2 p : points)
+    screen.push_back({center.x + p.x, center.y + p.y});
+  dl->AddPolyline(screen.data(), (int)screen.size(), color, ImDrawFlags_None,
+                  thickness);
+}
+
 } // namespace
 
 Color SpellEditor::BalanceColor(float imbalance) {
@@ -415,9 +427,10 @@ void SpellEditor::DrawComponent(ImDrawList *dl,
                                 ImVec2 canvasOrigin, ImVec2 canvasCenter,
                                 ImU32 color) {
   ImVec2 c = SpellToCanvasSpace(canvasOrigin, canvasCenter, component.position);
-  dl->AddCircle(c, SpellGeometry::ComponentRadius(component.scale), color, 48,
-                2.0f);
-  dl->AddCircle(c, SPELL_INNER_RADIUS * component.scale, color, 48, 1.0f);
+  ImVec2 spellCenter = SpellToCanvasSpace(canvasOrigin, canvasCenter, {0, 0});
+  for (const SpellGeometry::Ring &ring :
+       SpellGeometry::ComponentRings(component))
+    AddRing(dl, ring, spellCenter, color, 2.5f * ring.weight);
   for (const PlacedGlyph &glyph : component.glyphs) {
     const SvgAsset *asset = GetAssetForGlyph(glyph);
     if (!asset)
@@ -462,19 +475,16 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
 
   dl->AddRectFilled(canvasOrigin, canvasEnd, IM_COL32(40, 40, 50, 255));
 
-  dl->AddCircleFilled(circleCenter, SPELL_OUTER_RADIUS,
+  dl->AddCircleFilled(circleCenter, SPELL_OUTER_RADIUS + 6.0f,
                       IM_COL32(255, 255, 255, 255));
-  bool layered = m_currentSpell.Layered();
-  if (layered) {
-    // The core holds the embedded spells, the band around it the ring signs
-    dl->AddCircle(circleCenter, LAYER_CORE_RADIUS, IM_COL32(0, 0, 0, 255), 64,
-                  2.0f);
-    dl->AddCircle(circleCenter, LAYER_RING_INNER, IM_COL32(0, 0, 0, 255), 64,
-                  1.0f);
-  } else {
-    dl->AddCircle(circleCenter, SPELL_INNER_RADIUS, IM_COL32(0, 0, 0, 255), 64,
-                  2.0f);
-  }
+  // The spell's own rings; the embedded spells draw theirs below, in their
+  // selection colours. In a layered spell the core holds the embedded
+  // spells and the band around it the ring signs.
+  auto rings = SpellGeometry::Rings(m_currentSpell);
+  size_t ownRings = rings.size() - 2 * m_currentSpell.components.size();
+  for (size_t i = 0; i < ownRings; ++i)
+    AddRing(dl, rings[i], circleCenter, IM_COL32(0, 0, 0, 255),
+            3.0f * rings[i].weight);
 
   for (size_t i = 0; i < m_currentSpell.components.size(); ++i) {
     const SpellComponent &component = m_currentSpell.components[i];
@@ -685,6 +695,10 @@ void SpellEditor::DrawSpellPalette() {
       m_paletteSpellRef = ref;
       m_isPlacing = true;
       m_ghostRotation = 0.0f;
+      // The first spell fills the core; more have to share it
+      m_ghostComponentScale = m_currentSpell.components.empty()
+                                  ? COMPONENT_SCALE_MAX
+                                  : 0.35f;
     }
     ImVec2 p0 = ImGui::GetItemRectMin();
     ImVec2 p1 = ImGui::GetItemRectMax();

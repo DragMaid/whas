@@ -53,9 +53,9 @@ public static class SpellEvaluator
     const float CollectRadiusPerSign = 10.0f;
     const float CollectCellsPerSign = 40.0f;
     const int MaxCollect = 150;
-    const float ComponentFullScale = 0.4f;
+    const float ComponentFullScale = 0.7f;
     const float ComponentMinEffect = 0.5f;
-    const float ComponentMaxEffect = 1.25f;
+    const float ComponentMaxEffect = 1.0f;
     public const int MaxComponents = 5;
 
     // raylib's DEG2RAD, in float as the C++ side computes it

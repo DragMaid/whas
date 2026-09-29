@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whas/spell/spell_types.h"
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -48,6 +49,25 @@ bool IsGlyphPlacementValid(const SvgAsset &asset, const PlacedGlyph &glyph,
                            const Spell &spell,
                            const std::vector<SvgAsset> &assets,
                            std::optional<size_t> ignoreIndex = std::nullopt);
+
+// A drawn circle of a spell. Every ring is left open by RING_GAP_DEG around
+// `gapDeg` (screen angle, 90 = straight down), as the manga draws them.
+struct Ring {
+  Vector2 center;
+  float radius;
+  float weight; // 1 for the main rings, less for the inner guide rings
+  float gapDeg = 90.0f;
+};
+
+// Every ring of a spell, outermost first: the outer circle, then the inner
+// circle (plain) or the core and ring band (layered) and each embedded
+// spell's own two rings, turned with it
+std::vector<Ring> Rings(const Spell &spell);
+// An embedded spell's outer and inner ring
+std::array<Ring, 2> ComponentRings(const SpellComponent &component);
+
+// Points along an open ring, from one side of the gap to the other
+std::vector<Vector2> RingPoints(const Ring &ring, int segments = 64);
 
 float PointToSegmentDistance(Vector2 p, const LineSeg &seg);
 

@@ -69,10 +69,11 @@ struct SpellTuning {
   float collectCellsPerSign = 40.0f;
   int maxCollect = 150;
   float aboveHeadGap = 4.0f; // cells from the caster's centre to an orb
-  // Layered spells: an embedded spell of scale s is worth s / this
-  float componentFullScale = 0.4f;
+  // Layered spells: an embedded spell of scale s is worth s / this; one
+  // that fills the whole core is worth all of it
+  float componentFullScale = 0.7f;
   float componentMinEffect = 0.5f;
-  float componentMaxEffect = 1.25f;
+  float componentMaxEffect = 1.0f;
 
 };
 

@@ -1,6 +1,7 @@
 #include "whas/ui/spell_thumbnails.h"
 #include "whas/spell/spell_geometry.h"
 #include "whas/spell/spell_system.h"
+#include <algorithm>
 #include <cstring>
 
 namespace {
@@ -83,8 +84,14 @@ void SpellThumbnails::Render(const Spell &spell, RenderTexture2D &target) {
 
   BeginTextureMode(target);
   ClearBackground(BLANK);
-  DrawRing({half, half}, SPELL_OUTER_RADIUS * scale - 2.0f,
-           SPELL_OUTER_RADIUS * scale, 0, 360, 64, tint);
+  // The same open rings the editor draws; the guide rings fainter
+  for (const SpellGeometry::Ring &ring : SpellGeometry::Rings(spell)) {
+    auto points = SpellGeometry::RingPoints(ring, 48);
+    Color c = ring.weight >= 0.8f ? tint : faint;
+    float thickness = std::max(1.0f, 2.5f * ring.weight);
+    for (size_t i = 1; i < points.size(); ++i)
+      DrawLineEx(toTex(points[i - 1]), toTex(points[i]), thickness, c);
+  }
   auto drawGlyph = [&](const PlacedGlyph &glyph, float thickness) {
     const SvgAsset *asset = m_glyphs.FindById(glyph.assetId);
     if (!asset)
@@ -93,18 +100,9 @@ void SpellThumbnails::Render(const Spell &spell, RenderTexture2D &target) {
     for (const LineSeg &seg : SpellGeometry::GlyphSegments(*asset, glyph))
       DrawLineEx(toTex(seg.a), toTex(seg.b), thickness, c);
   };
-  if (spell.Layered()) {
-    DrawCircleLinesV({half, half}, LAYER_RING_INNER * scale, faint);
-    for (const SpellComponent &comp : spell.components) {
-      Vector2 c = toTex(comp.position);
-      DrawCircleLinesV(c, SpellGeometry::ComponentRadius(comp.scale) * scale,
-                       tint);
-      for (const PlacedGlyph &glyph : comp.glyphs)
-        drawGlyph(SpellGeometry::ComponentGlyph(comp, glyph), 2.0f);
-    }
-  } else {
-    DrawCircleLinesV({half, half}, SPELL_INNER_RADIUS * scale, faint);
-  }
+  for (const SpellComponent &comp : spell.components)
+    for (const PlacedGlyph &glyph : comp.glyphs)
+      drawGlyph(SpellGeometry::ComponentGlyph(comp, glyph), 2.0f);
   for (const PlacedGlyph &glyph : spell.glyphs)
     drawGlyph(glyph, 3.0f);
   EndTextureMode();

@@ -1,5 +1,6 @@
 #include "whas/spell/spell_geometry.h"
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 namespace SpellGeometry {
@@ -102,6 +103,40 @@ PlacedGlyph ComponentGlyph(const SpellComponent &component,
   out.scale = glyph.scale * component.scale;
   out.rotationDeg = glyph.rotationDeg + component.rotationDeg;
   return out;
+}
+
+std::vector<Ring> Rings(const Spell &spell) {
+  std::vector<Ring> rings{{{0, 0}, SPELL_OUTER_RADIUS, 1.0f}};
+  if (!spell.Layered()) {
+    rings.push_back({{0, 0}, SPELL_INNER_RADIUS, 0.6f});
+    return rings;
+  }
+  rings.push_back({{0, 0}, LAYER_RING_INNER, 0.4f});
+  rings.push_back({{0, 0}, LAYER_CORE_RADIUS, 0.8f});
+  for (const SpellComponent &c : spell.components)
+    for (const Ring &r : ComponentRings(c))
+      rings.push_back(r);
+  return rings;
+}
+
+std::array<Ring, 2> ComponentRings(const SpellComponent &c) {
+  // The gap sits behind the component's aim
+  float gap = 90.0f + c.rotationDeg;
+  return {Ring{c.position, ComponentRadius(c.scale), 0.8f, gap},
+          Ring{c.position, SPELL_INNER_RADIUS * c.scale, 0.4f, gap}};
+}
+
+std::vector<Vector2> RingPoints(const Ring &ring, int segments) {
+  float start = (ring.gapDeg + RING_GAP_DEG * 0.5f) * DEG2RAD;
+  float sweep = (360.0f - RING_GAP_DEG) * DEG2RAD;
+  std::vector<Vector2> points;
+  points.reserve(segments + 1);
+  for (int i = 0; i <= segments; ++i) {
+    float a = start + sweep * i / segments;
+    points.push_back({ring.center.x + ring.radius * std::cos(a),
+                      ring.center.y + ring.radius * std::sin(a)});
+  }
+  return points;
 }
 
 bool IsComponentPlacementValid(const SpellComponent &component,

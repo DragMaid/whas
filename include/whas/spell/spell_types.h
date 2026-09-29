@@ -14,13 +14,18 @@ constexpr int SPELL_NAME_MAX_LEN = 32;
 
 // Layered spells: the embedded spells sit in the core, the outer ring band
 // holds signs that modify every one of them. Only one level of nesting.
-constexpr float LAYER_CORE_RADIUS = 160.0f;
-constexpr float LAYER_RING_INNER = 168.0f;
+// The core takes 70% of the circle, so a lone embedded spell reads clearly
+constexpr float LAYER_CORE_RADIUS = 175.0f;
+constexpr float LAYER_RING_INNER = 183.0f;
 constexpr float LAYER_RING_OUTER = SPELL_OUTER_RADIUS - 4.0f;
 constexpr int LAYER_MAX_COMPONENTS = 5;
 // Component scale is its radius as a share of a full circle's
 constexpr float COMPONENT_SCALE_MIN = 0.2f;
-constexpr float COMPONENT_SCALE_MAX = 0.5f;
+constexpr float COMPONENT_SCALE_MAX = LAYER_CORE_RADIUS / SPELL_OUTER_RADIUS;
+
+// Drawn rings are left open by this many degrees at the bottom, like the
+// circles in the manga
+constexpr float RING_GAP_DEG = 14.0f;
 
 enum class GlyphKind { Sign, Sigil };
 
@@ -60,7 +65,7 @@ struct SpellComponent {
   std::string source; // name of the spell it was copied from, for display
   std::vector<PlacedGlyph> glyphs;
   Vector2 position{0, 0};
-  float scale = 0.35f;       // COMPONENT_SCALE_MIN..MAX
+  float scale = 0.35f;      // COMPONENT_SCALE_MIN..MAX
   float rotationDeg = 0.0f; // turns the component's aim
 };
 
