@@ -25,8 +25,9 @@ the clients report.
 | Cast time | Integer formula `max(1, (180 + 3*particles + 5) / 10)` on both sides. A layered spell takes its slowest part, plus half the other parts rounded up, plus `8 + 2*(parts-1)`. |
 | Tuning sliders | Online matches use the default config (ruleset 1) |
 
-`tests/fixtures/spells.json` holds 538 golden spells (evaluator version 4).
-They cover plain spells, modifier signs, the dragon sigil and layered spells.
+`tests/fixtures/spells.json` holds 686 golden spells (evaluator version 5).
+They cover plain spells, modifier signs, pulling fields, light, guidance, the
+dragon sigil and layered spells.
 The C++ and C# evaluators must produce exactly the listed quantized stats
 (`whas_tests`, `dotnet test`).
 
@@ -49,17 +50,26 @@ The C++ and C# evaluators must produce exactly the listed quantized stats
 
 A glyph has the same shape as the spell files:
 `{assetId, kind: "sign"|"sigil", x, y, scale, rotation, inverted?}`.
-`inverted` is only sent when it is true, and only `crushing` and `expansion`
-may set it.
+`inverted` is only sent when it is true, and only `crushing`, `expansion`
+and `pulling` may set it.
 
 - Signs: `column` (thrust), plus the modifiers `convergence`, `crushing`,
-  `repetition`, `cooling`, `strengthening`, `collection`, `expansion` and
-  `orb`.
-- Sigils: the element and kind sigils, plus `dragon`. `dragon` is a shape
-  sigil and needs exactly one other sigil beside it.
+  `repetition`, `cooling`, `strengthening`, `collection`, `expansion`,
+  `orb`, `pulling` and `sights_set`.
+- Sigils: the elements (`fire`, `water`, `earth`, `light`), `wind` (only
+  with a pulling sign: a field), `wind_underfoot` (flight), plus:
+  - `dragon`, a shape sigil that needs an element sigil beside it;
+  - `guidance`, which needs a target beside it: `human` (the nearest
+    enemy) or a second, smaller element sigil (the nearest cells of that
+    element). With two element sigils the bigger one is fired.
+- Evaluator version 5 renamed the sigils: stored spells from before it have
+  `wind` for today's `wind_underfoot` and `gust` for today's `wind`. The
+  server renames them when it re-evaluates a stored spell; client spell
+  files are marked `"format": 2` from then on.
+- Uploads are rejected unless the evaluator makes a valid spell of them.
 
 A layered spell also has `components`: 1 to 5 entries of
-`{source, x, y, scale (0.2-0.5), rotation, glyphs[]}`.
+`{source, x, y, scale (0.2-0.7), rotation, glyphs[]}`.
 
 - Each entry is a plain spell.
 - The top-level `glyphs` are the outer ring and must all be signs.
@@ -71,11 +81,17 @@ the quantized `SpellQuant::Stats`:
 
 - `speed`, `range`, `density`, `power`, `diameter`, `temperature`,
   `launchSpeed`, `force`, `duration`, `imbalance`, `temperatureDelta`,
-  `hardnessScale`, `crush`, `restore` and `collectRadius` are in units of
-  1/1024.
+  `hardnessScale`, `crush`, `restore`, `collectRadius`, `pull`,
+  `flashRadius`, `flashTime`, `homeTurnRate`, `homeRadius`, `steerTime` and
+  `steerRate` are in units of 1/1024. Turn rates are radians per second.
 - `offset` is in radians, in units of 1/65536.
 - `particleCount` and `collectMax` are plain counts.
+- `kind` is 0 (none), 1 (element), 2 (flight), 3 (field: a pulling sign,
+  `pull` > 0 pulls toward the caster and < 0 pushes; `element` 0 moves
+  everything) or 4 (layered).
 - `shape` is 0 (stream), 1 (orb) or 2 (dragon).
+- `homeTarget` is 0 (none), 1 (the nearest enemy) or 2 (the nearest cells of
+  `homeElement`).
 - A missing modifier field means its default: 0, or 1024 for
   `hardnessScale`. The C++ side leaves out default modifier fields; the
   server always writes them.
@@ -143,10 +159,12 @@ This is `src/net/plan_codec.cpp`. Consecutive steps with the same input are
 collapsed into runs, and casts carry the server spell id:
 
 ```json
-{"v":1,"runs":[{"n":30,"in":2},{"n":1,"in":0,"casts":[{"id":7,"ax":16383,"ay":0}]},{"n":29,"in":0}]}
+{"v":1,"runs":[{"n":30,"in":2},{"n":1,"in":0,"casts":[{"id":7,"ax":16383,"ay":0}]},{"n":29,"in":0,"c":[1280,400]}]}
 ```
 
-`in` is a bit field: 1 = left, 2 = right, 4 = jump. The server rejects a plan
+`in` is a bit field: 1 = left, 2 = right, 4 = jump. `c` is where the
+player's cursor was, in 1/8 cells, for sights set spells (two int16s); a
+run without it keeps the last one. The server rejects a plan
 (`server/Whas.Server/Matches/PlanValidator.cs`) if any of these hold:
 
 - it runs past 180 ticks,
@@ -154,7 +172,8 @@ collapsed into runs, and casts carry the server spell id:
 - its casts would finish after the turn ends,
 - it casts a spell that isn't in that round's deck, or an invalid one,
 - an aim isn't a unit vector (±2%),
-- it has more than one wind cast in a pause.
+- it has more than one wind underfoot cast in a pause,
+- a cursor isn't two int16s.
 
 ## REST
 
