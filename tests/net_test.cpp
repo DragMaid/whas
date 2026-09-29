@@ -2,6 +2,9 @@
 #include "whas/core/sha256.h"
 #include "whas/engine/simulation.h"
 #include "whas/net/lockstep_client.h"
+#include "whas/net/net_client.h"
+#include <ixwebsocket/IXHttpServer.h>
+#include <ixwebsocket/IXWebSocketServer.h>
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
 #include <cstdlib>
@@ -184,4 +187,56 @@ TEST_CASE("bot opponent waits in the queue and plays one match", "[.bot]") {
   bot.client.QuickMatch();
   REQUIRE(until([&] { return bot.client.GetPhase() == Phase::MatchOver; }, 1800));
   REQUIRE(bot.client.Desyncs() == 0);
+}
+
+TEST_CASE("server addresses become WebSocket URLs", "[net]") {
+  REQUIRE(NetClient::WebSocketUrl("https://abc.ngrok-free.app") ==
+          "wss://abc.ngrok-free.app/ws");
+  REQUIRE(NetClient::WebSocketUrl("http://localhost:8080") ==
+          "ws://localhost:8080/ws");
+  REQUIRE(NetClient::WebSocketUrl("ws://localhost:8080/ws") ==
+          "ws://localhost:8080/ws");
+  REQUIRE(NetClient::WebSocketUrl("localhost:8080") == "ws://localhost:8080/ws");
+  REQUIRE(NetClient::HttpBase("wss://abc.ngrok-free.app/ws") ==
+          "https://abc.ngrok-free.app");
+}
+
+TEST_CASE("the client follows a redirect to the real server", "[net]") {
+  // The real server: echoes one message back
+  ix::WebSocketServer ws(18731, "127.0.0.1");
+  ws.setOnClientMessageCallback(
+      [](std::shared_ptr<ix::ConnectionState>, ix::WebSocket &socket,
+         const ix::WebSocketMessagePtr &msg) {
+        if (msg->type == ix::WebSocketMessageType::Message)
+          socket.sendText(msg->str);
+      });
+  REQUIRE(ws.listen().first);
+  ws.start();
+  // A tunnel in front of it that sends everyone elsewhere
+  ix::HttpServer tunnel(18732, "127.0.0.1");
+  tunnel.setOnConnectionCallback(
+      [](ix::HttpRequestPtr, std::shared_ptr<ix::ConnectionState>) {
+        ix::WebSocketHttpHeaders headers;
+        headers["Location"] = "http://127.0.0.1:18731/ws";
+        return std::make_shared<ix::HttpResponse>(
+            308, "Permanent Redirect", ix::HttpErrorCode::Ok, headers, "");
+      });
+  REQUIRE(tunnel.listen().first);
+  tunnel.start();
+
+  NetClient client;
+  client.Connect("http://127.0.0.1:18732");
+  bool echoed = false;
+  for (int i = 0; i < 300 && !echoed; ++i) {
+    for (const nlohmann::json &j : client.Poll()) {
+      if (j["type"] == "_open")
+        client.Send({{"type", "ping"}});
+      echoed = echoed || j["type"] == "ping";
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  client.Close();
+  tunnel.stop();
+  ws.stop();
+  REQUIRE(echoed);
 }

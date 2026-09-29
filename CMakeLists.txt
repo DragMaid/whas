@@ -58,9 +58,11 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-# WebSocket + HTTP client for online play. Plain ws:// for now (a TLS
-# terminating proxy can sit in front of the server).
-set(USE_TLS OFF CACHE BOOL "" FORCE)
+# WebSocket + HTTP client for online play. TLS (OpenSSL) so the client can
+# reach a server behind a TLS proxy or tunnel (wss://, e.g. ngrok); the
+# server itself speaks plain ws://.
+set(USE_TLS ON CACHE BOOL "" FORCE)
+set(USE_OPEN_SSL ON CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
 set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(

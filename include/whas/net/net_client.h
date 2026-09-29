@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace ix {
@@ -24,6 +25,9 @@ public:
   NetClient(const NetClient &) = delete;
   NetClient &operator=(const NetClient &) = delete;
 
+  // ws://, wss://, or an http(s):// address such as an ngrok tunnel's
+  // (turned into ws(s)://, with /ws when it has no path). HTTP redirects are
+  // followed first, off the game thread.
   void Connect(const std::string &url);
   void Close();
   bool IsOpen() const { return m_open; }
@@ -37,9 +41,12 @@ public:
 
   // ws://host:port/ws -> http://host:port
   static std::string HttpBase(const std::string &wsUrl);
+  // http(s):// -> ws(s)://, and /ws when there's no path
+  static std::string WebSocketUrl(const std::string &url);
 
 private:
   std::unique_ptr<ix::WebSocket> m_ws;
+  std::jthread m_connecting; // follows redirects, then opens the socket
   std::mutex m_mutex;
   std::deque<nlohmann::json> m_inbox;
   std::atomic<bool> m_open{false};
