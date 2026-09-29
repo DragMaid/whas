@@ -97,6 +97,7 @@ struct SpellEffect {
   int rows = 0;               // rows emitted so far (for the weave)
   int partRows = 0;           // rows emitted by the current part
   int bonusParticles = 0;     // drawn in by collection when cast
+  int guideId = -1; // steered spells: the path its particles follow
 };
 
 namespace SpellSystem {

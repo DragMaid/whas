@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr uint32_t MAGIC = 0x334E5357; // "WSN3"
+constexpr uint32_t MAGIC = 0x344E5357; // "WSN4"
 constexpr uint16_t MAX_RUN = 0xFFFF;
 
 // Cells are stored field by field ("columns"), each column run-length
@@ -168,12 +168,9 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(p.restore);
     out.Put(p.flashRadius);
     out.Put(p.flashTime);
-    out.Put(p.homeTarget);
-    out.Put(static_cast<uint8_t>(p.homeElement));
-    out.Put(p.homeTurnRate);
-    out.Put(p.homeRadius);
-    out.Put(p.steerTime);
-    out.Put(p.steerRate);
+    out.Put(p.guideId);
+    out.Put(p.pathS);
+    out.Put(p.pathL);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -190,6 +187,24 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(e.rows);
     out.Put(e.partRows);
     out.Put(e.bonusParticles);
+    out.Put(e.guideId);
+  }
+
+  out.Put(m_particles.NextGuideId());
+  out.Put(static_cast<uint32_t>(m_particles.Guides().size()));
+  for (const Guide &g : m_particles.Guides()) {
+    out.Put(g.id);
+    out.Put(g.owner);
+    for (float v : {g.speed, g.steerTime, g.steerRate, g.homeTurnRate,
+                    g.homeRadius, g.heading})
+      out.Put(v);
+    out.Put(g.homeTarget);
+    out.Put(static_cast<uint8_t>(g.homeElement));
+    out.Put(static_cast<uint32_t>(g.line.size()));
+    for (Vector2 p : g.line) {
+      out.Put(p.x);
+      out.Put(p.y);
+    }
   }
   return std::move(out.Data());
 }
@@ -267,12 +282,9 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.restore = in.Get<float>();
       p.flashRadius = in.Get<float>();
       p.flashTime = in.Get<float>();
-      p.homeTarget = in.Get<uint8_t>();
-      p.homeElement = static_cast<Element>(in.Get<uint8_t>());
-      p.homeTurnRate = in.Get<float>();
-      p.homeRadius = in.Get<float>();
-      p.steerTime = in.Get<float>();
-      p.steerRate = in.Get<float>();
+      p.guideId = in.Get<int>();
+      p.pathS = in.Get<float>();
+      p.pathL = in.Get<float>();
     }
 
     uint32_t effects = in.Get<uint32_t>();
@@ -292,6 +304,30 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       e.rows = in.Get<int>();
       e.partRows = in.Get<int>();
       e.bonusParticles = in.Get<int>();
+      e.guideId = in.Get<int>();
+    }
+
+    int nextGuideId = in.Get<int>();
+    uint32_t guides = in.Get<uint32_t>();
+    if (guides > 4096)
+      return false;
+    std::vector<Guide> newGuides(guides);
+    for (Guide &g : newGuides) {
+      g.id = in.Get<int>();
+      g.owner = in.Get<int>();
+      for (float *v : {&g.speed, &g.steerTime, &g.steerRate, &g.homeTurnRate,
+                       &g.homeRadius, &g.heading})
+        *v = in.Get<float>();
+      g.homeTarget = in.Get<uint8_t>();
+      g.homeElement = static_cast<Element>(in.Get<uint8_t>());
+      uint32_t points = in.Get<uint32_t>();
+      if (points < 2 || points > 100000)
+        return false;
+      g.line.resize(points);
+      for (Vector2 &p : g.line) {
+        p.x = in.Get<float>();
+        p.y = in.Get<float>();
+      }
     }
     if (!in.Done())
       return false;
@@ -304,6 +340,8 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
     pool = std::move(newPool);
     m_particles.TakeHits();
     m_activeSpellEffects = std::move(newEffects);
+    m_particles.Guides() = std::move(newGuides);
+    m_particles.NextGuideId() = nextGuideId;
     m_frameCounter = frame;
     m_seed = seed;
     m_rng = DetRng::FromState(rngState);

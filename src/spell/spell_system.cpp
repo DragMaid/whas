@@ -702,12 +702,8 @@ void SpawnSpellParticle(SpellEffect &effect, ElementContext &ctx, Vector2 pos,
     p->restore = s.restore;
     p->flashRadius = s.flashRadius;
     p->flashTime = s.flashTime;
-    p->homeTarget = static_cast<uint8_t>(s.homeTarget);
-    p->homeElement = s.homeElement;
-    p->homeTurnRate = s.homeTurnRate;
-    p->homeRadius = s.homeRadius;
-    p->steerTime = s.steerTime;
-    p->steerRate = s.steerRate;
+    if (effect.guideId >= 0)
+      ctx.particles.Follow(*p, effect.guideId);
   }
   effect.emitted++;
 }

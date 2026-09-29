@@ -230,6 +230,12 @@ uint64_t Simulation::StateHash() const {
     f.Add(p.power);
     f.Add(p.owner);
   });
+  for (const Guide &g : m_particles.Guides()) {
+    f.Add(g.id);
+    f.Add(g.heading);
+    f.Add(g.steerTime);
+    f.AddVec(g.line.back());
+  }
   for (const SpellEffect &e : m_activeSpellEffects) {
     f.Add(static_cast<uint8_t>(e.stats.kind));
     f.AddVec(e.origin);
@@ -265,6 +271,11 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   effect.origin = origin;
   effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
   effect.owner = owner;
+  // Sights set and guidance steer the whole figure along one path
+  if (effect.stats.kind == SpellKind::Element &&
+      (stats.steerTime > 0.0f || stats.homeTarget != HomeTarget::None))
+    effect.guideId =
+        m_particles.CreateGuide(stats, origin, effect.direction, owner);
   if (stats.collectMax > 0)
     effect.bonusParticles = Collect(stats, origin);
   m_activeSpellEffects.push_back(effect);

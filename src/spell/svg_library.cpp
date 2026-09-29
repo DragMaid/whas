@@ -17,6 +17,19 @@ bool IsDarkStroke(unsigned int color) {
   return (r + g + b) < 600;
 }
 
+float Distance(Vector2 a, Vector2 b) { return std::hypot(b.x - a.x, b.y - a.y); }
+
+// How far a point is from the line through a and b
+float OffLine(Vector2 p, Vector2 a, Vector2 b) {
+  float len = Distance(a, b);
+  if (len < 1e-4f)
+    return Distance(p, a);
+  return std::abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / len;
+}
+
+// nanosvg gives every path as cubic Béziers (lines and circles too). A
+// straight one becomes one segment; a curve gets more segments the longer
+// it is, so small circles (a head, a dot) keep their shape.
 void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
   if (!path || path->npts < 4)
     return;
@@ -28,7 +41,15 @@ void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
     Vector2 p2{p[4], p[5]};
     Vector2 p3{p[6], p[7]};
 
-    int segments = 10;
+    if (OffLine(p1, p0, p3) < 0.05f && OffLine(p2, p0, p3) < 0.05f) {
+      if (Distance(p0, p3) > 1e-3f)
+        out.push_back({p0, p3});
+      continue;
+    }
+
+    // The control polygon is never shorter than the curve
+    float length = Distance(p0, p1) + Distance(p1, p2) + Distance(p2, p3);
+    int segments = std::clamp(static_cast<int>(std::ceil(length / 1.5f)), 4, 24);
     Vector2 prev = p0;
     for (int j = 1; j <= segments; ++j) {
       float t = static_cast<float>(j) / segments;
@@ -42,11 +63,21 @@ void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
       current.x = mt3 * p0.x + 3.0f * mt2 * t * p1.x + 3.0f * mt * t2 * p2.x + t3 * p3.x;
       current.y = mt3 * p0.y + 3.0f * mt2 * t * p1.y + 3.0f * mt * t2 * p2.y + t3 * p3.y;
 
-      if (std::hypot(current.x - prev.x, current.y - prev.y) > 0.5f) {
+      // Tiny steps are merged into the next one, never dropped (dropping
+      // them used to leave gaps, and erase small circles entirely)
+      if (Distance(prev, current) > 0.2f || j == segments) {
         out.push_back({prev, current});
+        prev = current;
       }
-      prev = current;
     }
+  }
+  // A closed path ends where it started
+  if (path->closed) {
+    Vector2 first{path->pts[0], path->pts[1]};
+    Vector2 last{path->pts[(path->npts - 1) * 2],
+                 path->pts[(path->npts - 1) * 2 + 1]};
+    if (Distance(first, last) > 1e-3f)
+      out.push_back({last, first});
   }
 }
 

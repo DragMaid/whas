@@ -53,21 +53,39 @@ struct Particle {
     // Light: bursts into a flash instead of landing
     float flashRadius = 0.0f;
     float flashTime = 0.0f;
-    // Guidance (see SpellStats): what it chases while it flies
-    uint8_t homeTarget = 0; // HomeTarget
-    Element homeElement = Element::AIR;
-    float homeTurnRate = 0.0f;
-    float homeRadius = 0.0f;
-    // Sights set: seconds left following the caster's cursor, and how fast
-    // it may turn doing it
-    float steerTime = 0.0f;
-    float steerRate = 0.0f;
+    // Steered spells (sights set, guidance): the Guide the particle follows
+    // (-1 = none), how far along its path the particle is (cells) and how
+    // far to the side of it (cells, left positive)
+    int guideId = -1;
+    float pathS = 0.0f;
+    float pathL = 0.0f;
 };
 
 // Where a caster's cursor is (cells), for sights set
 struct Cursor {
     int owner;
     Vector2 pos;
+};
+
+// The path a steered cast flies along. Its tip turns toward the cursor
+// (sights set) or the target (guidance) and is laid down a cell at a time
+// just ahead of the leading particle. Every particle of the cast follows it
+// at its own distance along and offset across, so the figure keeps its
+// shape: a stream or dragon snakes after its head, an orb stays round.
+struct Guide {
+    int id = 0;
+    int owner = -1;
+    float speed = 0.0f; // the spell's cells/s
+    // Sights set: seconds left following the cursor, and the turn rate
+    float steerTime = 0.0f;
+    float steerRate = 0.0f;
+    // Guidance (see SpellStats), after the sights set
+    uint8_t homeTarget = 0; // HomeTarget
+    Element homeElement = Element::AIR;
+    float homeTurnRate = 0.0f;
+    float homeRadius = 0.0f;
+    float heading = 0.0f;      // radians, where the tip is going
+    std::vector<Vector2> line; // the path, one point per cell from the cast
 };
 
 class ParticleSystem {
@@ -103,14 +121,31 @@ public:
     // Flashes from the last Update
     std::vector<Flash> TakeFlashes() { return std::exchange(m_flashes, {}); }
 
+    // A path for a steered cast fired from `origin` along `dir`; its id goes
+    // on the cast's particles (see Follow)
+    int CreateGuide(const struct SpellStats &stats, Vector2 origin,
+                    Vector2 dir, int owner);
+    // Put a freshly spawned particle on its guide's path, where it stands
+    void Follow(Particle &p, int guideId);
+
+    // For snapshots
+    std::vector<Guide> &Guides() { return m_guides; }
+    const std::vector<Guide> &Guides() const { return m_guides; }
+    int &NextGuideId() { return m_nextGuideId; }
+    int NextGuideId() const { return m_nextGuideId; }
+
 private:
     bool HitHurtbox(const Particle &p);
     // A light mote ends in a flash
     void Burst(Particle &p);
-    // Turn guided projectiles toward what they chase
+    // Turn the guides toward what they chase and keep their particles on
+    // them; drop guides nothing follows any more
     void Steer(const struct Grid &grid, float dt);
+    Guide *FindGuide(int id);
 
     std::vector<Particle> m_particles;
+    std::vector<Guide> m_guides;
+    int m_nextGuideId = 0;
     std::vector<Hurtbox> m_hurtboxes;
     std::vector<Cursor> m_cursors;
     std::vector<ParticleHit> m_hits;

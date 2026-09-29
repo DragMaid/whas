@@ -7,6 +7,7 @@
 #include "whas/spell/spell_quant.h"
 #include "whas/spell/svg_library.h"
 #include <algorithm>
+#include <set>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
 
@@ -642,3 +643,115 @@ TEST_CASE("every spell shape is defined and can be picked", "[spell]") {
 
 
 
+
+TEST_CASE("small circles in glyph drawings survive loading", "[glyph]") {
+  SvgLibrary library;
+  library.LoadFromDirectories(WHAS_SOURCE_DIR "/assets/signs",
+                              WHAS_SOURCE_DIR "/assets/sigils");
+  // The human's head: a circle of radius 9 at (50, 20) in a 100-wide
+  // drawing, loaded at 64 wide
+  const SvgAsset *human = library.FindById("human");
+  REQUIRE(human);
+  Vector2 head{50 * 0.64f, 20 * 0.64f};
+  float r = 9 * 0.64f;
+  float around = 0.0f;
+  for (const LineSeg &seg : human->segments) {
+    float da = std::hypot(seg.a.x - head.x, seg.a.y - head.y);
+    float db = std::hypot(seg.b.x - head.x, seg.b.y - head.y);
+    if (std::abs(da - r) < 0.5f && std::abs(db - r) < 0.5f)
+      around += std::hypot(seg.b.x - seg.a.x, seg.b.y - seg.a.y);
+  }
+  REQUIRE(around > 2 * PI * r * 0.9f); // the whole way round
+}
+
+namespace {
+
+// Where the flying particles are: distinct cells, and their spread (RMS
+// distance from their centre)
+struct Figure {
+  int cells = 0;
+  float spread = 0.0f;
+  Vector2 centre{0, 0};
+};
+
+Figure Measure(Simulation &sim) {
+  std::vector<Vector2> at;
+  sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+    if (p.isProjectile)
+      at.push_back(p.pos);
+  });
+  Figure f;
+  if (at.empty())
+    return f;
+  std::set<std::pair<int, int>> cells;
+  for (Vector2 p : at) {
+    cells.insert({(int)std::floor(p.x), (int)std::floor(p.y)});
+    f.centre.x += p.x / at.size();
+    f.centre.y += p.y / at.size();
+  }
+  float sum = 0.0f;
+  for (Vector2 p : at)
+    sum += (p.x - f.centre.x) * (p.x - f.centre.x) +
+           (p.y - f.centre.y) * (p.y - f.centre.y);
+  f.cells = (int)cells.size();
+  f.spread = std::sqrt(sum / at.size());
+  return f;
+}
+
+} // namespace
+
+TEST_CASE("a steered orb turns as a ball", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(23);
+  Spell orb = Make("water", {Sign("orb", 1.0f), Sign("sights_set", 3.0f)});
+  sim.CastSpell(SpellQuant::Canonical(orb), {60, 120}, {1, 0}, 1);
+  auto tick = [&](int n) {
+    for (int i = 0; i < n; ++i) {
+      sim.GetParticleSystem().SetCursors({{1, {80, 20}}}); // up and ahead
+      sim.Update(DT);
+    }
+  };
+  tick(2);
+  Figure start = Measure(sim);
+  REQUIRE(start.cells > 10);
+  tick(30);
+  Figure turned = Measure(sim);
+  REQUIRE(turned.centre.y < start.centre.y - 5.0f); // it did turn
+  // Still the same ball: not smeared out, not balled up
+  REQUIRE(turned.spread < start.spread * 1.3f);
+  REQUIRE(turned.spread > start.spread * 0.7f);
+}
+
+TEST_CASE("a guided dragon keeps its body while it curves", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(29);
+  Spell dragon = Make("water", {Sign("collection", 1.0f),
+                                {"guidance", GlyphKind::Sigil, {0, 120}, 1.5f, 0},
+                                {"human", GlyphKind::Sigil, {-100, 60}, 0.5f, 0}});
+  dragon.glyphs.push_back({"dragon", GlyphKind::Sigil, {100, 60}, 1.0f, 0.0f});
+  SpellStats stats = SpellQuant::Canonical(dragon);
+  REQUIRE(stats.valid);
+  REQUIRE(stats.shape == SpellShape::Dragon);
+  // The target above the line of fire, within guidance's reach
+  Character target;
+  target.id = 2;
+  target.pos = {100, 100};
+  sim.GetParticleSystem().SetHurtboxes({{2, target.Bounds()}});
+  sim.CastSpell(stats, {40, 150}, {1, 0}, 1);
+  // Until it reaches the target the whole body flies on: as many cells
+  // and as spread out as once it had formed, however much it curves
+  Figure formed;
+  bool hit = false;
+  for (int i = 0; i < 120 && !hit; ++i) {
+    sim.Update(DT);
+    hit = !sim.GetParticleSystem().TakeHits().empty();
+    Figure f = Measure(sim);
+    if (i == 12)
+      formed = f;
+    if (i > 12 && !hit) {
+      REQUIRE(f.cells >= formed.cells * 0.9f);
+      REQUIRE(f.spread >= formed.spread * 0.9f);
+    }
+  }
+  REQUIRE(hit); // it curved up onto the target
+}

@@ -41,12 +41,9 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.temperature = 0.0f;
       p.flashRadius = 0.0f;
       p.flashTime = 0.0f;
-      p.homeTarget = 0;
-      p.homeElement = Element::AIR;
-      p.homeTurnRate = 0.0f;
-      p.homeRadius = 0.0f;
-      p.steerTime = 0.0f;
-      p.steerRate = 0.0f;
+      p.guideId = -1;
+      p.pathS = 0.0f;
+      p.pathL = 0.0f;
       return &p;
     }
   }
@@ -240,19 +237,32 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
 
 namespace {
 
-// Turn a velocity toward `to` by at most `maxTurn` radians, keeping its
-// speed
-void TurnToward(Particle &p, Vector2 to, float maxTurn) {
-  float want = std::atan2(to.y - p.pos.y, to.x - p.pos.x);
-  float have = std::atan2(p.vel.y, p.vel.x);
-  float diff = want - have;
-  while (diff > PI)
-    diff -= 2.0f * PI;
-  while (diff < -PI)
-    diff += 2.0f * PI;
-  float turn = std::clamp(diff, -maxTurn, maxTurn);
-  float c = std::cos(turn), s = std::sin(turn);
-  p.vel = {p.vel.x * c - p.vel.y * s, p.vel.x * s + p.vel.y * c};
+// How far ahead along its path a particle aims (cells): enough to round a
+// turn smoothly, little enough to stay on the path
+constexpr float kLookAhead = 3.0f;
+
+float WrapAngle(float a) {
+  while (a > PI)
+    a -= 2.0f * PI;
+  while (a < -PI)
+    a += 2.0f * PI;
+  return a;
+}
+
+// A point on a guide's path `s` cells from the cast, and which way the path
+// runs there. Before the start and past the end it carries straight on.
+void PathAt(const Guide &g, float s, Vector2 &point, Vector2 &dir) {
+  const std::vector<Vector2> &line = g.line;
+  int last = static_cast<int>(line.size()) - 1;
+  int k = std::clamp(static_cast<int>(std::floor(s)), 0, last - 1);
+  Vector2 a = line[k], b = line[k + 1];
+  dir = {b.x - a.x, b.y - a.y}; // points are a cell apart
+  float t = s - k;
+  point = {a.x + dir.x * t, a.y + dir.y * t};
+}
+
+bool Flying(const Particle &p) {
+  return p.active && p.isProjectile && p.remainingDistance > 0.0f;
 }
 
 // The nearest cell of an element within `radius` of `from`, ring by ring
@@ -277,89 +287,139 @@ bool NearestCell(const Grid &grid, Vector2 from, Element element, int radius,
 
 } // namespace
 
+int ParticleSystem::CreateGuide(const SpellStats &stats, Vector2 origin,
+                                Vector2 dir, int owner) {
+  Guide g;
+  g.id = m_nextGuideId++;
+  g.owner = owner;
+  g.speed = stats.speed;
+  g.steerTime = stats.steerTime;
+  g.steerRate = stats.steerRate;
+  g.homeTarget = static_cast<uint8_t>(stats.homeTarget);
+  g.homeElement = stats.homeElement;
+  g.homeTurnRate = stats.homeTurnRate;
+  g.homeRadius = stats.homeRadius;
+  g.heading = std::atan2(dir.y, dir.x);
+  // Straight ahead to start with; Steer lays down the rest as it's reached
+  g.line = {origin, {origin.x + dir.x, origin.y + dir.y}};
+  m_guides.push_back(std::move(g));
+  return m_guides.back().id;
+}
+
+Guide *ParticleSystem::FindGuide(int id) {
+  for (Guide &g : m_guides)
+    if (g.id == id)
+      return &g;
+  return nullptr;
+}
+
+void ParticleSystem::Follow(Particle &p, int guideId) {
+  const Guide *g = FindGuide(guideId);
+  if (!g)
+    return;
+  // Where it stands relative to the start of the path: along and across
+  Vector2 origin = g->line[0];
+  Vector2 dir{g->line[1].x - origin.x, g->line[1].y - origin.y};
+  Vector2 rel{p.pos.x - origin.x, p.pos.y - origin.y};
+  p.guideId = guideId;
+  p.pathS = rel.x * dir.x + rel.y * dir.y;
+  p.pathL = rel.x * -dir.y + rel.y * dir.x;
+}
+
 void ParticleSystem::Steer(const Grid &grid, float dt) {
-  // Sights set steers toward the caster's cursor. Guided particles of one
-  // cast share a target: found once a tick from
-  // where the group is, in pool order so every client picks the same
-  struct Group {
-    int owner;
-    uint8_t target;
-    Element element;
-    float radius = 0.0f;
-    Vector2 sum{0.0f, 0.0f};
-    int count = 0;
-    bool found = false;
-    Vector2 point{0.0f, 0.0f};
-  };
-  std::vector<Group> groups;
-  auto groupOf = [&groups](const Particle &p) -> Group * {
-    for (Group &g : groups)
-      if (g.owner == p.owner && g.target == p.homeTarget &&
-          g.element == p.homeElement)
-        return &g;
-    return nullptr;
-  };
-  auto flying = [](const Particle &p) {
-    return p.active && p.isProjectile && p.remainingDistance > 0.0f;
-  };
-
-  // Sights set first: while it lasts the cursor is the target
-  for (Particle &p : m_particles) {
-    if (!flying(p) || p.steerTime <= 0.0f)
-      continue;
-    p.steerTime = std::max(0.0f, p.steerTime - dt);
-    for (const Cursor &c : m_cursors)
-      if (c.owner == p.owner)
-        TurnToward(p, c.pos, p.steerRate * dt);
-  }
-
-  // Then guidance, for particles no longer following the cursor
-  auto guided = [&flying](const Particle &p) {
-    return flying(p) && p.homeTarget != 0 && p.steerTime <= 0.0f;
-  };
-
-  for (const Particle &p : m_particles) {
-    if (!guided(p))
-      continue;
-    Group *g = groupOf(p);
-    if (!g) {
-      groups.push_back({p.owner, p.homeTarget, p.homeElement});
-      g = &groups.back();
-    }
-    g->radius = std::max(g->radius, p.homeRadius);
-    g->sum.x += p.pos.x;
-    g->sum.y += p.pos.y;
-    g->count++;
-  }
-  if (groups.empty())
+  if (m_guides.empty())
     return;
 
-  for (Group &g : groups) {
-    Vector2 at{g.sum.x / g.count, g.sum.y / g.count};
-    if (g.target == static_cast<uint8_t>(HomeTarget::Human)) {
-      float best = g.radius * g.radius;
+  // How far along the leading particle of each guide is; a guide nothing
+  // follows any more (landed, out of range) is dropped
+  std::vector<float> lead(m_guides.size(), -1e9f);
+  std::vector<bool> used(m_guides.size(), false);
+  for (const Particle &p : m_particles) {
+    if (!Flying(p) || p.guideId < 0)
+      continue;
+    for (size_t i = 0; i < m_guides.size(); ++i)
+      if (m_guides[i].id == p.guideId) {
+        used[i] = true;
+        lead[i] = std::max(lead[i], p.pathS);
+      }
+  }
+
+  for (size_t i = 0; i < m_guides.size(); ++i) {
+    Guide &g = m_guides[i];
+    if (!used[i])
+      continue;
+    Vector2 tip = g.line.back();
+
+    // What the tip turns toward: the cursor while the sights set lasts,
+    // then guidance's target, else straight on
+    bool found = false;
+    Vector2 target{0.0f, 0.0f};
+    float rate = 0.0f;
+    if (g.steerTime > 0.0f) {
+      g.steerTime = std::max(0.0f, g.steerTime - dt);
+      for (const Cursor &c : m_cursors)
+        if (c.owner == g.owner) {
+          target = c.pos;
+          found = true;
+        }
+      rate = g.steerRate;
+    } else if (g.homeTarget == static_cast<uint8_t>(HomeTarget::Human)) {
+      float best = g.homeRadius * g.homeRadius;
       for (const Hurtbox &box : m_hurtboxes) {
         if (box.id == g.owner)
           continue;
         Vector2 c{box.bounds.x + box.bounds.width * 0.5f,
                   box.bounds.y + box.bounds.height * 0.5f};
-        float d = (c.x - at.x) * (c.x - at.x) + (c.y - at.y) * (c.y - at.y);
+        float d = (c.x - tip.x) * (c.x - tip.x) + (c.y - tip.y) * (c.y - tip.y);
         if (d <= best) {
           best = d;
-          g.point = c;
-          g.found = true;
+          target = c;
+          found = true;
         }
       }
-    } else {
-      g.found = NearestCell(grid, at, g.element, static_cast<int>(g.radius),
-                            g.point);
+      rate = g.homeTurnRate;
+    } else if (g.homeTarget == static_cast<uint8_t>(HomeTarget::Element)) {
+      found = NearestCell(grid, tip, g.homeElement,
+                          static_cast<int>(g.homeRadius), target);
+      rate = g.homeTurnRate;
+    }
+    if (found) {
+      float want = std::atan2(target.y - tip.y, target.x - tip.x);
+      g.heading +=
+          std::clamp(WrapAngle(want - g.heading), -rate * dt, rate * dt);
+    }
+
+    // Lay the path down ahead of the leader, far enough for this tick
+    float needed = lead[i] + g.speed * dt + kLookAhead + 2.0f;
+    Vector2 step{std::cos(g.heading), std::sin(g.heading)};
+    while (static_cast<float>(g.line.size()) < needed) {
+      Vector2 end = g.line.back();
+      g.line.push_back({end.x + step.x, end.y + step.y});
     }
   }
+  std::vector<Guide> kept;
+  for (size_t i = 0; i < m_guides.size(); ++i)
+    if (used[i])
+      kept.push_back(std::move(m_guides[i]));
+  m_guides = std::move(kept);
 
-  for (Particle &p : m_particles)
-    if (guided(p))
-      if (const Group *g = groupOf(p); g && g->found)
-        TurnToward(p, g->point, p.homeTurnRate * dt);
+  // Each particle heads for its own spot a little further along the path,
+  // as far across it as where it started: the figure keeps its shape
+  for (Particle &p : m_particles) {
+    if (!Flying(p) || p.guideId < 0)
+      continue;
+    const Guide *g = FindGuide(p.guideId);
+    if (!g)
+      continue;
+    Vector2 point, dir;
+    PathAt(*g, p.pathS + kLookAhead, point, dir);
+    Vector2 aim{point.x - dir.y * p.pathL - p.pos.x,
+                point.y + dir.x * p.pathL - p.pos.y};
+    float len = std::hypot(aim.x, aim.y);
+    float speed = std::hypot(p.vel.x, p.vel.y);
+    if (len > 1e-4f)
+      p.vel = {aim.x / len * speed, aim.y / len * speed};
+  }
 }
 
 void ParticleSystem::Burst(Particle &p) {
@@ -454,6 +514,7 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
       }
 
       if (p.isProjectile) {
+        p.pathS += stepLength;
         p.remainingDistance -= stepLength;
         if (p.remainingDistance <= 0.0f) {
           if (light) {
@@ -476,6 +537,8 @@ void ParticleSystem::Clear() {
   m_flashes.clear();
   m_visualFlashes.clear();
   m_cursors.clear();
+  m_guides.clear();
+  m_nextGuideId = 0;
 }
 
 void ParticleSystem::Draw() {
