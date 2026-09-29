@@ -54,9 +54,9 @@ namespace {
 const char *KindLabel(const SpellStats &stats) {
   switch (stats.kind) {
   case SpellKind::Flight:
-    return "Wind";
+    return "Wind Underfoot";
   case SpellKind::Gust:
-    return "Gust";
+    return "Wind";
   case SpellKind::Element:
     return ElementName(stats.element);
   default:
@@ -111,10 +111,10 @@ void SpellEditor::DrawStats(const SpellStats &stats) {
   Color c = BalanceColor(stats.imbalance);
   switch (stats.kind) {
   case SpellKind::Flight:
-    ImGui::Text("Wind: carries the caster");
+    ImGui::Text("Wind Underfoot: carries the caster");
     break;
   case SpellKind::Gust:
-    ImGui::Text("Gust: pushes everything in its path");
+    ImGui::Text("Wind: pushes everything in its path");
     break;
   default:
     ImGui::Text("Element: %s", ElementName(stats.element));

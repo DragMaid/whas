@@ -71,8 +71,11 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
     public async Task<List<SpellCard>> MineAsync(long ownerId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
-        var rows = await db.Spells.AsNoTracking().Where(s => s.OwnerId == ownerId)
+        var rows = await db.Spells.Where(s => s.OwnerId == ownerId)
                                .OrderBy(s => s.Id).ToListAsync(ct);
+        foreach (var row in rows)
+            Refresh(row);
+        await db.SaveChangesAsync(ct);
         return rows.Select(ToCard).ToList();
     }
 
@@ -146,13 +149,8 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
                             .Distinct().ToList();
         var spells = await db.Spells.Where(s => s.OwnerId == ownerId && spellIds.Contains(s.Id))
                                     .ToDictionaryAsync(s => s.Id, ct);
-        foreach (var s in spells.Values.Where(s => s.EvaluatorVersion != SpellEvaluator.Version))
-        {
-            var glyphs = JsonSerializer.Deserialize<List<Glyph>>(s.GlyphsJson, Protocol.Json)!;
-            s.StatsJson = JsonSerializer.Serialize(
-                SpellEvaluator.EvaluateQuantized(glyphs, ComponentsOf(s) ?? []), Protocol.Json);
-            s.EvaluatorVersion = SpellEvaluator.Version;
-        }
+        foreach (var s in spells.Values)
+            Refresh(s);
         await db.SaveChangesAsync(ct);
 
         var rounds = new List<SpellCard?[]>();
@@ -168,6 +166,42 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
             rounds.Add(cards);
         }
         return (rounds, null);
+    }
+
+    // Evaluator version that renamed the wind sigils: before it "wind" was
+    // the flight sigil (now "wind_underfoot") and "gust" the push field (now
+    // "wind"). Same as SpellJson::MigrateLegacyIds on the client.
+    const int WindRenameVersion = 5;
+
+    static List<Glyph> MigrateLegacyIds(List<Glyph> glyphs) =>
+        glyphs.Select(g => g.AssetId switch
+        {
+            "wind" => g with { AssetId = "wind_underfoot" },
+            "gust" => g with { AssetId = "wind" },
+            _ => g,
+        }).ToList();
+
+    // Re-evaluate a spell stored under an older evaluator, so every match
+    // plays by the current rules (renaming legacy glyph ids on the way).
+    // The glyph hash is left as it was uploaded.
+    static void Refresh(SpellDefinition s)
+    {
+        if (s.EvaluatorVersion == SpellEvaluator.Version)
+            return;
+        var glyphs = JsonSerializer.Deserialize<List<Glyph>>(s.GlyphsJson, Protocol.Json)!;
+        var components = ComponentsOf(s);
+        if (s.EvaluatorVersion < WindRenameVersion)
+        {
+            glyphs = MigrateLegacyIds(glyphs);
+            components = components?.Select(c => c with { Glyphs = MigrateLegacyIds(c.Glyphs) })
+                                   .ToList();
+            s.GlyphsJson = JsonSerializer.Serialize(glyphs, Protocol.Json);
+            if (components is not null)
+                s.ComponentsJson = JsonSerializer.Serialize(components, Protocol.Json);
+        }
+        s.StatsJson = JsonSerializer.Serialize(
+            SpellEvaluator.EvaluateQuantized(glyphs, components ?? []), Protocol.Json);
+        s.EvaluatorVersion = SpellEvaluator.Version;
     }
 
     static List<Component>? ComponentsOf(SpellDefinition s) =>

@@ -48,9 +48,9 @@ Color SpellThumbnails::Tint(const Spell &spell) {
   for (const PlacedGlyph &g : spell.glyphs) {
     if (g.kind != GlyphKind::Sigil)
       continue;
-    if (g.assetId == "wind")
+    if (g.assetId == "wind_underfoot")
       return {170, 235, 180, 255};
-    if (g.assetId == "gust")
+    if (g.assetId == "wind")
       return {205, 225, 255, 255};
     switch (SpellSystem::SigilElement(g.assetId)) {
     case Element::WATER:

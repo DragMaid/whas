@@ -22,9 +22,9 @@ struct Filter {
   const char *sigil; // nullptr = all
 };
 constexpr Filter kFilters[] = {
-    {"All", nullptr},    {"Fire", "fire"}, {"Water", "water"},
-    {"Earth", "earth"},  {"Ice", "ice"},   {"Sand", "sand"},
-    {"Rock", "rock"},    {"Wind", "wind"}, {"Gust", "gust"},
+    {"All", nullptr},     {"Fire", "fire"},   {"Water", "water"},
+    {"Earth", "earth"},   {"Light", "light"}, {"Wind", "wind"},
+    {"Underfoot", "wind_underfoot"},
 };
 
 // The sigil that picks what a plain spell (or a component) does
@@ -197,8 +197,8 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
   const char *kind = !stats.valid                         ? "invalid"
                      : stats.kind == SpellKind::Compound
                          ? TextFormat("layered x%d", (int)stats.parts.size())
-                     : stats.kind == SpellKind::Flight    ? "wind"
-                     : stats.kind == SpellKind::Gust      ? "gust"
+                     : stats.kind == SpellKind::Flight    ? "underfoot"
+                     : stats.kind == SpellKind::Gust      ? "wind"
                                                           : SigilOf(spell.glyphs);
   int ticks = stats.valid ? TurnController::CastTicks(stats) : 0;
   dl->AddText(ImGui::GetFont(), 12.0f, {p0.x + 8, t0.y + thumb + 20},

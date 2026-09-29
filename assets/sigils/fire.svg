@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-  <path style="stroke:#000000; fill:none;" d="M32 56C18 54 14 42 20 32C24 38 26 38 28 34C24 24 30 14 36 8C36 18 44 22 46 32C50 42 44 54 32 56"/>
-  <path style="stroke:#000000; fill:none;" d="M32 50C26 48 26 42 30 38C32 42 36 42 36 46C36 48 34 50 32 50"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+  <path style="stroke:#000000; fill:none;" d="M50 24 L26 70 L74 70 L50 24"/>
+  <path style="stroke:#000000; fill:none;" d="M50 70 L50 84"/>
+  <path style="stroke:#000000; fill:none;" d="M22 38 L36 46"/>
+  <path style="stroke:#000000; fill:none;" d="M78 38 L64 46"/>
 </svg>

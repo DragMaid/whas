@@ -85,4 +85,18 @@ void Read(const json &j, Spell &spell) {
                          : std::vector<SpellComponent>{};
 }
 
+void MigrateLegacyIds(Spell &spell) {
+  auto migrate = [](std::vector<PlacedGlyph> &glyphs) {
+    for (PlacedGlyph &g : glyphs) {
+      if (g.assetId == "wind")
+        g.assetId = "wind_underfoot";
+      else if (g.assetId == "gust")
+        g.assetId = "wind";
+    }
+  };
+  migrate(spell.glyphs);
+  for (SpellComponent &c : spell.components)
+    migrate(c.glyphs);
+}
+
 } // namespace SpellJson

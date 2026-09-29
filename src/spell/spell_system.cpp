@@ -83,9 +83,9 @@ float Dot(Vector2 a, Vector2 b) { return a.x * b.x + a.y * b.y; }
 } // namespace
 
 SpellKind SpellSystem::SigilKind(const std::string &assetId) {
-  if (assetId == "wind")
+  if (assetId == "wind_underfoot")
     return SpellKind::Flight;
-  if (assetId == "gust")
+  if (assetId == "wind")
     return SpellKind::Gust;
   if (SigilElement(assetId) != Element::AIR)
     return SpellKind::Element;

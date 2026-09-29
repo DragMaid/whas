@@ -20,4 +20,10 @@ std::vector<SpellComponent> ParseComponents(const nlohmann::json &j);
 void Write(nlohmann::json &j, const Spell &spell);
 void Read(const nlohmann::json &j, Spell &spell);
 
+// Spell files carry "format": FORMAT. Format 1 files predate the wind
+// renames: their "wind" (flight) is now "wind_underfoot" and their "gust"
+// is now "wind". The server keeps its own copy in SpellService.
+constexpr int FORMAT = 2;
+void MigrateLegacyIds(Spell &spell);
+
 } // namespace SpellJson

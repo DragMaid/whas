@@ -46,7 +46,7 @@ std::vector<uint64_t> Run(int threads, uint64_t seed, int frames) {
     if (f == 60)
       sim.CastSpell(MakeSpell("rock", 1.5f, 3), {300, 100}, {-1, 0.2f});
     if (f == 90)
-      sim.CastSpell(MakeSpell("gust", 1.0f, 2), {100, 140}, {1, -0.3f});
+      sim.CastSpell(MakeSpell("wind", 1.0f, 2), {100, 140}, {1, -0.3f});
     if (f == 120)
       sim.CastSpell(MakeSpell("fire", 1.0f, 1), {200, 120}, {0, 1});
     sim.Update(DT);

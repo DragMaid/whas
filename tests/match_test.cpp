@@ -108,7 +108,7 @@ TEST_CASE("integer cast time matches the old float formula", "[spell]") {
 }
 
 TEST_CASE("quantized stats survive a round trip", "[spell]") {
-  for (const char *sigil : {"water", "fire", "rock", "gust", "wind", "ice"}) {
+  for (const char *sigil : {"water", "fire", "rock", "wind", "wind_underfoot", "ice"}) {
     for (int signs = 0; signs < 5; ++signs) {
       SpellQuant::Stats q =
           SpellQuant::Quantize(SpellSystem::Evaluate(MakeSpell(sigil, 1.3f, signs)));
@@ -121,8 +121,8 @@ TEST_CASE("plans survive the wire unchanged", "[codec]") {
   Library lib;
   lib.spells[1] = MakeSpell("fire", 1.0f, 2);
   lib.spells[2] = MakeSpell("water", 1.0f, 1);
-  lib.spells[3] = MakeSpell("gust", 1.0f, 2);
-  lib.spells[4] = MakeSpell("wind", 0.8f, 1);
+  lib.spells[3] = MakeSpell("wind", 1.0f, 2);
+  lib.spells[4] = MakeSpell("wind_underfoot", 0.8f, 1);
 
   TurnPlan plan = MakePlan(lib, 1, 0);
   std::string wire = PlanCodec::Encode(plan).dump();
@@ -153,7 +153,7 @@ TEST_CASE("two lockstep peers agree after every turn", "[lockstep]") {
   Library lib;
   lib.spells[1] = MakeSpell("fire", 1.0f, 2);
   lib.spells[2] = MakeSpell("water", 1.0f, 1);
-  lib.spells[3] = MakeSpell("gust", 1.0f, 2);
+  lib.spells[3] = MakeSpell("wind", 1.0f, 2);
   lib.spells[4] = MakeSpell("rock", 1.2f, 3);
 
   constexpr uint64_t seed = 0xC0FFEE;
@@ -208,7 +208,7 @@ TEST_CASE("a snapshot brings a desynced peer back into lockstep", "[snapshot]") 
   Library lib;
   lib.spells[1] = MakeSpell("fire", 1.0f, 2);
   lib.spells[2] = MakeSpell("water", 1.0f, 1);
-  lib.spells[3] = MakeSpell("gust", 1.0f, 2);
+  lib.spells[3] = MakeSpell("wind", 1.0f, 2);
   lib.spells[4] = MakeSpell("rock", 1.2f, 3);
 
   Simulation simA, simB;

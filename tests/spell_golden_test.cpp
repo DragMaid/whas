@@ -22,7 +22,7 @@ Spell FromJson(const nlohmann::json &j) {
 
 std::vector<Spell> Cases() {
   const char *sigils[] = {"water", "fire", "earth", "ice", "sand",
-                          "rock",  "wind", "gust",  "bogus"};
+                          "rock",  "wind_underfoot", "wind",  "bogus"};
   const float sigilScales[] = {0.1f, 0.5f, 1.0f, 1.3f, 2.2f, 3.0f};
   const float rotations[] = {-180, -135, -90, -45, 0, 45, 90, 135, 180};
   std::vector<Spell> out;
@@ -55,7 +55,7 @@ std::vector<Spell> Cases() {
   const char *modifiers[] = {"convergence", "crushing",      "repetition",
                              "cooling",     "strengthening", "collection",
                              "expansion",   "orb"};
-  const char *modSigils[] = {"water", "fire", "earth", "rock", "gust", "wind"};
+  const char *modSigils[] = {"water", "fire", "earth", "rock", "wind", "wind_underfoot"};
   const float modScales[] = {0.3f, 1.0f, 2.5f};
   for (const char *mod : modifiers) {
     for (const char *sigil : modSigils) {
@@ -93,7 +93,7 @@ std::vector<Spell> Cases() {
   }
 
   // Dragon: a shape sigil that needs an element sigil beside it
-  for (const char *sigil : {"water", "fire", "earth", "gust", "wind"}) {
+  for (const char *sigil : {"water", "fire", "earth", "wind", "wind_underfoot"}) {
     for (float scale : {0.5f, 1.5f}) {
       Spell s;
       s.name = "case" + std::to_string(n++);
@@ -116,7 +116,7 @@ std::vector<Spell> Cases() {
 
   // Layered spells: 1-6 embedded spells (6 is too many), varied scales and
   // turns, with and without outer ring signs
-  const char *partSigils[] = {"water", "fire", "earth", "gust", "wind", "ice"};
+  const char *partSigils[] = {"water", "fire", "earth", "wind", "wind_underfoot", "ice"};
   for (int parts = 1; parts <= 6; ++parts) {
     for (int ring = 0; ring < 3; ++ring) {
       Spell s;
@@ -191,4 +191,17 @@ TEST_CASE("spells evaluate to the golden quantized stats", "[spell]") {
     REQUIRE(SpellQuant::Quantize(SpellSystem::Evaluate(spell)) ==
             c.at("stats").get<SpellQuant::Stats>());
   }
+}
+
+TEST_CASE("format 1 spells rename the wind sigils", "[spell]") {
+  Spell s;
+  s.glyphs = {{"wind", GlyphKind::Sigil, {0, 0}, 1, 0},
+              {"column", GlyphKind::Sign, {0, -120}, 1, 0}};
+  SpellComponent c;
+  c.glyphs = {{"gust", GlyphKind::Sigil, {0, 0}, 1, 0}};
+  s.components.push_back(c);
+  SpellJson::MigrateLegacyIds(s);
+  CHECK(s.glyphs[0].assetId == "wind_underfoot");
+  CHECK(s.glyphs[1].assetId == "column");
+  CHECK(s.components[0].glyphs[0].assetId == "wind");
 }

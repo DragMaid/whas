@@ -278,7 +278,7 @@ TEST_CASE("the dragon sigil shapes a spell but needs an element", "[spell]") {
 
 TEST_CASE("a layered spell fires every part and takes longer to cast",
           "[spell]") {
-  Spell water = Make("water"), fire = Make("fire"), wind = Make("wind");
+  Spell water = Make("water"), fire = Make("fire"), wind = Make("wind_underfoot");
   Spell layered;
   layered.name = "layered";
   layered.components = {Part(water, 0.4f), Part(fire, 0.4f, 45.0f),

@@ -13,7 +13,7 @@ public static class SpellValidator
     const float ComponentScaleMin = 0.2f, ComponentScaleMax = 0.5f;
 
     static readonly HashSet<string> KnownSigils =
-        ["water", "fire", "earth", "ice", "sand", "rock", "wind", "gust", "dragon"];
+        ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "dragon"];
 
     static readonly HashSet<string> KnownSigns =
         ["column", "convergence", "crushing", "repetition", "cooling", "strengthening",

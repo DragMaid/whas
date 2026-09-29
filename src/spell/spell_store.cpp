@@ -44,6 +44,8 @@ std::vector<Spell> SpellStore::LoadAll() const {
       Spell spell;
       spell.name = j.value("name", entry.path().stem().string());
       SpellJson::Read(j, spell);
+      if (j.value("format", 1) < SpellJson::FORMAT)
+        SpellJson::MigrateLegacyIds(spell);
 
       if (!spell.name.empty())
         spells.push_back(std::move(spell));
@@ -88,6 +90,7 @@ bool SpellStore::Save(const Spell &spell, std::string &errorOut) const {
 
   json j;
   j["name"] = spell.name;
+  j["format"] = SpellJson::FORMAT;
   SpellJson::Write(j, spell);
 
   std::filesystem::path path =

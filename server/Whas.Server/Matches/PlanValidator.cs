@@ -73,7 +73,7 @@ public static class PlanValidator
                             return Result.Fail("aim is not a unit vector");
                         // Casts in one step were queued in the same pause
                         if (stats.HasFlight && ++flights > 1)
-                            return Result.Fail("more than one wind cast per pause");
+                            return Result.Fail("more than one wind underfoot cast per pause");
                         owed += SpellEvaluator.CastTicks(stats);
                         casts.Add(id);
                     }

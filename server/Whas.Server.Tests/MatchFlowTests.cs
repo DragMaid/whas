@@ -29,7 +29,7 @@ public class MatchFlowTests(ServerFixture server)
 
     static readonly object[] WindGlyphs =
     [
-        new { assetId = "wind", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
+        new { assetId = "wind_underfoot", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
         new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
     ];
 

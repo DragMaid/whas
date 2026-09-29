@@ -8,7 +8,7 @@ namespace Whas.Server.Spells;
 public static class SpellEvaluator
 {
     // Bump together with SpellQuant::EVALUATOR_VERSION
-    public const int Version = 4;
+    public const int Version = 5;
 
     public const int StatScale = 1024;
     public const int AngleScale = 65536;
@@ -63,8 +63,8 @@ public static class SpellEvaluator
 
     public static SpellKind SigilKind(string assetId) => assetId switch
     {
-        "wind" => SpellKind.Flight,
-        "gust" => SpellKind.Gust,
+        "wind_underfoot" => SpellKind.Flight,
+        "wind" => SpellKind.Gust,
         _ => SigilElement(assetId) != Element.Air ? SpellKind.Element
                                                   : SpellKind.None,
     };
