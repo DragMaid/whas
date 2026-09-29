@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr uint32_t MAGIC = 0x344E5357; // "WSN4"
+constexpr uint32_t MAGIC = 0x354E5357; // "WSN5"
 constexpr uint16_t MAX_RUN = 0xFFFF;
 
 // Cells are stored field by field ("columns"), each column run-length
@@ -171,6 +171,7 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(p.guideId);
     out.Put(p.pathS);
     out.Put(p.pathL);
+    out.Put(p.castId);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -188,8 +189,10 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(e.partRows);
     out.Put(e.bonusParticles);
     out.Put(e.guideId);
+    out.Put(e.castId);
   }
 
+  out.Put(m_particles.NextCastId());
   out.Put(m_particles.NextGuideId());
   out.Put(static_cast<uint32_t>(m_particles.Guides().size()));
   for (const Guide &g : m_particles.Guides()) {
@@ -285,6 +288,7 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.guideId = in.Get<int>();
       p.pathS = in.Get<float>();
       p.pathL = in.Get<float>();
+      p.castId = in.Get<int>();
     }
 
     uint32_t effects = in.Get<uint32_t>();
@@ -305,8 +309,10 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       e.partRows = in.Get<int>();
       e.bonusParticles = in.Get<int>();
       e.guideId = in.Get<int>();
+      e.castId = in.Get<int>();
     }
 
+    int nextCastId = in.Get<int>();
     int nextGuideId = in.Get<int>();
     uint32_t guides = in.Get<uint32_t>();
     if (guides > 4096)
@@ -342,6 +348,7 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
     m_activeSpellEffects = std::move(newEffects);
     m_particles.Guides() = std::move(newGuides);
     m_particles.NextGuideId() = nextGuideId;
+    m_particles.NextCastId() = nextCastId;
     m_frameCounter = frame;
     m_seed = seed;
     m_rng = DetRng::FromState(rngState);

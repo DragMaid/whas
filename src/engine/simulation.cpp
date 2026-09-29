@@ -271,6 +271,7 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   effect.origin = origin;
   effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
   effect.owner = owner;
+  effect.castId = m_particles.NewCastId();
   // Sights set and guidance steer the whole figure along one path
   if (effect.stats.kind == SpellKind::Element &&
       (stats.steerTime > 0.0f || stats.homeTarget != HomeTarget::None))

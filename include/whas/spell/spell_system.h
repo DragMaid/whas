@@ -98,6 +98,7 @@ struct SpellEffect {
   int partRows = 0;           // rows emitted by the current part
   int bonusParticles = 0;     // drawn in by collection when cast
   int guideId = -1; // steered spells: the path its particles follow
+  int castId = -1;  // on its particles, so they don't collide with each other
 };
 
 namespace SpellSystem {

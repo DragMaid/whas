@@ -339,7 +339,7 @@ TEST_CASE("cooling fire makes it cooler, then too cold to ignite",
   REQUIRE(restored.element == Element::WATER);
 }
 
-TEST_CASE("an orb is a round ball above the caster, bigger when enlarged",
+TEST_CASE("an orb is a round ball on the aim line, bigger when enlarged",
           "[spell]") {
   auto ball = [](std::vector<PlacedGlyph> signs) {
     Simulation sim;
@@ -351,7 +351,9 @@ TEST_CASE("an orb is a round ball above the caster, bigger when enlarged",
       minX = std::min(minX, p.pos.x), maxX = std::max(maxX, p.pos.x);
       minY = std::min(minY, p.pos.y), maxY = std::max(maxY, p.pos.y);
     });
-    REQUIRE(maxY < 90.0f - 4.0f); // above the caster
+    // Centred on the line it's aimed along, just ahead of the caster
+    REQUIRE(std::abs((minY + maxY) * 0.5f - 90.0f) <= 1.0f);
+    REQUIRE(minX > 100.0f);
     REQUIRE(std::abs((maxX - minX) - (maxY - minY)) <= 2.0f); // round
     return maxY - minY;
   };
@@ -754,4 +756,209 @@ TEST_CASE("a guided dragon keeps its body while it curves", "[spell]") {
     }
   }
   REQUIRE(hit); // it curved up onto the target
+}
+
+namespace {
+
+int Flying(Simulation &sim, Element e) {
+  int n = 0;
+  sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+    n += p.element == e && p.isProjectile && p.remainingDistance > 0.0f;
+  });
+  return n;
+}
+
+int Loose(Simulation &sim, Element e) {
+  int n = 0;
+  sim.GetParticleSystem().ForEachActive(
+      [&](Particle &p) { n += p.element == e && !p.isProjectile; });
+  return n;
+}
+
+} // namespace
+
+TEST_CASE("water meets fire in the air: the fire goes out, the water flies on",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(31);
+  sim.CastSpell(SpellQuant::Canonical(Make("water")), {80, 60}, {1, 0}, 1);
+  sim.CastSpell(SpellQuant::Canonical(Make("fire")), {180, 60}, {-1, 0}, 2);
+  // Each flies ~1.2 cells a tick: they meet halfway after ~45 ticks. Look
+  // just after the fire is gone, while the water is still in range.
+  int steam = 0;
+  for (int i = 0; i < 80 && (steam <= 5 || Flying(sim, Element::FIRE) > 0);
+       ++i) {
+    sim.Update(DT);
+    steam = std::max(steam, Count(sim, Element::STEAM) +
+                                Loose(sim, Element::STEAM));
+  }
+  REQUIRE(steam > 5);
+  REQUIRE(Flying(sim, Element::FIRE) == 0);
+  REQUIRE(Flying(sim, Element::WATER) > 5); // still on its way
+}
+
+TEST_CASE("earth ploughs through water and splashes it aside", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(37);
+  Floor(sim);
+  // A column of water across the line of fire (the bolt arrives before it
+  // has spread far)
+  Fill(sim, 122, GRID_H - 30, 138, GRID_H - 5, Element::WATER);
+  int pool = Count(sim, Element::WATER);
+  // Close enough that the pool is well within the bolt's range
+  sim.CastSpell(SpellQuant::Canonical(Make("earth")), {100, GRID_H - 20.0f},
+                {1, 0.0f}, 1);
+  float before = 0.0f;
+  bool splashed = false, through = false;
+  for (int i = 0; i < 90; ++i) {
+    sim.Update(DT);
+    splashed = splashed || Loose(sim, Element::WATER) > 3;
+    sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+      if (p.element != Element::EARTH || !p.isProjectile)
+        return;
+      float speed = std::hypot(p.vel.x, p.vel.y);
+      if (p.pos.x < 118)
+        before = std::max(before, speed);
+      if (p.pos.x > 142 && speed < before && speed > before * 0.4f)
+        through = true; // past the pool, slower but still flying
+    });
+  }
+  REQUIRE(splashed);
+  REQUIRE(through);
+  REQUIRE(Count(sim, Element::WATER) < pool);
+}
+
+TEST_CASE("a water bolt puts out the fire it flies through", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(41);
+  Fill(sim, 120, 50, 140, 70, Element::FIRE);
+  // Fire along the bolt's lane (the rest keeps burning and spreading)
+  auto lane = [&] {
+    int n = 0;
+    for (int y = 58; y <= 62; ++y)
+      for (int x = 120; x <= 140; ++x)
+        n += sim.GetCell(x, y).element == Element::FIRE;
+    return n;
+  };
+  int before = lane();
+  sim.CastSpell(SpellQuant::Canonical(Make("water")), {105, 60}, {1, 0}, 1);
+  Step(sim, 35); // long enough to cross it
+  REQUIRE(lane() < before / 3);
+  REQUIRE(Count(sim, Element::STEAM) > 10); // it went up in steam
+}
+
+TEST_CASE("a figure formed in the ground leaves out what overlaps it",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(43);
+  Floor(sim);
+  // Aimed along the floor from just above it: the lower half of the ball
+  // would form inside the ground
+  Spell orb = Make("sand", {Sign("orb", 1.0f), Sign("expansion", 1.5f)});
+  SpellStats stats = SpellQuant::Canonical(orb);
+  sim.CastSpell(stats, {100, GRID_H - 5.0f}, {1, 0}, 1);
+  Step(sim, 1);
+  int inGround = 0, flying = 0;
+  sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+    if (!p.isProjectile)
+      return;
+    flying++;
+    inGround += p.pos.y >= GRID_H - 4;
+  });
+  REQUIRE(flying > 0);
+  REQUIRE(flying < stats.particleCount);
+  REQUIRE(inGround == 0);
+}
+
+namespace {
+
+// Fire and burning cells
+int Burning(const Simulation &sim) {
+  int n = 0;
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x) {
+      const Cell &c = sim.GetCell(x, y);
+      n += c.element == Element::FIRE || (c.flags & CELL_BURNING);
+    }
+  return n;
+}
+
+Spell GuidedAt(const char *sigil, const char *target) {
+  return Make(sigil, {{"guidance", GlyphKind::Sigil, {0, 120}, 1.0f, 0},
+                      {target, GlyphKind::Sigil, {-100, 60}, 0.5f, 0}});
+}
+
+} // namespace
+
+TEST_CASE("guided water puts out the fire it was sent after", "[spell]") {
+  // A burning pile off to the side of where the water is aimed
+  auto run = [](bool cast) {
+    Simulation sim;
+    sim.SetSeed(47);
+    Floor(sim);
+    Fill(sim, 150, GRID_H - 14, 160, GRID_H - 5, Element::WOOD);
+    Fill(sim, 150, GRID_H - 24, 160, GRID_H - 15, Element::FIRE);
+    if (cast)
+      sim.CastSpell(SpellQuant::Canonical(GuidedAt("water", "fire")),
+                    {110, GRID_H - 40.0f}, {1, -0.5f}, 1);
+    Step(sim, 90);
+    return Burning(sim);
+  };
+  // Compared with leaving it: what's left burning is the wood the water
+  // never reached catching again
+  int left = run(false), doused = run(true);
+  REQUIRE(doused < left * 3 / 4);
+}
+
+TEST_CASE("guided water goes after an enemy's fireball first", "[spell]") {
+  // The enemy's fireball crosses high up; a fire burns on the ground nearer
+  // the water. Aimed straight ahead, the water turns to meet the fireball.
+  auto fireballLeft = [](const Spell &water) {
+    Simulation sim;
+    sim.SetSeed(53);
+    Floor(sim);
+    Fill(sim, 120, GRID_H - 10, 124, GRID_H - 5, Element::FIRE);
+    sim.CastSpell(SpellQuant::Canonical(Make("fire")), {180, 60}, {-1, 0}, 2);
+    sim.CastSpell(SpellQuant::Canonical(water), {100, 80}, {1, 0}, 1);
+    // Looked at before the fireball's own range runs out (~48 ticks)
+    int flying = 0;
+    for (int i = 0; i < 44; ++i) {
+      sim.Update(DT);
+      flying = 0;
+      sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+        flying += p.element == Element::FIRE && p.isProjectile && p.owner == 2;
+      });
+    }
+    return flying;
+  };
+  int unguided = fireballLeft(Make("water"));
+  int guided = fireballLeft(GuidedAt("water", "fire"));
+  REQUIRE(unguided > 10);
+  REQUIRE(guided < unguided / 2);
+}
+
+
+TEST_CASE("a small water spell is taken into a big water ball", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(59);
+  // A big ball flying right, and a thin stream of the enemy's crossing it
+  Spell ball = Make("water", {Sign("orb", 1.0f), Sign("expansion", 1.5f)});
+  Spell thin = Make("water");
+  thin.glyphs[0].scale = 0.1f;
+  sim.CastSpell(SpellQuant::Canonical(ball), {60, 90}, {1, 0}, 1);
+  sim.CastSpell(SpellQuant::Canonical(thin), {110, 40}, {0, 1}, 2);
+  auto flying = [&](int owner) {
+    int n = 0;
+    sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+      n += p.element == Element::WATER && p.isProjectile && p.owner == owner;
+    });
+    return n;
+  };
+  Step(sim, 2);
+  int before = flying(1);
+  int enemy = SpellQuant::Canonical(thin).particleCount;
+  REQUIRE(before > enemy * 3);
+  Step(sim, 45);
+  // The ball is whole (drops it took in fly with it), not chipped away
+  REQUIRE(flying(1) >= before);
 }

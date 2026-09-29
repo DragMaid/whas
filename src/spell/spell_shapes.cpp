@@ -29,11 +29,10 @@ std::vector<ShapeDef> BuildShapes() {
   shapes.push_back({SpellShape::Stream, "stream", 0.0f, 1.0f, {BeamRows()}});
 
   {
-    // A ball gathered above the caster's head, then thrown
+    // A ball gathered just ahead of the caster, then thrown
     ShapePart ball;
     ball.kind = Kind::Burst;
     ball.disk = true;
-    ball.anchor = ShapePart::Anchor::Above;
     shapes.push_back({SpellShape::Orb, "orb", 0.0f, 1.0f, {ball, BeamRows()}});
   }
 

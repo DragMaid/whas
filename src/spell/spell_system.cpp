@@ -71,7 +71,6 @@ struct SpellTuning {
   float collectRadiusPerSign = 10.0f;
   float collectCellsPerSign = 40.0f;
   int maxCollect = 150;
-  float aboveHeadGap = 4.0f; // cells from the caster's centre to an orb
   // Light: much faster than matter, few motes, each bursting into a flash
   // that blinds anyone (caster included) within its radius
   float lightSpeedScale = 2.5f;
@@ -689,12 +688,30 @@ float FigureExtraRange(const SpellEffect &effect) {
   return rows > 0 ? static_cast<float>(std::max(0, rows - effect.rows)) : 0.0f;
 }
 
+// Whether a spell particle would form inside the ground (or off the world):
+// that part of the figure is left out rather than stuck in the terrain
+bool InsideGround(const ElementContext &ctx, Vector2 pos) {
+  int x = static_cast<int>(std::floor(pos.x));
+  int y = static_cast<int>(std::floor(pos.y));
+  if (!ctx.grid.InBounds(x, y))
+    return true;
+  const Cell &c = ctx.grid.Get(x, y);
+  const auto &props = ctx.config.elements[static_cast<size_t>(c.element)];
+  bool liquid = props.mobile && !props.solid;
+  return c.element != Element::AIR && !props.passable && !liquid;
+}
+
 void SpawnSpellParticle(SpellEffect &effect, ElementContext &ctx, Vector2 pos,
                         Vector2 vel) {
   const SpellStats &s = effect.stats;
   float range = s.range + FigureExtraRange(effect);
+  if (InsideGround(ctx, pos)) {
+    effect.emitted++; // it still counts: the figure keeps its layout
+    return;
+  }
   if (Particle *p = ctx.particles.Spawn(pos, vel, s.element, range, s.power,
                                         true, effect.owner)) {
+    p->castId = effect.castId;
     p->temperature = s.temperature;
     p->temperatureDelta = s.temperatureDelta;
     p->hardnessScale = s.hardnessScale;
@@ -741,12 +758,9 @@ void EmitLanes(SpellEffect &effect, ElementContext &ctx, float width,
   EmitRow(effect, ctx, effect.origin, offsets, 1.0f, shift);
 }
 
-// Where a burst forms: just ahead of the caster, or over their head
-Vector2 BurstCenter(const SpellEffect &effect, const ShapePart &part,
-                    float reach) {
-  if (part.anchor == ShapePart::Anchor::Above)
-    return {effect.origin.x,
-            effect.origin.y - reach - kTuning.aboveHeadGap};
+// Where a burst forms: centred on the aim line just ahead of the caster,
+// so it flies exactly where it was aimed
+Vector2 BurstCenter(const SpellEffect &effect, float reach) {
   return {effect.origin.x + effect.direction.x * (reach + 1),
           effect.origin.y + effect.direction.y * (reach + 1)};
 }
@@ -773,7 +787,7 @@ void EmitBurst(SpellEffect &effect, ElementContext &ctx,
       return a.first * a.first + a.second * a.second <
              b.first * b.first + b.second * b.second;
     });
-    Vector2 center = BurstCenter(effect, part, static_cast<float>(radius));
+    Vector2 center = BurstCenter(effect, static_cast<float>(radius));
     Vector2 vel{effect.direction.x * s.speed, effect.direction.y * s.speed};
     for (int i = 0; i < left; ++i)
       SpawnSpellParticle(effect, ctx,
@@ -785,11 +799,9 @@ void EmitBurst(SpellEffect &effect, ElementContext &ctx,
   // Art: the front row furthest along the aim
   float scale = SpellShapes::PartScale(part, s.diameter);
   int rows = SpellShapes::ScaledRows(part, scale);
-  Vector2 base = part.anchor == ShapePart::Anchor::Above
-                     ? BurstCenter(effect, part, 0.0f)
-                     : effect.origin;
   for (int row = 0; row < rows; ++row)
-    EmitRow(effect, ctx, base, SpellShapes::RowOffsets(part, row, scale),
+    EmitRow(effect, ctx, effect.origin,
+            SpellShapes::RowOffsets(part, row, scale),
             1.0f, 0.0f, (rows - 1 - row) * part.rowSpacing);
 }
 

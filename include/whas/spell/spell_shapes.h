@@ -43,7 +43,8 @@ struct ShapeTrigger {
 // One stage of a shape. The emitter runs the parts in order.
 struct ShapePart {
   enum class Kind : uint8_t {
-    Burst, // the whole pattern at once (one tick), laid out ahead
+    Burst, // the whole pattern at once (one tick), laid out ahead of the
+           // caster on the aim line, so it flies where it's aimed
     Rows,  // `length` rows streamed out behind, one cell apart
   };
   Kind kind = Kind::Rows;
@@ -59,10 +60,6 @@ struct ShapePart {
 
   bool beamLanes = false; // Rows: a row across the whole beam, not the art
   bool disk = false;      // Burst: a round ball of every particle left
-
-  // Where a Burst forms: just ahead of the caster, or above their head
-  enum class Anchor : uint8_t { Ahead, Above };
-  Anchor anchor = Anchor::Ahead;
 
   // The art grows with the beam (and so with the sigil and expansion
   // signs): scale = diameter / scaleDiameter, clamped to [minScale,

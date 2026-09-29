@@ -59,6 +59,10 @@ struct Particle {
     int guideId = -1;
     float pathS = 0.0f;
     float pathL = 0.0f;
+    // Which cast a spell particle belongs to (-1 = not a spell's). Flying
+    // spell particles of different casts collide; one cast's never do, so a
+    // figure doesn't knock itself apart.
+    int castId = -1;
 };
 
 // Where a caster's cursor is (cells), for sights set
@@ -128,7 +132,12 @@ public:
     // Put a freshly spawned particle on its guide's path, where it stands
     void Follow(Particle &p, int guideId);
 
+    // A new id for a cast's particles (see Particle::castId)
+    int NewCastId() { return m_nextCastId++; }
+
     // For snapshots
+    int &NextCastId() { return m_nextCastId; }
+    int NextCastId() const { return m_nextCastId; }
     std::vector<Guide> &Guides() { return m_guides; }
     const std::vector<Guide> &Guides() const { return m_guides; }
     int &NextGuideId() { return m_nextGuideId; }
@@ -142,10 +151,15 @@ private:
     // them; drop guides nothing follows any more
     void Steer(const struct Grid &grid, float dt);
     Guide *FindGuide(int id);
+    // Spell particles of different casts that meet this tick
+    void Collide(struct ElementContext &ctx, float dt);
+    // A drop taken into a bigger water spell: it flies on as part of it
+    void Absorb(Particle &drop, const Particle &into);
 
     std::vector<Particle> m_particles;
     std::vector<Guide> m_guides;
     int m_nextGuideId = 0;
+    int m_nextCastId = 0;
     std::vector<Hurtbox> m_hurtboxes;
     std::vector<Cursor> m_cursors;
     std::vector<ParticleHit> m_hits;
