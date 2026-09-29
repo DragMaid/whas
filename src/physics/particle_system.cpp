@@ -45,6 +45,8 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.homeElement = Element::AIR;
       p.homeTurnRate = 0.0f;
       p.homeRadius = 0.0f;
+      p.steerTime = 0.0f;
+      p.steerRate = 0.0f;
       return &p;
     }
   }
@@ -276,7 +278,8 @@ bool NearestCell(const Grid &grid, Vector2 from, Element element, int radius,
 } // namespace
 
 void ParticleSystem::Steer(const Grid &grid, float dt) {
-  // Guided particles of one cast share a target: found once a tick from
+  // Sights set steers toward the caster's cursor. Guided particles of one
+  // cast share a target: found once a tick from
   // where the group is, in pool order so every client picks the same
   struct Group {
     int owner;
@@ -296,9 +299,23 @@ void ParticleSystem::Steer(const Grid &grid, float dt) {
         return &g;
     return nullptr;
   };
-  auto guided = [](const Particle &p) {
-    return p.active && p.homeTarget != 0 && p.isProjectile &&
-           p.remainingDistance > 0.0f;
+  auto flying = [](const Particle &p) {
+    return p.active && p.isProjectile && p.remainingDistance > 0.0f;
+  };
+
+  // Sights set first: while it lasts the cursor is the target
+  for (Particle &p : m_particles) {
+    if (!flying(p) || p.steerTime <= 0.0f)
+      continue;
+    p.steerTime = std::max(0.0f, p.steerTime - dt);
+    for (const Cursor &c : m_cursors)
+      if (c.owner == p.owner)
+        TurnToward(p, c.pos, p.steerRate * dt);
+  }
+
+  // Then guidance, for particles no longer following the cursor
+  auto guided = [&flying](const Particle &p) {
+    return flying(p) && p.homeTarget != 0 && p.steerTime <= 0.0f;
   };
 
   for (const Particle &p : m_particles) {
@@ -458,6 +475,7 @@ void ParticleSystem::Clear() {
   m_hits.clear();
   m_flashes.clear();
   m_visualFlashes.clear();
+  m_cursors.clear();
 }
 
 void ParticleSystem::Draw() {

@@ -31,6 +31,7 @@ bool Stats::operator==(const Stats &o) const {
          flashRadius == o.flashRadius && flashTime == o.flashTime &&
          homeTarget == o.homeTarget && homeElement == o.homeElement &&
          homeTurnRate == o.homeTurnRate && homeRadius == o.homeRadius &&
+         steerTime == o.steerTime && steerRate == o.steerRate &&
          parts == o.parts;
 }
 
@@ -65,6 +66,8 @@ Stats Quantize(const SpellStats &s) {
   q.homeElement = static_cast<uint8_t>(s.homeElement);
   q.homeTurnRate = Q(s.homeTurnRate, STAT_SCALE);
   q.homeRadius = Q(s.homeRadius, STAT_SCALE);
+  q.steerTime = Q(s.steerTime, STAT_SCALE);
+  q.steerRate = Q(s.steerRate, STAT_SCALE);
   for (const SpellStats &part : s.parts)
     q.parts.push_back(Quantize(part));
   return q;
@@ -101,6 +104,8 @@ SpellStats Dequantize(const Stats &q) {
   s.homeElement = static_cast<Element>(q.homeElement);
   s.homeTurnRate = D(q.homeTurnRate, STAT_SCALE);
   s.homeRadius = D(q.homeRadius, STAT_SCALE);
+  s.steerTime = D(q.steerTime, STAT_SCALE);
+  s.steerRate = D(q.steerRate, STAT_SCALE);
   for (const Stats &part : q.parts)
     s.parts.push_back(Dequantize(part));
   // Only used for the editor's balance display; the direction comes from
@@ -165,6 +170,10 @@ void to_json(nlohmann::json &j, const Stats &s) {
     j["homeTurnRate"] = s.homeTurnRate;
     j["homeRadius"] = s.homeRadius;
   }
+  if (s.steerTime != 0) {
+    j["steerTime"] = s.steerTime;
+    j["steerRate"] = s.steerRate;
+  }
   if (!s.parts.empty()) {
     j["parts"] = nlohmann::json::array();
     for (const Stats &part : s.parts) {
@@ -205,6 +214,8 @@ void from_json(const nlohmann::json &j, Stats &s) {
   s.homeElement = j.value("homeElement", uint8_t{0});
   s.homeTurnRate = j.value("homeTurnRate", int32_t{0});
   s.homeRadius = j.value("homeRadius", int32_t{0});
+  s.steerTime = j.value("steerTime", int32_t{0});
+  s.steerRate = j.value("steerRate", int32_t{0});
   s.parts.clear();
   if (auto it = j.find("parts"); it != j.end())
     for (const auto &pj : *it) {

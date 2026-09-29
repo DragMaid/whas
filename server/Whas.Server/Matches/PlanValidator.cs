@@ -50,6 +50,12 @@ public static class PlanValidator
                     return Result.Fail("bad run");
                 if (steps + n > TurnTicks)
                     return Result.Fail("plan is longer than a turn");
+                // The cursor sights set spells follow: two int16s
+                if (run.TryGetProperty("c", out var cursor) &&
+                    (cursor.ValueKind != JsonValueKind.Array || cursor.GetArrayLength() != 2 ||
+                     cursor.EnumerateArray().Any(v => v.ValueKind != JsonValueKind.Number ||
+                                                      !v.TryGetInt16(out _))))
+                    return Result.Fail("bad cursor");
 
                 if (run.TryGetProperty("casts", out var castList))
                 {

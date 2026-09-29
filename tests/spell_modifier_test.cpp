@@ -265,6 +265,43 @@ TEST_CASE("a guided spell curves onto the nearest enemy", "[spell]") {
   REQUIRE(hits(guided) > 0);
 }
 
+TEST_CASE("sights set steers a spell after the caster's cursor", "[spell]") {
+  SpellStats small =
+      SpellQuant::Canonical(Make("water", {Sign("sights_set", 0.5f)}));
+  SpellStats big =
+      SpellQuant::Canonical(Make("water", {Sign("sights_set", 2.0f)}));
+  REQUIRE(small.steerTime > 0.0f);
+  REQUIRE(big.steerTime > small.steerTime);
+  // Hard to turn: well under a full turn a second
+  REQUIRE(big.steerRate < 2.0f * PI);
+
+  // Fired straight up with the cursor off to the right
+  auto meanX = [](Simulation &sim, const Spell &spell, bool cursor) {
+    sim.Reset();
+    sim.CastSpell(SpellQuant::Canonical(spell), {100, 150}, {0, -1}, 1);
+    for (int i = 0; i < 40; ++i) {
+      if (cursor)
+        sim.GetParticleSystem().SetCursors({{1, {250, 150}}});
+      sim.Update(DT);
+    }
+    float sum = 0.0f;
+    int n = 0;
+    sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+      sum += p.pos.x;
+      n++;
+    });
+    return n > 0 ? sum / n : 0.0f;
+  };
+  Simulation sim;
+  sim.SetSeed(19);
+  Spell sighted = Make("water", {Sign("sights_set", 2.0f)});
+  float straight = meanX(sim, Make("water"), true);
+  float steered = meanX(sim, sighted, true);
+  float noCursor = meanX(sim, sighted, false);
+  REQUIRE(steered > straight + 5.0f);
+  REQUIRE(std::abs(noCursor - straight) < 1.0f);
+}
+
 TEST_CASE("cooled water lands as ice", "[spell]") {
   Simulation sim;
   sim.SetSeed(7);

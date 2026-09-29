@@ -30767,6 +30767,1067 @@
   {
    "glyphs": [
     {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case612",
+   "stats": {
+    "density": 1044,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 1,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 31596,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1700,
+    "steerTime": 563,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case613",
+   "stats": {
+    "density": 1044,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 1,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 31596,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1843,
+    "steerTime": 922,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case614",
+   "stats": {
+    "density": 1044,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 1,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 31596,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 2294,
+    "steerTime": 2048,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case615",
+   "stats": {
+    "density": 209,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 6319,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1700,
+    "steerTime": 563,
+    "temperature": 2129920,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case616",
+   "stats": {
+    "density": 209,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 6319,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1843,
+    "steerTime": 922,
+    "temperature": 2129920,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case617",
+   "stats": {
+    "density": 209,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 6319,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 2294,
+    "steerTime": 2048,
+    "temperature": 2129920,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case618",
+   "stats": {
+    "density": 2089,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 2,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 63191,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1700,
+    "steerTime": 563,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case619",
+   "stats": {
+    "density": 2089,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 2,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 63191,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1843,
+    "steerTime": 922,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case620",
+   "stats": {
+    "density": 2089,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 2,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 63191,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 2294,
+    "steerTime": 2048,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "rock",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case621",
+   "stats": {
+    "density": 2611,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 8,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 78989,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1700,
+    "steerTime": 563,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "rock",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case622",
+   "stats": {
+    "density": 2611,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 8,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 78989,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 1843,
+    "steerTime": 922,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "rock",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case623",
+   "stats": {
+    "density": 2611,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 8,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 68,
+    "power": 78989,
+    "range": 45056,
+    "speed": 56320,
+    "steerRate": 2294,
+    "steerTime": 2048,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case624",
+   "stats": {
+    "density": 0,
+    "diameter": 9830,
+    "duration": 696,
+    "element": 0,
+    "force": 13517,
+    "imbalance": 1024,
+    "kind": 3,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "pull": -256,
+    "range": 45056,
+    "speed": 56320,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case625",
+   "stats": {
+    "density": 0,
+    "diameter": 9830,
+    "duration": 696,
+    "element": 0,
+    "force": 13517,
+    "imbalance": 1024,
+    "kind": 3,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "pull": -256,
+    "range": 45056,
+    "speed": 56320,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case626",
+   "stats": {
+    "density": 0,
+    "diameter": 9830,
+    "duration": 696,
+    "element": 0,
+    "force": 13517,
+    "imbalance": 1024,
+    "kind": 3,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "pull": -256,
+    "range": 45056,
+    "speed": 56320,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind_underfoot",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case627",
+   "stats": {
+    "density": 0,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 2,
+    "launchSpeed": 41395,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 45056,
+    "speed": 56320,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind_underfoot",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case628",
+   "stats": {
+    "density": 0,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 2,
+    "launchSpeed": 41395,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 45056,
+    "speed": 56320,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind_underfoot",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case629",
+   "stats": {
+    "density": 0,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 2,
+    "launchSpeed": 41395,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 45056,
+    "speed": 56320,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "light",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 0.30000001192092896,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case630",
+   "stats": {
+    "density": 0,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 12,
+    "flashRadius": 19456,
+    "flashTime": 3226,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 17,
+    "power": 0,
+    "range": 112640,
+    "speed": 140800,
+    "steerRate": 1700,
+    "steerTime": 563,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "light",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 1.0,
+     "x": -100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case631",
+   "stats": {
+    "density": 0,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 12,
+    "flashRadius": 19456,
+    "flashTime": 3226,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 17,
+    "power": 0,
+    "range": 112640,
+    "speed": 140800,
+    "steerRate": 1843,
+    "steerTime": 922,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "light",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.100000023841858,
+     "x": 0.0,
+     "y": 0.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 45.0,
+     "scale": 2.5,
+     "x": -100.0,
+     "y": 60.0
+    },
+    {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.699999988079071,
+     "x": 100.0,
+     "y": 60.0
+    }
+   ],
+   "name": "case632",
+   "stats": {
+    "density": 0,
+    "diameter": 6554,
+    "duration": 0,
+    "element": 12,
+    "flashRadius": 19456,
+    "flashTime": 3226,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 17,
+    "power": 0,
+    "range": 112640,
+    "speed": 140800,
+    "steerRate": 2294,
+    "steerTime": 2048,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
      "assetId": "fire",
      "kind": "sigil",
      "rotation": 0.0,
@@ -30847,6 +31908,14 @@
      "y": 80.0
     },
     {
+     "assetId": "sights_set",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 0.6000000238418579,
+     "x": 210.0,
+     "y": 80.0
+    },
+    {
      "assetId": "column",
      "kind": "sign",
      "rotation": -45.0,
@@ -30902,7 +31971,7 @@
      "y": -120.0
     }
    ],
-   "name": "case612",
+   "name": "case633",
    "stats": {
     "density": 922,
     "diameter": 4096,
@@ -30957,7 +32026,7 @@
      "y": 0.0
     }
    ],
-   "name": "case613",
+   "name": "case634",
    "stats": {
     "density": 1126,
     "diameter": 8192,
@@ -31004,7 +32073,7 @@
      "y": -120.0
     }
    ],
-   "name": "case614",
+   "name": "case635",
    "stats": {
     "density": 184,
     "diameter": 4096,
@@ -31059,7 +32128,7 @@
      "y": 0.0
     }
    ],
-   "name": "case615",
+   "name": "case636",
    "stats": {
     "density": 225,
     "diameter": 8192,
@@ -31106,7 +32175,7 @@
      "y": -120.0
     }
    ],
-   "name": "case616",
+   "name": "case637",
    "stats": {
     "density": 1843,
     "diameter": 4096,
@@ -31161,7 +32230,7 @@
      "y": 0.0
     }
    ],
-   "name": "case617",
+   "name": "case638",
    "stats": {
     "density": 2253,
     "diameter": 8192,
@@ -31208,7 +32277,7 @@
      "y": -120.0
     }
    ],
-   "name": "case618",
+   "name": "case639",
    "stats": {
     "density": 0,
     "diameter": 6144,
@@ -31263,7 +32332,7 @@
      "y": 0.0
     }
    ],
-   "name": "case619",
+   "name": "case640",
    "stats": {
     "density": 0,
     "diameter": 12288,
@@ -31310,7 +32379,7 @@
      "y": -120.0
     }
    ],
-   "name": "case620",
+   "name": "case641",
    "stats": {
     "density": 0,
     "diameter": 4096,
@@ -31364,7 +32433,7 @@
      "y": 0.0
     }
    ],
-   "name": "case621",
+   "name": "case642",
    "stats": {
     "density": 0,
     "diameter": 8192,

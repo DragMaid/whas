@@ -58,6 +58,16 @@ struct Particle {
     Element homeElement = Element::AIR;
     float homeTurnRate = 0.0f;
     float homeRadius = 0.0f;
+    // Sights set: seconds left following the caster's cursor, and how fast
+    // it may turn doing it
+    float steerTime = 0.0f;
+    float steerRate = 0.0f;
+};
+
+// Where a caster's cursor is (cells), for sights set
+struct Cursor {
+    int owner;
+    Vector2 pos;
 };
 
 class ParticleSystem {
@@ -86,6 +96,8 @@ public:
     const std::vector<Particle> &Pool() const { return m_particles; }
 
     void SetHurtboxes(std::vector<Hurtbox> hurtboxes) { m_hurtboxes = std::move(hurtboxes); }
+    // Casters' cursors this tick; a caster without one steers nothing
+    void SetCursors(std::vector<Cursor> cursors) { m_cursors = std::move(cursors); }
     // Hits recorded since the last call
     std::vector<ParticleHit> TakeHits() { return std::exchange(m_hits, {}); }
     // Flashes from the last Update
@@ -100,6 +112,7 @@ private:
 
     std::vector<Particle> m_particles;
     std::vector<Hurtbox> m_hurtboxes;
+    std::vector<Cursor> m_cursors;
     std::vector<ParticleHit> m_hits;
     std::vector<Flash> m_flashes;
     // Recent flashes for drawing only (not simulation state): where, how

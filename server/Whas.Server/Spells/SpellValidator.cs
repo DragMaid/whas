@@ -17,7 +17,7 @@ public static class SpellValidator
 
     static readonly HashSet<string> KnownSigns =
         ["column", "convergence", "crushing", "repetition", "cooling", "strengthening",
-         "collection", "expansion", "orb", "pulling"];
+         "collection", "expansion", "orb", "pulling", "sights_set"];
 
     public static string? Check(string name, IReadOnlyList<Glyph> glyphs) =>
         Check(name, glyphs, []);

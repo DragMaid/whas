@@ -54,7 +54,8 @@ std::vector<Spell> Cases() {
   // Modifier signs, alone and doubled, plain and inverted
   const char *modifiers[] = {"convergence", "crushing",      "repetition",
                              "cooling",     "strengthening", "collection",
-                             "expansion",   "orb",           "pulling"};
+                             "expansion",   "orb",           "pulling",
+                             "sights_set"};
   const char *modSigils[] = {"water", "fire",           "earth",
                              "rock",  "wind",           "wind_underfoot",
                              "light"};

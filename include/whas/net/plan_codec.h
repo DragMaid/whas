@@ -7,7 +7,8 @@
 // TurnPlan <-> JSON for the wire and for replays. Runs of identical input
 // are collapsed, casts carry the server spell id and the quantized aim:
 //   {"v":1,"runs":[{"n":12,"in":2},{"n":1,"in":0,"casts":[{"id":7,"ax":..,"ay":..}]}]}
-// "in" bits: 1 left, 2 right, 4 jump. See docs/protocol.md.
+// "in" bits: 1 left, 2 right, 4 jump. A run may carry "c":[x,y], the cursor
+// in 1/8 cells (sights set). See docs/protocol.md.
 namespace PlanCodec {
 
 constexpr int VERSION = 1;

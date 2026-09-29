@@ -18,10 +18,26 @@ struct PlannedCast {
   static PlannedCast Local(const Spell &spell, Vector2 aim);
 };
 
+// Where the player's cursor was on a tick, for sights set spells: cells in
+// 1/SCALE units, as sent over the wire
+struct PlanCursor {
+  static constexpr int SCALE = 8;
+  bool set = false;
+  int16_t x = 0;
+  int16_t y = 0;
+
+  static PlanCursor FromCells(Vector2 cells);
+  Vector2 Cells() const {
+    return {static_cast<float>(x) / SCALE, static_cast<float>(y) / SCALE};
+  }
+  bool operator==(const PlanCursor &) const = default;
+};
+
 // One tick of input. Its casts fire at the start of the tick, before moving;
 // several can share a tick when they were queued during the same pause.
 struct PlanStep {
   CharacterInput input;
+  PlanCursor cursor;
   std::vector<PlannedCast> casts;
 };
 
@@ -78,8 +94,9 @@ public:
   CastResult QueueCast(PlannedCast cast);
 
   // Run the clock one tick: pending casts fire, then the ghost moves (input is
-  // ignored while channelling).
-  void FlowTick(const Simulation &sim, CharacterInput input);
+  // ignored while channelling). The cursor steers sights set spells.
+  void FlowTick(const Simulation &sim, CharacterInput input,
+                PlanCursor cursor = {});
 
   // Call when the clock is paused, so undo can step back to this point
   void MarkPause() { m_segmentBreak = true; }

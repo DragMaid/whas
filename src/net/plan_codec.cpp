@@ -22,12 +22,18 @@ nlohmann::json Encode(const TurnPlan &plan) {
   nlohmann::json runs = nlohmann::json::array();
   for (const PlanStep &step : plan.steps) {
     int bits = InputBits(step.input);
+    nlohmann::json cursor =
+        step.cursor.set ? nlohmann::json::array({step.cursor.x, step.cursor.y})
+                        : nlohmann::json();
     if (step.casts.empty() && !runs.empty() && !runs.back().contains("casts") &&
-        runs.back()["in"] == bits) {
+        runs.back()["in"] == bits &&
+        runs.back().value("c", nlohmann::json()) == cursor) {
       runs.back()["n"] = runs.back()["n"].get<int>() + 1;
       continue;
     }
     nlohmann::json run{{"n", 1}, {"in", bits}};
+    if (step.cursor.set)
+      run["c"] = std::move(cursor);
     if (!step.casts.empty()) {
       nlohmann::json casts = nlohmann::json::array();
       for (const PlannedCast &cast : step.casts)
@@ -58,6 +64,9 @@ bool Decode(const nlohmann::json &j, const SpellResolver &resolve,
       }
       PlanStep step;
       step.input = InputFromBits(bits);
+      if (auto cur = run.find("c"); cur != run.end())
+        step.cursor = {true, cur->at(0).get<int16_t>(),
+                       cur->at(1).get<int16_t>()};
       if (run.contains("casts")) {
         if (n != 1) {
           error = "casts on a multi-step run";

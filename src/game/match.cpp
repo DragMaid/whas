@@ -109,6 +109,11 @@ void ExecuteTick(Simulation &sim, State &state,
     if (c.Alive())
       hurtboxes.push_back({c.id, c.Bounds()});
   sim.GetParticleSystem().SetHurtboxes(std::move(hurtboxes));
+  std::vector<Cursor> cursors;
+  for (const Character &c : state.characters)
+    if (c.hasCursor)
+      cursors.push_back({c.id, c.cursor});
+  sim.GetParticleSystem().SetCursors(std::move(cursors));
 
   sim.Update(TurnController::TICK_DT);
   ApplyEffects(sim, state.characters.data(), PLAYERS);

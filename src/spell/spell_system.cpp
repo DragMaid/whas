@@ -88,6 +88,14 @@ struct SpellTuning {
   float homeBaseRadius = 40.0f;
   float homeRadiusPerSigil = 30.0f;
   float maxHomeRadius = 120.0f;
+  // Sights set: more or bigger signs follow the cursor for longer and turn
+  // a little quicker, but always heavily
+  float steerBaseTime = 0.4f;
+  float steerTimePerSign = 0.5f;
+  float maxSteerTime = 3.0f;
+  float steerBaseRate = 1.6f; // rad/s, about 90 degrees a second
+  float steerRatePerSign = 0.2f;
+  float maxSteerRate = 2.5f;
   // Layered spells: an embedded spell of scale s is worth s / this; one
   // that fills the whole core is worth all of it
   float componentFullScale = 0.7f;
@@ -190,6 +198,7 @@ struct Modifiers {
   float collection = 0.0f;
   float expansion = 0.0f;
   float pull = 0.0f; // pulling signs, negative when inverted (pushing)
+  float sights = 0.0f;
   // Summed scales of each shape's trigger glyphs
   std::array<float, static_cast<size_t>(SpellShape::Count)> shapes{};
 
@@ -197,7 +206,8 @@ struct Modifiers {
     Modifiers m{convergence + o.convergence, crush + o.crush,
                 repetition + o.repetition,   cooling + o.cooling,
                 strengthening + o.strengthening, collection + o.collection,
-                expansion + o.expansion,     pull + o.pull, {}};
+                expansion + o.expansion,     pull + o.pull,
+                sights + o.sights, {}};
     for (size_t i = 0; i < shapes.size(); ++i)
       m.shapes[i] = shapes[i] + o.shapes[i];
     return m;
@@ -271,6 +281,8 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
       m.expansion += sign;
     else if (id == "pulling")
       m.pull += sign;
+    else if (id == "sights_set")
+      m.sights += glyph.scale;
     else {
       // Column: sign glyphs point up in their SVG; rotate like
       // SpellGeometry does
@@ -482,6 +494,15 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
           static_cast<int>(kTuning.collectCellsPerSign * mods.collection));
     }
 
+    if (mods.sights > 0.0f) {
+      s.steerTime = std::min(kTuning.maxSteerTime,
+                             kTuning.steerBaseTime +
+                                 kTuning.steerTimePerSign * mods.sights);
+      s.steerRate = std::min(kTuning.maxSteerRate,
+                             kTuning.steerBaseRate +
+                                 kTuning.steerRatePerSign * mods.sights);
+    }
+
     s.power = 0.5f * s.density * s.speed * s.speed * kTuning.powerScale;
     s.particleCount = std::clamp(static_cast<int>(count * effect), 1,
                                  kTuning.maxParticles);
@@ -685,6 +706,8 @@ void SpawnSpellParticle(SpellEffect &effect, ElementContext &ctx, Vector2 pos,
     p->homeElement = s.homeElement;
     p->homeTurnRate = s.homeTurnRate;
     p->homeRadius = s.homeRadius;
+    p->steerTime = s.steerTime;
+    p->steerRate = s.steerRate;
   }
   effect.emitted++;
 }

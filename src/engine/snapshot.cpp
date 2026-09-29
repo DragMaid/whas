@@ -75,7 +75,7 @@ void PutStats(ByteWriter &out, const SpellStats &s) {
   out.Put(static_cast<uint8_t>(s.shape));
   for (float v : {s.temperatureDelta, s.hardnessScale, s.crush, s.restore,
                   s.collectRadius, s.pull, s.flashRadius, s.flashTime,
-                  s.homeTurnRate, s.homeRadius})
+                  s.homeTurnRate, s.homeRadius, s.steerTime, s.steerRate})
     out.Put(v);
   out.Put(s.collectMax);
   out.Put(static_cast<uint8_t>(s.homeTarget));
@@ -98,7 +98,8 @@ SpellStats GetStats(ByteReader &in) {
   s.shape = static_cast<SpellShape>(in.Get<uint8_t>());
   for (float *v : {&s.temperatureDelta, &s.hardnessScale, &s.crush,
                    &s.restore, &s.collectRadius, &s.pull, &s.flashRadius,
-                   &s.flashTime, &s.homeTurnRate, &s.homeRadius})
+                   &s.flashTime, &s.homeTurnRate, &s.homeRadius,
+                   &s.steerTime, &s.steerRate})
     *v = in.Get<float>();
   s.collectMax = in.Get<int>();
   s.homeTarget = static_cast<HomeTarget>(in.Get<uint8_t>());
@@ -171,6 +172,8 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(static_cast<uint8_t>(p.homeElement));
     out.Put(p.homeTurnRate);
     out.Put(p.homeRadius);
+    out.Put(p.steerTime);
+    out.Put(p.steerRate);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -268,6 +271,8 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.homeElement = static_cast<Element>(in.Get<uint8_t>());
       p.homeTurnRate = in.Get<float>();
       p.homeRadius = in.Get<float>();
+      p.steerTime = in.Get<float>();
+      p.steerRate = in.Get<float>();
     }
 
     uint32_t effects = in.Get<uint32_t>();

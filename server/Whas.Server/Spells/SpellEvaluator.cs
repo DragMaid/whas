@@ -49,6 +49,12 @@ public static class SpellEvaluator
     const float HomeBaseRadius = 40.0f;
     const float HomeRadiusPerSigil = 30.0f;
     const float MaxHomeRadius = 120.0f;
+    const float SteerBaseTime = 0.4f;
+    const float SteerTimePerSign = 0.5f;
+    const float MaxSteerTime = 3.0f;
+    const float SteerBaseRate = 1.6f;
+    const float SteerRatePerSign = 0.2f;
+    const float MaxSteerRate = 2.5f;
     const float MinPull = 0.25f;
     const float MaxPull = 2.5f;
     const float GustBaseDuration = 0.35f;
@@ -144,7 +150,7 @@ public static class SpellEvaluator
     struct Modifiers
     {
         public float Convergence, Crush, Repetition, Cooling, Strengthening,
-                     Collection, Expansion, Pull;
+                     Collection, Expansion, Pull, Sights;
         // Summed scales of each shape's trigger glyphs, by SpellShape
         public float[] Shapes;
 
@@ -158,6 +164,7 @@ public static class SpellEvaluator
             Collection = a.Collection + b.Collection,
             Expansion = a.Expansion + b.Expansion,
             Pull = a.Pull + b.Pull,
+            Sights = a.Sights + b.Sights,
             Shapes = a.Shapes.Zip(b.Shapes, (x, y) => x + y).ToArray(),
         };
     }
@@ -219,6 +226,7 @@ public static class SpellEvaluator
                 case "collection": c.Mods.Collection += glyph.Scale; break;
                 case "expansion": c.Mods.Expansion += sign; break;
                 case "pulling": c.Mods.Pull += sign; break;
+                case "sights_set": c.Mods.Sights += glyph.Scale; break;
                 default:
                     // Column: a thrust vector
                     float rad = glyph.Rotation * Deg2Rad;
@@ -419,6 +427,12 @@ public static class SpellEvaluator
                     s.CollectMax = Math.Min(MaxCollect, (int)(CollectCellsPerSign * mods.Collection));
                 }
 
+                if (mods.Sights > 0.0f)
+                {
+                    s.SteerTime = MathF.Min(MaxSteerTime, SteerBaseTime + SteerTimePerSign * mods.Sights);
+                    s.SteerRate = MathF.Min(MaxSteerRate, SteerBaseRate + SteerRatePerSign * mods.Sights);
+                }
+
                 s.Power = 0.5f * s.Density * s.Speed * s.Speed * PowerScale;
                 s.ParticleCount = Math.Clamp((int)(count * effect), 1, MaxParticles);
                 break;
@@ -497,6 +511,7 @@ public static class SpellEvaluator
         Q(s.FlashRadius, StatScale), Q(s.FlashTime, StatScale),
         (byte)s.HomeTarget, (byte)s.HomeElement,
         Q(s.HomeTurnRate, StatScale), Q(s.HomeRadius, StatScale),
+        Q(s.SteerTime, StatScale), Q(s.SteerRate, StatScale),
         s.Parts.Count == 0 ? null : s.Parts.Select(Quantize).ToList());
 
     public static QuantizedStats EvaluateQuantized(IReadOnlyList<Glyph> glyphs) =>

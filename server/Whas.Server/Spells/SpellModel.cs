@@ -75,6 +75,8 @@ public sealed class SpellStats
     public Element HomeElement;
     public float HomeTurnRate;
     public float HomeRadius;
+    public float SteerTime;
+    public float SteerRate;
     public List<SpellStats> Parts = [];
 }
 
@@ -109,6 +111,8 @@ public sealed record QuantizedStats(
     [property: JsonPropertyName("homeElement")] byte HomeElement = 0,
     [property: JsonPropertyName("homeTurnRate")] int HomeTurnRate = 0,
     [property: JsonPropertyName("homeRadius")] int HomeRadius = 0,
+    [property: JsonPropertyName("steerTime")] int SteerTime = 0,
+    [property: JsonPropertyName("steerRate")] int SteerRate = 0,
     [property: JsonPropertyName("parts"),
                JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     List<QuantizedStats>? Parts = null)
@@ -130,6 +134,7 @@ public sealed record QuantizedStats(
         FlashRadius == o.FlashRadius && FlashTime == o.FlashTime &&
         HomeTarget == o.HomeTarget && HomeElement == o.HomeElement &&
         HomeTurnRate == o.HomeTurnRate && HomeRadius == o.HomeRadius &&
+        SteerTime == o.SteerTime && SteerRate == o.SteerRate &&
         (Parts ?? []).SequenceEqual(o.Parts ?? []);
 
     public override int GetHashCode() =>

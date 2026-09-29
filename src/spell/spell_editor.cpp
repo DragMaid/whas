@@ -193,6 +193,9 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.flashRadius > 0.0f)
     ImGui::Text("Flash: blinds within %.0f cells for %.1fs", stats.flashRadius,
                 stats.flashTime);
+  if (stats.steerTime > 0.0f)
+    ImGui::Text("Sights set: follows your cursor for %.1fs (%.0f deg/s)",
+                stats.steerTime, stats.steerRate * RAD2DEG);
   if (stats.homeTarget == HomeTarget::Human)
     ImGui::Text("Guided: chases the nearest enemy (%.0f deg/s)",
                 stats.homeTurnRate * RAD2DEG);

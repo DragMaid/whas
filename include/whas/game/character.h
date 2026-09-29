@@ -44,6 +44,11 @@ struct Character {
   // the game's screen reads it (it doesn't change what happens), so it's
   // left out of the match hash; the game takes it with TakeFlash.
   float flash = 0.0f;
+
+  // Where the player's cursor is (cells), from the plan: sights set spells
+  // follow it
+  Vector2 cursor{0.0f, 0.0f};
+  bool hasCursor = false;
   float TakeFlash() { return std::exchange(flash, 0.0f); }
 
   // Advance one step against the current grid. Deterministic for a given grid,

@@ -26,6 +26,10 @@ public class PlanValidatorTests
     }
 
     [Fact]
+    public void AcceptsACursorPath() =>
+        Assert.True(V("""{"v":1,"runs":[{"n":3,"in":0,"c":[1280,-40]},{"n":2,"in":2,"c":[1300,-40]}]}""").Ok);
+
+    [Fact]
     public void AcceptsTheEmptyPlan() => Assert.True(V(PlanValidator.EmptyPlan).Ok);
 
     [Theory]
@@ -37,6 +41,8 @@ public class PlanValidatorTests
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":7,"ax":9000,"ay":0}]}]}""", "unit")]
     [InlineData("""{"v":1,"runs":[{"n":2,"in":0,"casts":[{"id":7,"ax":16383,"ay":0}]}]}""", "multi-step")]
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":8,"ax":16383,"ay":0},{"id":8,"ax":0,"ay":-16383}]}]}""", "wind underfoot")]
+    [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"c":[1]}]}""", "cursor")]
+    [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"c":[1,99999]}]}""", "cursor")]
     [InlineData("not json", "JSON")]
     public void RejectsCheats(string plan, string expected)
     {

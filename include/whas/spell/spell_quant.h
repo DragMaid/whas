@@ -48,6 +48,8 @@ struct Stats {
   uint8_t homeElement = 0; // Element
   int32_t homeTurnRate = 0;
   int32_t homeRadius = 0;
+  int32_t steerTime = 0;
+  int32_t steerRate = 0;
   std::vector<Stats> parts; // layered spells
 
   bool operator==(const Stats &) const;

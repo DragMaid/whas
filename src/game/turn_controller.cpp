@@ -1,6 +1,7 @@
 #include "whas/game/turn_controller.h"
 #include "whas/engine/simulation.h"
 #include <algorithm>
+#include <climits>
 #include <cmath>
 
 PlannedCast PlannedCast::Local(const Spell &spell, Vector2 aim) {
@@ -90,11 +91,21 @@ TurnController::CastResult TurnController::QueueCast(PlannedCast cast) {
   return CastResult::Queued;
 }
 
-void TurnController::FlowTick(const Simulation &sim, CharacterInput input) {
+PlanCursor PlanCursor::FromCells(Vector2 cells) {
+  auto q = [](float v) {
+    return static_cast<int16_t>(std::clamp<long>(
+        std::lround(v * SCALE), INT16_MIN, INT16_MAX));
+  };
+  return {true, q(cells.x), q(cells.y)};
+}
+
+void TurnController::FlowTick(const Simulation &sim, CharacterInput input,
+                              PlanCursor cursor) {
   if (m_phase != Phase::Planning || Finished())
     return;
 
   PlanStep step;
+  step.cursor = cursor;
   step.casts = std::move(m_pending);
   m_pending.clear();
   if (m_channelTicks > 0) {
@@ -171,6 +182,11 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
   if (tick >= 0 && tick < static_cast<int>(plan.steps.size())) {
     const PlanStep &step = plan.steps[tick];
     input = step.input;
+    // Past the end of the plan the last cursor stays where it was
+    if (step.cursor.set) {
+      character.cursor = step.cursor.Cells();
+      character.hasCursor = true;
+    }
     for (const PlannedCast &cast : step.casts) {
       if (!character.Alive())
         break;

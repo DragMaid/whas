@@ -66,6 +66,11 @@ struct SpellStats {
   float homeTurnRate = 0.0f;
   float homeRadius = 0.0f;
 
+  // Sights set: for steerTime seconds the particles turn toward the
+  // caster's cursor at up to steerRate (rad/s), then fly straight on
+  float steerTime = 0.0f;
+  float steerRate = 0.0f;
+
   // Modifier signs (element spells)
   SpellShape shape = SpellShape::Stream;
   float temperatureDelta = 0.0f; // cooling: added to what lands

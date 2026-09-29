@@ -1,3 +1,4 @@
+#include "whas/engine/view.h"
 #include "whas/game/sandbox.h"
 #include "imgui.h"
 #include "whas/constants.h"
@@ -17,10 +18,7 @@ constexpr Color AVATAR_COLOR{230, 230, 240, 255};
 // longer than a frame the sandbox runs in slow motion instead.
 constexpr int MAX_TICKS_PER_FRAME = 1;
 
-Vector2 MouseCell() {
-  Vector2 m = GetMousePosition();
-  return {m.x / CELL_SIZE, m.y / CELL_SIZE};
-}
+Vector2 MouseCell() { return View::MouseCells(); }
 
 bool Contains(Rectangle r, Vector2 p) {
   return p.x >= r.x && p.x <= r.x + r.width && p.y >= r.y &&
@@ -220,6 +218,10 @@ void Sandbox::Tick(Simulation &sim, bool isPainting) {
   if (!m_dragging)
     m_avatar.Step(sim, {}, TurnController::TICK_DT);
   sim.GetParticleSystem().SetHurtboxes({{m_avatar.id, m_avatar.Bounds()}});
+  // Sights set follows the live cursor here (casts without the avatar
+  // have no owner)
+  sim.GetParticleSystem().SetCursors(
+      {{m_avatar.id, MouseCell()}, {-1, MouseCell()}});
   sim.Update(TurnController::TICK_DT, isPainting);
   Match::ApplyEffects(sim, &m_avatar, 1);
   // Practice dummy: never stays down

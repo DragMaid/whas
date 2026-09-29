@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
+#include "whas/engine/view.h"
 #include "whas/net/lockstep_client.h"
 #include "whas/spell/spell_system.h"
 #include "whas/ui/ui.h"
@@ -410,8 +411,8 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
       Notify("That spell needs exactly one known sigil", 2.0f);
     } else {
       Vector2 origin = ghost.Center();
-      Vector2 mouse = GetMousePosition();
-      Vector2 aim{mouse.x / CELL_SIZE - origin.x, mouse.y / CELL_SIZE - origin.y};
+      Vector2 mouse = View::MouseCells();
+      Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
       float len = std::hypot(aim.x, aim.y);
       aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
                          : Vector2{(float)ghost.facing, 0.0f};
@@ -435,7 +436,8 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
     input.left = IsKeyDown(KEY_A);
     input.right = IsKeyDown(KEY_D);
     input.jump = IsKeyDown(KEY_W);
-    m_turn.FlowTick(sim, input);
+    // The cursor is recorded too: sights set spells follow it
+    m_turn.FlowTick(sim, input, PlanCursor::FromCells(View::MouseCells()));
   }
 
   // Prep time is over once the clock has run the whole turn
@@ -508,9 +510,8 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
   if (planning && !ui.IsBlockingWorldInput()) {
     if (const Spell *spell = ui.GetSelectedSpell()) {
       Vector2 origin = m_turn.LocalPreview().end.Center();
-      Vector2 mouse = GetMousePosition();
-      Vector2 aim{mouse.x / CELL_SIZE - origin.x,
-                  mouse.y / CELL_SIZE - origin.y};
+      Vector2 mouse = View::MouseCells();
+      Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
       float len = std::hypot(aim.x, aim.y);
       if (len > 0.001f)
         ui.DrawAimIndicator(*spell, origin, {aim.x / len, aim.y / len},

@@ -55,9 +55,13 @@ TurnPlan MakePlan(const Library &lib, int turn, int slot) {
     step.input.right = right;
     step.input.left = !right;
     step.input.jump = t == 10 && turn == 1;
+    // The cursor from halfway, for sights set spells
+    if (t >= 20)
+      step.cursor = PlanCursor::FromCells({160.0f + slot * 10.0f, 60.5f});
     plan.steps.push_back(step);
   }
   PlanStep cast;
+  cast.cursor = PlanCursor::FromCells({150.25f, 40.0f});
   int64_t id = 1 + (turn + slot) % 4;
   cast.casts.push_back(lib.Cast(id, {right ? 1.0f : -1.0f, -0.15f}));
   plan.steps.push_back(cast);
@@ -138,6 +142,7 @@ TEST_CASE("plans survive the wire unchanged", "[codec]") {
   REQUIRE(back.steps.size() == plan.steps.size());
   for (size_t i = 0; i < plan.steps.size(); ++i) {
     REQUIRE(back.steps[i].input == plan.steps[i].input);
+    REQUIRE(back.steps[i].cursor == plan.steps[i].cursor);
     REQUIRE(back.steps[i].casts.size() == plan.steps[i].casts.size());
     for (size_t c = 0; c < plan.steps[i].casts.size(); ++c) {
       REQUIRE(back.steps[i].casts[c].aimQ == plan.steps[i].casts[c].aimQ);

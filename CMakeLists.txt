@@ -101,6 +101,7 @@ set(SOURCES
 
     src/engine/simulation.cpp
     src/engine/renderer.cpp
+    src/engine/view.cpp
 
     src/ui/ui.cpp
     src/ui/spell_thumbnails.cpp
