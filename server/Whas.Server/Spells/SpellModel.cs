@@ -12,6 +12,8 @@ public enum Element : byte
 
 public enum SpellKind : byte { None = 0, Element = 1, Flight = 2, Field = 3, Compound = 4 }
 
+public enum HomeTarget : byte { None = 0, Human = 1, Element = 2 }
+
 public enum SpellShape : byte { Stream = 0, Orb = 1, Dragon = 2 }
 
 // A glyph as the client's spell files and editor store it
@@ -69,6 +71,10 @@ public sealed class SpellStats
     public float Pull;
     public float FlashRadius;
     public float FlashTime;
+    public HomeTarget HomeTarget;
+    public Element HomeElement;
+    public float HomeTurnRate;
+    public float HomeRadius;
     public List<SpellStats> Parts = [];
 }
 
@@ -99,6 +105,10 @@ public sealed record QuantizedStats(
     [property: JsonPropertyName("pull")] int Pull = 0,
     [property: JsonPropertyName("flashRadius")] int FlashRadius = 0,
     [property: JsonPropertyName("flashTime")] int FlashTime = 0,
+    [property: JsonPropertyName("homeTarget")] byte HomeTarget = 0,
+    [property: JsonPropertyName("homeElement")] byte HomeElement = 0,
+    [property: JsonPropertyName("homeTurnRate")] int HomeTurnRate = 0,
+    [property: JsonPropertyName("homeRadius")] int HomeRadius = 0,
     [property: JsonPropertyName("parts"),
                JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     List<QuantizedStats>? Parts = null)
@@ -118,6 +128,8 @@ public sealed record QuantizedStats(
         Crush == o.Crush && Restore == o.Restore && CollectRadius == o.CollectRadius &&
         CollectMax == o.CollectMax && Pull == o.Pull &&
         FlashRadius == o.FlashRadius && FlashTime == o.FlashTime &&
+        HomeTarget == o.HomeTarget && HomeElement == o.HomeElement &&
+        HomeTurnRate == o.HomeTurnRate && HomeRadius == o.HomeRadius &&
         (Parts ?? []).SequenceEqual(o.Parts ?? []);
 
     public override int GetHashCode() =>

@@ -203,6 +203,68 @@ TEST_CASE("light is fast, weightless and blinds whoever it bursts near",
   REQUIRE(Count(sim, Element::LIGHT) == 0); // never lands as a cell
 }
 
+namespace {
+PlacedGlyph Sigil(const char *id, float scale, Vector2 at) {
+  return {id, GlyphKind::Sigil, at, scale, 0.0f};
+}
+} // namespace
+
+TEST_CASE("guidance fires the bigger sigil at the human or the smaller one",
+          "[spell]") {
+  Spell atHuman = Make("light", {Sigil("guidance", 1.0f, {0, 120}),
+                                 Sigil("human", 0.6f, {-100, 60})});
+  SpellStats s = SpellSystem::Evaluate(atHuman);
+  REQUIRE(s.valid);
+  REQUIRE(s.element == Element::LIGHT);
+  REQUIRE(s.homeTarget == HomeTarget::Human);
+  REQUIRE(s.homeTurnRate > 0.0f);
+
+  Spell atWater = Make("fire", {Sigil("guidance", 1.0f, {0, 120}),
+                                Sigil("water", 0.5f, {-100, 60})});
+  s = SpellSystem::Evaluate(atWater);
+  REQUIRE(s.valid);
+  REQUIRE(s.element == Element::FIRE);
+  REQUIRE(s.homeTarget == HomeTarget::Element);
+  REQUIRE(s.homeElement == Element::WATER);
+
+  // Two elements without guidance, guidance without a target, or a human
+  // without guidance make no spell
+  REQUIRE_FALSE(
+      SpellSystem::Evaluate(Make("fire", {Sigil("water", 0.5f, {-100, 60})}))
+          .valid);
+  REQUIRE_FALSE(
+      SpellSystem::Evaluate(Make("fire", {Sigil("guidance", 1.0f, {0, 120})}))
+          .valid);
+  REQUIRE_FALSE(
+      SpellSystem::Evaluate(Make("fire", {Sigil("human", 1.0f, {0, 120})}))
+          .valid);
+}
+
+TEST_CASE("a guided spell curves onto the nearest enemy", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(17);
+  // Aimed straight up, the target off to the right: unguided it misses
+  Character target;
+  target.id = 2;
+  target.pos = {150, 60};
+  Spell bolt = Make("water");
+  Spell guided = Make("water", {Sigil("guidance", 1.5f, {0, 120}),
+                                Sigil("human", 0.5f, {-100, 60})});
+  auto hits = [&](const Spell &spell) {
+    sim.Reset();
+    sim.GetParticleSystem().SetHurtboxes({{2, target.Bounds()}});
+    sim.CastSpell(SpellQuant::Canonical(spell), {130, 100}, {0, -1}, 1);
+    int n = 0;
+    for (int i = 0; i < 90; ++i) {
+      sim.Update(DT);
+      n += static_cast<int>(sim.GetParticleSystem().TakeHits().size());
+    }
+    return n;
+  };
+  REQUIRE(hits(bolt) == 0);
+  REQUIRE(hits(guided) > 0);
+}
+
 TEST_CASE("cooled water lands as ice", "[spell]") {
   Simulation sim;
   sim.SetSeed(7);

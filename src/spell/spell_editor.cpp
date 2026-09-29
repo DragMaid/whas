@@ -78,13 +78,20 @@ const char *KindLabel(const SpellStats &stats) {
   }
 }
 
-void DrawLayeredStats(const SpellStats &stats) {
+void DrawProblem(const char *problem) {
+  ImGui::PushTextWrapPos(0.0f);
+  ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", problem);
+  ImGui::PopTextWrapPos();
+}
+
+void DrawLayeredStats(const SpellStats &stats, const char *problem) {
   int parts = static_cast<int>(stats.parts.size());
   if (!stats.valid)
-    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                       "1-%d parts, each with one sigil;\nthe ring holds "
-                       "signs only",
-                       LAYER_MAX_COMPONENTS);
+    DrawProblem(problem && *problem
+                    ? problem
+                    : TextFormat("1-%d parts, each with one sigil; the ring "
+                                 "holds signs only",
+                                 LAYER_MAX_COMPONENTS));
   ImGui::Text("Layered: %d part%s, cast together", parts,
               parts == 1 ? "" : "s");
   Color c = SpellEditor::BalanceColor(stats.imbalance);
@@ -112,14 +119,14 @@ void DrawLayeredStats(const SpellStats &stats) {
 
 } // namespace
 
-void SpellEditor::DrawStats(const SpellStats &stats) {
+void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.kind == SpellKind::Compound) {
-    DrawLayeredStats(stats);
+    DrawLayeredStats(stats, problem);
     return;
   }
   if (!stats.valid) {
-    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
-                       "Needs exactly one known sigil");
+    DrawProblem(problem && *problem ? problem
+                                    : "Needs exactly one known sigil");
     return;
   }
   Color c = BalanceColor(stats.imbalance);
@@ -183,6 +190,15 @@ void SpellEditor::DrawStats(const SpellStats &stats) {
       ImGui::Text("Needs %d %s, has %d", need, ElementName(stats.element),
                   stats.particleCount);
   }
+  if (stats.flashRadius > 0.0f)
+    ImGui::Text("Flash: blinds within %.0f cells for %.1fs", stats.flashRadius,
+                stats.flashTime);
+  if (stats.homeTarget == HomeTarget::Human)
+    ImGui::Text("Guided: chases the nearest enemy (%.0f deg/s)",
+                stats.homeTurnRate * RAD2DEG);
+  else if (stats.homeTarget == HomeTarget::Element)
+    ImGui::Text("Guided: chases the nearest %s (%.0f deg/s)",
+                ElementName(stats.homeElement), stats.homeTurnRate * RAD2DEG);
   if (stats.temperatureDelta < 0.0f)
     ImGui::Text("Cooled: %.0f C", stats.temperatureDelta);
   if (stats.hardnessScale != 1.0f)
@@ -348,16 +364,27 @@ bool SpellEditor::TryPlaceAt(Vector2 spellPos) {
       m_statusMessage = "The outer ring holds signs only.";
       return false;
     }
-    // One sigil for what the spell is, and at most one dragon for its shape
-    bool shape = SpellSystem::IsShapeSigil(glyph.assetId);
-    if (std::any_of(m_currentSpell.glyphs.begin(), m_currentSpell.glyphs.end(),
-                    [shape](const PlacedGlyph &g) {
-                      return g.kind == GlyphKind::Sigil &&
-                             SpellSystem::IsShapeSigil(g.assetId) == shape;
-                    })) {
-      m_statusMessage = shape ? "A spell can only hold one dragon sigil."
-                              : "A spell can only hold one element sigil "
-                                "(plus a dragon).";
+    // At most one dragon, guidance and human; two element sigils only make
+    // sense with guidance (the smaller is the target), so no more than two
+    auto count = [this](auto pred) {
+      return std::count_if(m_currentSpell.glyphs.begin(),
+                           m_currentSpell.glyphs.end(),
+                           [&](const PlacedGlyph &g) {
+                             return g.kind == GlyphKind::Sigil && pred(g.assetId);
+                           });
+    };
+    auto isElement = [](const std::string &id) {
+      return !SpellSystem::IsShapeSigil(id) && id != "guidance" &&
+             id != "human";
+    };
+    const std::string &id = glyph.assetId;
+    if (!isElement(id) && count([&](const std::string &g) { return g == id; })) {
+      m_statusMessage = "A spell holds only one " + id + " sigil.";
+      return false;
+    }
+    if (isElement(id) && count(isElement) >= 2) {
+      m_statusMessage = "At most two element sigils (with guidance, the "
+                        "smaller one is its target).";
       return false;
     }
   }
@@ -852,45 +879,19 @@ void SpellEditor::OpenSpell(const Spell &spell) {
 }
 
 void SpellEditor::SaveCurrent() {
-  int signCount = 0, sigilCount = 0, shapeCount = 0;
   bool anyInvalid = false;
-  for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
-    const PlacedGlyph &g = m_currentSpell.glyphs[i];
-    const SvgAsset *a = GetAssetForGlyph(g);
-    if (!a) {
+  for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i)
+    if (!GetAssetForGlyph(m_currentSpell.glyphs[i]) ||
+        !IsPlacementValid(m_currentSpell.glyphs[i], i))
       anyInvalid = true;
-      break;
-    }
-    if (a->kind == GlyphKind::Sign)
-      signCount++;
-    else if (SpellSystem::IsShapeSigil(a->id))
-      shapeCount++;
-    else
-      sigilCount++;
-    if (!IsPlacementValid(g, i))
-      anyInvalid = true;
-  }
   for (size_t i = 0; i < m_currentSpell.components.size(); ++i)
     if (!SpellGeometry::IsComponentPlacementValid(m_currentSpell.components[i],
                                                   m_currentSpell, i))
       anyInvalid = true;
 
-  if (m_currentSpell.Layered()) {
-    if ((int)m_currentSpell.components.size() > LAYER_MAX_COMPONENTS) {
-      m_statusMessage = "A layered spell holds at most 5 spells.";
-      return;
-    }
-    if (sigilCount + shapeCount > 0) {
-      m_statusMessage = "The outer ring holds signs only.";
-      return;
-    }
-    if (!SpellSystem::Evaluate(m_currentSpell).valid) {
-      m_statusMessage = "Every embedded spell needs exactly one sigil.";
-      return;
-    }
-  } else if (signCount == 0 || sigilCount != 1 || shapeCount > 1) {
-    m_statusMessage =
-        "Spell must contain at least one sign and exactly one sigil.";
+  if (std::string problem = SpellSystem::Problem(m_currentSpell);
+      !problem.empty() || !SpellSystem::Evaluate(m_currentSpell).valid) {
+    m_statusMessage = problem.empty() ? "That isn't a working spell." : problem;
     return;
   }
   if (anyInvalid) {
@@ -990,7 +991,8 @@ void SpellEditor::DrawOverlay() {
 
   ImGui::BeginChild("RightPanel", ImVec2(rightW, 0), true);
   if (ImGui::CollapsingHeader("Spell Stats", ImGuiTreeNodeFlags_DefaultOpen))
-    DrawStats(SpellSystem::Evaluate(m_currentSpell));
+    DrawStats(SpellSystem::Evaluate(m_currentSpell),
+              SpellSystem::Problem(m_currentSpell).c_str());
   DrawEditPanel();
   DrawPalette();
   ImGui::EndChild();

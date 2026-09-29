@@ -18159,17 +18159,17 @@
    ],
    "name": "two-sigils",
    "stats": {
-    "density": 1024,
-    "diameter": 6144,
+    "density": 0,
+    "diameter": 2048,
     "duration": 0,
-    "element": 1,
+    "element": 0,
     "force": 0,
     "imbalance": 0,
-    "kind": 1,
+    "kind": 0,
     "launchSpeed": 0,
     "offset": 0,
-    "particleCount": 60,
-    "power": 16384,
+    "particleCount": 0,
+    "power": 0,
     "range": 32768,
     "speed": 40960,
     "temperature": 0,
@@ -31473,6 +31473,1102 @@
     "shape": 2,
     "speed": 56320,
     "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "light",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.800000011920929,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-light-human-0.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 12,
+    "flashRadius": 18432,
+    "flashTime": 3072,
+    "force": 0,
+    "homeElement": 0,
+    "homeRadius": 56320,
+    "homeTarget": 1,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 16,
+    "power": 0,
+    "range": 118784,
+    "speed": 148480,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "light",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.800000011920929,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-light-human-1.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 12,
+    "flashRadius": 18432,
+    "flashTime": 3072,
+    "force": 0,
+    "homeElement": 0,
+    "homeRadius": 87040,
+    "homeTarget": 1,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 16,
+    "power": 0,
+    "range": 118784,
+    "speed": 148480,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.6000000238418579,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-fire-water-0.500000",
+   "stats": {
+    "density": 213,
+    "diameter": 6963,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "homeElement": 1,
+    "homeRadius": 56320,
+    "homeTarget": 2,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 72,
+    "power": 7165,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2211840,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.6000000238418579,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-fire-water-1.500000",
+   "stats": {
+    "density": 213,
+    "diameter": 6963,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "homeElement": 1,
+    "homeRadius": 87040,
+    "homeTarget": 2,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 72,
+    "power": 7165,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2211840,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.6000000238418579,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-water-fire-0.500000",
+   "stats": {
+    "density": 1065,
+    "diameter": 6963,
+    "duration": 0,
+    "element": 1,
+    "force": 0,
+    "homeElement": 3,
+    "homeRadius": 56320,
+    "homeTarget": 2,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 72,
+    "power": 35825,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.6000000238418579,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-water-fire-1.500000",
+   "stats": {
+    "density": 1065,
+    "diameter": 6963,
+    "duration": 0,
+    "element": 1,
+    "force": 0,
+    "homeElement": 3,
+    "homeRadius": 87040,
+    "homeTarget": 2,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 72,
+    "power": 35825,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-tie-0.500000",
+   "stats": {
+    "density": 2048,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 2,
+    "force": 0,
+    "homeElement": 1,
+    "homeRadius": 56320,
+    "homeTarget": 2,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 68895,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-tie-1.500000",
+   "stats": {
+    "density": 2048,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 2,
+    "force": 0,
+    "homeElement": 1,
+    "homeRadius": 87040,
+    "homeTarget": 2,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 68895,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": true
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-nothing-0.500000",
+   "stats": {
+    "density": 205,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 6889,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2048000,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-nothing-1.500000",
+   "stats": {
+    "density": 205,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 6889,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2048000,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-air-0.500000",
+   "stats": {
+    "density": 205,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "homeElement": 0,
+    "homeRadius": 56320,
+    "homeTarget": 2,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 6889,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2048000,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-air-1.500000",
+   "stats": {
+    "density": 205,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "homeElement": 0,
+    "homeRadius": 87040,
+    "homeTarget": 2,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 6889,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2048000,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.4000000059604645,
+     "x": 40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-three-0.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 2048,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 0,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "water",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "earth",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.4000000059604645,
+     "x": 40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-three-1.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 2048,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 0,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "pulling",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 90.0,
+     "y": 0.0
+    }
+   ],
+   "name": "guided-wind-human-0.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 9216,
+    "duration": 666,
+    "element": 0,
+    "force": 53453,
+    "homeElement": 0,
+    "homeRadius": 56320,
+    "homeTarget": 1,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 3,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "pull": 1024,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    },
+    {
+     "assetId": "pulling",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": 90.0,
+     "y": 0.0
+    }
+   ],
+   "name": "guided-wind-human-1.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 9216,
+    "duration": 666,
+    "element": 0,
+    "force": 53453,
+    "homeElement": 0,
+    "homeRadius": 87040,
+    "homeTarget": 1,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 3,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "pull": 1024,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind_underfoot",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 0.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-flight-human-0.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "homeElement": 0,
+    "homeRadius": 56320,
+    "homeTarget": 1,
+    "homeTurnRate": 3328,
+    "imbalance": 1024,
+    "kind": 2,
+    "launchSpeed": 41574,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "wind_underfoot",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "guidance",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.5,
+     "x": 0.0,
+     "y": 130.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "guided-flight-human-1.500000",
+   "stats": {
+    "density": 0,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 0,
+    "force": 0,
+    "homeElement": 0,
+    "homeRadius": 87040,
+    "homeTarget": 1,
+    "homeTurnRate": 4864,
+    "imbalance": 1024,
+    "kind": 2,
+    "launchSpeed": 41574,
+    "offset": 0,
+    "particleCount": 0,
+    "power": 0,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 0,
+    "valid": false
+   }
+  },
+  {
+   "glyphs": [
+    {
+     "assetId": "fire",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -120.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "human",
+     "kind": "sigil",
+     "rotation": 0.0,
+     "scale": 1.0,
+     "x": -40.0,
+     "y": 40.0
+    },
+    {
+     "assetId": "column",
+     "kind": "sign",
+     "rotation": 0.0,
+     "scale": 1.2000000476837158,
+     "x": 0.0,
+     "y": -120.0
+    }
+   ],
+   "name": "human-alone-0.500000",
+   "stats": {
+    "density": 205,
+    "diameter": 6144,
+    "duration": 0,
+    "element": 3,
+    "force": 0,
+    "imbalance": 1024,
+    "kind": 1,
+    "launchSpeed": 0,
+    "offset": 0,
+    "particleCount": 64,
+    "power": 6889,
+    "range": 47514,
+    "speed": 59392,
+    "temperature": 2048000,
     "valid": false
    }
   },

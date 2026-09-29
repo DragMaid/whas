@@ -37,7 +37,8 @@ public:
 
   // Shared with the casting UI
   static Color BalanceColor(float imbalance);
-  static void DrawStats(const SpellStats &stats);
+  // `problem` (SpellSystem::Problem) explains an invalid spell
+  static void DrawStats(const SpellStats &stats, const char *problem = nullptr);
 
 private:
   void DrawOverlay();

@@ -44,6 +44,10 @@ struct Stats {
   int32_t pull = 0;
   int32_t flashRadius = 0;
   int32_t flashTime = 0;
+  uint8_t homeTarget = 0;  // HomeTarget
+  uint8_t homeElement = 0; // Element
+  int32_t homeTurnRate = 0;
+  int32_t homeRadius = 0;
   std::vector<Stats> parts; // layered spells
 
   bool operator==(const Stats &) const;

@@ -13,7 +13,7 @@ public static class SpellValidator
     const float ComponentScaleMin = 0.2f, ComponentScaleMax = 0.7f;
 
     static readonly HashSet<string> KnownSigils =
-        ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "light", "dragon"];
+        ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "light", "dragon", "guidance", "human"];
 
     static readonly HashSet<string> KnownSigns =
         ["column", "convergence", "crushing", "repetition", "cooling", "strengthening",
@@ -60,19 +60,23 @@ public static class SpellValidator
         return null;
     }
 
-    // A plain circle: one sigil (plus at most one dragon) and some signs
+    // A plain circle: one sigil (plus at most one dragon, and guidance with
+    // its target) and some signs, that the evaluator can make a spell of
     static string? CheckCircle(IReadOnlyList<Glyph> glyphs)
     {
         if (glyphs.Count == 0 || glyphs.Count > MaxGlyphs)
             return $"a spell has 1-{MaxGlyphs} glyphs";
         if (CheckGlyphs(glyphs, out int sigils, out int shapes, out int signs) is { } bad)
             return bad;
-        if (sigils != 1)
-            return "a spell needs exactly one sigil";
+        if (sigils < 1 || sigils > 4)
+            return "a spell needs one sigil to fire (plus guidance and its target)";
         if (shapes > 1)
             return "a spell holds at most one dragon";
         if (signs == 0)
             return "a spell needs at least one sign";
+        if (!SpellEvaluator.Evaluate(glyphs).Valid)
+            return "the sigils don't make a spell (one sigil to fire; guidance needs " +
+                   "a target, a human sigil needs guidance, wind needs a pulling sign)";
         return null;
     }
 

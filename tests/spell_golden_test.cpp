@@ -116,6 +116,47 @@ std::vector<Spell> Cases() {
                   {"dragon", GlyphKind::Sigil, {-60, 0}, 1, 0},
                   {"column", GlyphKind::Sign, {0, -120}, 1, 0}}});
 
+  // Guidance: a human sigil or a second element sigil is the target
+  {
+    struct G {
+      const char *name;
+      std::vector<std::pair<const char *, float>> sigils;
+    };
+    const G guided[] = {
+        {"guided-light-human", {{"light", 1.0f}, {"human", 0.8f}}},
+        {"guided-fire-water", {{"fire", 1.2f}, {"water", 0.6f}}},
+        {"guided-water-fire", {{"fire", 0.6f}, {"water", 1.2f}}},
+        {"guided-tie", {{"earth", 1.0f}, {"water", 1.0f}}},
+        {"guided-nothing", {{"fire", 1.0f}}},
+        {"guided-air", {{"fire", 1.0f}, {"wind", 0.5f}}},
+        {"guided-three", {{"fire", 1.0f}, {"water", 0.5f}, {"earth", 0.4f}}},
+        {"guided-wind-human", {{"wind", 1.0f}, {"human", 1.0f}}},
+        {"guided-flight-human", {{"wind_underfoot", 1.0f}, {"human", 1.0f}}},
+        {"human-alone", {{"fire", 1.0f}, {"human", 1.0f}}},
+    };
+    for (const G &g : guided) {
+      for (float guidance : {0.5f, 1.5f}) {
+        bool withGuidance = std::string(g.name) != "human-alone";
+        if (!withGuidance && guidance > 1.0f)
+          continue;
+        Spell s;
+        s.name = std::string(g.name) + "-" + std::to_string(guidance);
+        float x = -120;
+        for (auto [id, scale] : g.sigils) {
+          s.glyphs.push_back({id, GlyphKind::Sigil, {x, 40}, scale, 0.0f});
+          x += 80;
+        }
+        if (withGuidance)
+          s.glyphs.push_back(
+              {"guidance", GlyphKind::Sigil, {0, 130}, guidance, 0.0f});
+        s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.2f, 0.0f});
+        if (std::string(g.name) == "guided-wind-human")
+          s.glyphs.push_back({"pulling", GlyphKind::Sign, {90, 0}, 1.0f, 0.0f});
+        out.push_back(std::move(s));
+      }
+    }
+  }
+
   // Layered spells: 1-6 embedded spells (6 is too many), varied scales and
   // turns, with and without outer ring signs
   const char *partSigils[] = {"water", "fire", "earth", "wind", "wind_underfoot", "ice"};
@@ -206,4 +247,18 @@ TEST_CASE("format 1 spells rename the wind sigils", "[spell]") {
   CHECK(s.glyphs[0].assetId == "wind_underfoot");
   CHECK(s.glyphs[1].assetId == "column");
   CHECK(s.components[0].glyphs[0].assetId == "wind");
+}
+
+TEST_CASE("the editor's problem text agrees with the evaluator", "[spell]") {
+  for (const Spell &s : Cases()) {
+    INFO(s.name);
+    bool valid = SpellSystem::Evaluate(s).valid;
+    std::string problem = SpellSystem::Problem(s);
+    // Never nothing wrong with an invalid spell, never a complaint about
+    // the sigils of a valid one (a missing sign is the editor's own rule)
+    if (problem.empty())
+      CHECK(valid);
+    if (valid && !problem.empty())
+      CHECK(problem == "Add at least one sign.");
+  }
 }

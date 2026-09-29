@@ -20,6 +20,11 @@ enum class SpellKind : uint8_t {
 };
 
 
+// What a guided spell (guidance sigil) chases: the nearest character (a
+// human sigil beside it) or the nearest cells of an element (a second,
+// smaller element sigil)
+enum class HomeTarget : uint8_t { None, Human, Element };
+
 // Everything a spell does, derived from its glyphs.
 //
 // Signs are vectors in the circle's own frame, where "up" (0, -1) is the aim
@@ -53,6 +58,13 @@ struct SpellStats {
   // this long (seconds)
   float flashRadius = 0.0f;
   float flashTime = 0.0f;
+
+  // Guidance: particles turn toward the target at up to homeTurnRate
+  // (rad/s), looking for it within homeRadius cells
+  HomeTarget homeTarget = HomeTarget::None;
+  Element homeElement = Element::AIR;
+  float homeTurnRate = 0.0f;
+  float homeRadius = 0.0f;
 
   // Modifier signs (element spells)
   SpellShape shape = SpellShape::Stream;
@@ -95,6 +107,9 @@ bool IsShapeSigil(const std::string &assetId);
 bool SignInvertible(const std::string &assetId);
 
 SpellStats Evaluate(const Spell &spell);
+
+// Why a spell isn't valid, in the editor's words; empty when it is
+std::string Problem(const Spell &spell);
 
 // How much an embedded spell of this scale is worth (0.5..1)
 float ComponentEffectiveness(float scale);

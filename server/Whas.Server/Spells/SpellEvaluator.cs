@@ -43,6 +43,12 @@ public static class SpellEvaluator
     const float FlashBaseTime = 1.5f;
     const float FlashTimePerSigil = 1.5f;
     const float MaxFlashRadius = 30.0f;
+    const float HomeBaseTurn = 2.5f;
+    const float HomeTurnPerSigil = 1.5f;
+    const float MaxHomeTurn = 6.0f;
+    const float HomeBaseRadius = 40.0f;
+    const float HomeRadiusPerSigil = 30.0f;
+    const float MaxHomeRadius = 120.0f;
     const float MinPull = 0.25f;
     const float MaxPull = 2.5f;
     const float GustBaseDuration = 0.35f;
@@ -158,7 +164,12 @@ public static class SpellEvaluator
 
     sealed class Circle
     {
-        public int SigilCount, ShapeSigils, ThrustSigns;
+        public int SigilCount, ShapeSigils, ThrustSigns, AllSigils;
+        // Guidance (see ReadCircle in spell_system.cpp)
+        public float Guidance;
+        public HomeTarget HomeTarget;
+        public Element HomeElement;
+        public bool GuideValid = true;
         public float SigilScale;
         public SpellKind Kind;
         public Element Element;
@@ -171,6 +182,8 @@ public static class SpellEvaluator
     static Circle ReadCircle(IReadOnlyList<Glyph> glyphs)
     {
         var c = new Circle();
+        int guidanceSigils = 0, humanSigils = 0;
+        var sigils = new List<Glyph>(); // element and kind sigils
         foreach (var glyph in glyphs)
         {
             string id = glyph.AssetId;
@@ -183,10 +196,16 @@ public static class SpellEvaluator
             }
             if (glyph.IsSigil)
             {
-                c.SigilCount++;
-                c.SigilScale = glyph.Scale;
-                c.Kind = SigilKind(id);
-                c.Element = SigilElement(id);
+                c.AllSigils++;
+                if (id == "guidance")
+                {
+                    guidanceSigils++;
+                    c.Guidance += glyph.Scale;
+                }
+                else if (id == "human")
+                    humanSigils++;
+                else
+                    sigils.Add(glyph);
                 continue;
             }
             float sign = glyph.Inverted ? -glyph.Scale : glyph.Scale;
@@ -212,6 +231,32 @@ public static class SpellEvaluator
                     break;
             }
         }
+
+        // With guidance the bigger element sigil fires (the first on a tie)
+        // and a human sigil or the smaller element sigil is the target
+        Glyph? fired = sigils.Count == 1 ? sigils[0] : null;
+        if (c.Guidance > 0.0f && sigils.Count == 2 && humanSigils == 0)
+        {
+            bool second = sigils[1].Scale > sigils[0].Scale;
+            fired = sigils[second ? 1 : 0];
+            c.HomeTarget = HomeTarget.Element;
+            c.HomeElement = SigilElement(sigils[second ? 0 : 1].AssetId);
+        }
+        else if (c.Guidance > 0.0f && humanSigils > 0)
+        {
+            c.HomeTarget = HomeTarget.Human;
+        }
+        c.SigilCount = fired is not null ? 1 : sigils.Count;
+        if (fired is not null)
+        {
+            c.SigilScale = fired.Scale;
+            c.Kind = SigilKind(fired.AssetId);
+            c.Element = SigilElement(fired.AssetId);
+        }
+        bool targeted = c.HomeTarget == HomeTarget.Human ||
+                        (c.HomeTarget == HomeTarget.Element && c.HomeElement != Element.Air);
+        c.GuideValid = guidanceSigils <= 1 && humanSigils <= 1 &&
+                       (c.Guidance > 0.0f ? targeted : humanSigils == 0);
         return c;
     }
 
@@ -249,7 +294,8 @@ public static class SpellEvaluator
     {
         var s = new SpellStats();
         var thrust = ReadThrust(c);
-        s.Valid = c.SigilCount == 1 && c.Kind != SpellKind.None && c.ShapeSigils <= 1;
+        s.Valid = c.SigilCount == 1 && c.Kind != SpellKind.None && c.ShapeSigils <= 1 &&
+                  c.GuideValid;
         s.Kind = c.Kind;
         s.Element = c.Element;
         // Pulling signs make a field of the sigil's element; the wind sigil
@@ -277,6 +323,17 @@ public static class SpellEvaluator
         s.Range = s.Speed * FlightTime;
         s.Diameter = Math.Clamp(BaseDiameter + sigilScale * DiameterPerSigilScale,
                                 1.0f, MaxDiameter);
+
+        // Only something fired can be guided
+        if (c.HomeTarget != HomeTarget.None)
+        {
+            if (s.Kind != SpellKind.Element)
+                s.Valid = false;
+            s.HomeTarget = c.HomeTarget;
+            s.HomeElement = c.HomeElement;
+            s.HomeTurnRate = MathF.Min(MaxHomeTurn, HomeBaseTurn + HomeTurnPerSigil * c.Guidance);
+            s.HomeRadius = MathF.Min(MaxHomeRadius, HomeBaseRadius + HomeRadiusPerSigil * c.Guidance);
+        }
 
         switch (s.Kind)
         {
@@ -407,7 +464,7 @@ public static class SpellEvaluator
             OffsetRad = thrust.OffsetRad,
             Speed = BaseSpeed + thrust.SpeedGain,
         };
-        s.Valid = outer.SigilCount == 0 && outer.ShapeSigils == 0 &&
+        s.Valid = outer.AllSigils == 0 && outer.ShapeSigils == 0 &&
                   components.Count >= 1 && components.Count <= MaxComponents;
         foreach (var component in components)
         {
@@ -438,6 +495,8 @@ public static class SpellEvaluator
         Q(s.Crush, StatScale), Q(s.Restore, StatScale), Q(s.CollectRadius, StatScale),
         s.CollectMax, Q(s.Pull, StatScale),
         Q(s.FlashRadius, StatScale), Q(s.FlashTime, StatScale),
+        (byte)s.HomeTarget, (byte)s.HomeElement,
+        Q(s.HomeTurnRate, StatScale), Q(s.HomeRadius, StatScale),
         s.Parts.Count == 0 ? null : s.Parts.Select(Quantize).ToList());
 
     public static QuantizedStats EvaluateQuantized(IReadOnlyList<Glyph> glyphs) =>

@@ -29,6 +29,8 @@ bool Stats::operator==(const Stats &o) const {
          restore == o.restore && collectRadius == o.collectRadius &&
          collectMax == o.collectMax && pull == o.pull &&
          flashRadius == o.flashRadius && flashTime == o.flashTime &&
+         homeTarget == o.homeTarget && homeElement == o.homeElement &&
+         homeTurnRate == o.homeTurnRate && homeRadius == o.homeRadius &&
          parts == o.parts;
 }
 
@@ -59,6 +61,10 @@ Stats Quantize(const SpellStats &s) {
   q.pull = Q(s.pull, STAT_SCALE);
   q.flashRadius = Q(s.flashRadius, STAT_SCALE);
   q.flashTime = Q(s.flashTime, STAT_SCALE);
+  q.homeTarget = static_cast<uint8_t>(s.homeTarget);
+  q.homeElement = static_cast<uint8_t>(s.homeElement);
+  q.homeTurnRate = Q(s.homeTurnRate, STAT_SCALE);
+  q.homeRadius = Q(s.homeRadius, STAT_SCALE);
   for (const SpellStats &part : s.parts)
     q.parts.push_back(Quantize(part));
   return q;
@@ -91,6 +97,10 @@ SpellStats Dequantize(const Stats &q) {
   s.pull = D(q.pull, STAT_SCALE);
   s.flashRadius = D(q.flashRadius, STAT_SCALE);
   s.flashTime = D(q.flashTime, STAT_SCALE);
+  s.homeTarget = static_cast<HomeTarget>(q.homeTarget);
+  s.homeElement = static_cast<Element>(q.homeElement);
+  s.homeTurnRate = D(q.homeTurnRate, STAT_SCALE);
+  s.homeRadius = D(q.homeRadius, STAT_SCALE);
   for (const Stats &part : q.parts)
     s.parts.push_back(Dequantize(part));
   // Only used for the editor's balance display; the direction comes from
@@ -149,6 +159,12 @@ void to_json(nlohmann::json &j, const Stats &s) {
     j["flashRadius"] = s.flashRadius;
   if (s.flashTime != 0)
     j["flashTime"] = s.flashTime;
+  if (s.homeTarget != 0) {
+    j["homeTarget"] = s.homeTarget;
+    j["homeElement"] = s.homeElement;
+    j["homeTurnRate"] = s.homeTurnRate;
+    j["homeRadius"] = s.homeRadius;
+  }
   if (!s.parts.empty()) {
     j["parts"] = nlohmann::json::array();
     for (const Stats &part : s.parts) {
@@ -185,6 +201,10 @@ void from_json(const nlohmann::json &j, Stats &s) {
   s.pull = j.value("pull", int32_t{0});
   s.flashRadius = j.value("flashRadius", int32_t{0});
   s.flashTime = j.value("flashTime", int32_t{0});
+  s.homeTarget = j.value("homeTarget", uint8_t{0});
+  s.homeElement = j.value("homeElement", uint8_t{0});
+  s.homeTurnRate = j.value("homeTurnRate", int32_t{0});
+  s.homeRadius = j.value("homeRadius", int32_t{0});
   s.parts.clear();
   if (auto it = j.find("parts"); it != j.end())
     for (const auto &pj : *it) {

@@ -53,6 +53,11 @@ struct Particle {
     // Light: bursts into a flash instead of landing
     float flashRadius = 0.0f;
     float flashTime = 0.0f;
+    // Guidance (see SpellStats): what it chases while it flies
+    uint8_t homeTarget = 0; // HomeTarget
+    Element homeElement = Element::AIR;
+    float homeTurnRate = 0.0f;
+    float homeRadius = 0.0f;
 };
 
 class ParticleSystem {
@@ -90,6 +95,8 @@ private:
     bool HitHurtbox(const Particle &p);
     // A light mote ends in a flash
     void Burst(Particle &p);
+    // Turn guided projectiles toward what they chase
+    void Steer(const struct Grid &grid, float dt);
 
     std::vector<Particle> m_particles;
     std::vector<Hurtbox> m_hurtboxes;

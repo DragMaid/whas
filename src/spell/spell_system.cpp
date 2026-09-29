@@ -81,6 +81,13 @@ struct SpellTuning {
   float flashBaseTime = 1.5f; // seconds of blindness
   float flashTimePerSigil = 1.5f;
   float maxFlashRadius = 30.0f;
+  // Guidance: a bigger guidance sigil turns harder and looks further
+  float homeBaseTurn = 2.5f; // rad/s
+  float homeTurnPerSigil = 1.5f;
+  float maxHomeTurn = 6.0f;
+  float homeBaseRadius = 40.0f;
+  float homeRadiusPerSigil = 30.0f;
+  float maxHomeRadius = 120.0f;
   // Layered spells: an embedded spell of scale s is worth s / this; one
   // that fills the whole core is worth all of it
   float componentFullScale = 0.7f;
@@ -199,8 +206,16 @@ struct Modifiers {
 
 // What one circle's glyphs add up to
 struct Circle {
-  int sigilCount = 0; // sigils that pick the kind
+  int sigilCount = 0; // sigils that pick the kind (the fired one)
   int shapeSigils = 0;
+  int allSigils = 0; // every sigil, for rings that may hold none
+
+  // Guidance: its summed scale, what it chases, and whether the sigils
+  // around it make sense (one guidance, one target, at most one human)
+  float guidance = 0.0f;
+  HomeTarget homeTarget = HomeTarget::None;
+  Element homeElement = Element::AIR;
+  bool guideValid = true;
   float sigilScale = 0.0f;
   SpellKind kind = SpellKind::None;
   Element element = Element::AIR;
@@ -215,6 +230,8 @@ struct Circle {
 
 Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
   Circle c;
+  int guidanceSigils = 0, humanSigils = 0;
+  std::vector<const PlacedGlyph *> sigils; // element and kind sigils
   for (const auto &glyph : glyphs) {
     const std::string &id = glyph.assetId;
     if (const ShapeTrigger *t = SpellShapes::TriggerFor(id, glyph.kind)) {
@@ -224,10 +241,15 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
       continue;
     }
     if (glyph.kind == GlyphKind::Sigil) {
-      c.sigilCount++;
-      c.sigilScale = glyph.scale;
-      c.kind = SpellSystem::SigilKind(id);
-      c.element = SpellSystem::SigilElement(id);
+      c.allSigils++;
+      if (id == "guidance") {
+        guidanceSigils++;
+        c.guidance += glyph.scale;
+      } else if (id == "human") {
+        humanSigils++;
+      } else {
+        sigils.push_back(&glyph);
+      }
       continue;
     }
 
@@ -260,6 +282,32 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
       c.thrustSigns++;
     }
   }
+
+  // Which sigil is fired. With guidance, a human sigil or a second element
+  // sigil is what it chases: the bigger element sigil fires (the first on a
+  // tie), the smaller one is the target.
+  const PlacedGlyph *fired = sigils.size() == 1 ? sigils[0] : nullptr;
+  if (c.guidance > 0.0f && sigils.size() == 2 && humanSigils == 0) {
+    bool second = sigils[1]->scale > sigils[0]->scale;
+    fired = sigils[second ? 1 : 0];
+    c.homeTarget = HomeTarget::Element;
+    c.homeElement = SpellSystem::SigilElement(sigils[second ? 0 : 1]->assetId);
+  } else if (c.guidance > 0.0f && humanSigils > 0) {
+    c.homeTarget = HomeTarget::Human;
+  }
+  c.sigilCount = fired ? 1 : static_cast<int>(sigils.size());
+  if (fired) {
+    c.sigilScale = fired->scale;
+    c.kind = SpellSystem::SigilKind(fired->assetId);
+    c.element = SpellSystem::SigilElement(fired->assetId);
+  }
+  // Guidance needs something to chase (never plain air), and a human sigil
+  // means nothing without guidance
+  bool targeted = c.homeTarget == HomeTarget::Human ||
+                  (c.homeTarget == HomeTarget::Element &&
+                   c.homeElement != Element::AIR);
+  c.guideValid = guidanceSigils <= 1 && humanSigils <= 1 &&
+                 (c.guidance > 0.0f ? targeted : humanSigils == 0);
   return c;
 }
 
@@ -305,7 +353,7 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
   SpellStats s;
   Thrust thrust = ReadThrust(c);
   s.valid = c.sigilCount == 1 && c.kind != SpellKind::None &&
-            c.shapeSigils <= 1;
+            c.shapeSigils <= 1 && c.guideValid;
   s.kind = c.kind;
   s.element = c.element;
   // Pulling signs make a field out of the sigil's element: they move what's
@@ -332,6 +380,20 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
   s.diameter = std::clamp(
       kTuning.baseDiameter + sigilScale * kTuning.diameterPerSigilScale, 1.0f,
       kTuning.maxDiameter);
+
+  // Only something fired can be guided
+  if (c.homeTarget != HomeTarget::None) {
+    if (s.kind != SpellKind::Element)
+      s.valid = false;
+    s.homeTarget = c.homeTarget;
+    s.homeElement = c.homeElement;
+    s.homeTurnRate = std::min(kTuning.maxHomeTurn,
+                              kTuning.homeBaseTurn +
+                                  kTuning.homeTurnPerSigil * c.guidance);
+    s.homeRadius = std::min(kTuning.maxHomeRadius,
+                            kTuning.homeBaseRadius +
+                                kTuning.homeRadiusPerSigil * c.guidance);
+  }
 
   switch (s.kind) {
   case SpellKind::Element: {
@@ -461,7 +523,7 @@ SpellStats EvaluateLayered(const Spell &spell) {
   s.speed = kTuning.baseSpeed + thrust.speedGain;
 
   int count = static_cast<int>(spell.components.size());
-  s.valid = outer.sigilCount == 0 && outer.shapeSigils == 0 && count >= 1 &&
+  s.valid = outer.allSigils == 0 && outer.shapeSigils == 0 && count >= 1 &&
             count <= LAYER_MAX_COMPONENTS;
   for (const SpellComponent &component : spell.components) {
     Circle inner = ReadCircle(component.glyphs);
@@ -477,6 +539,68 @@ SpellStats EvaluateLayered(const Spell &spell) {
 }
 
 } // namespace
+
+namespace {
+
+std::string CircleProblem(const std::vector<PlacedGlyph> &glyphs) {
+  Circle c = ReadCircle(glyphs);
+  int guidance = 0, human = 0, signs = 0;
+  for (const PlacedGlyph &g : glyphs) {
+    guidance += g.assetId == "guidance";
+    human += g.assetId == "human";
+    signs += g.kind == GlyphKind::Sign;
+  }
+  if (c.shapeSigils > 1)
+    return "Only one dragon sigil per spell.";
+  if (guidance > 1 || human > 1)
+    return "Only one guidance and one human sigil per spell.";
+  if (human > 0 && guidance == 0)
+    return "A human sigil is only a target: add a guidance sigil.";
+  if (c.sigilCount == 0)
+    return "Place a sigil: it's what the spell is made of.";
+  if (c.sigilCount > 1)
+    return guidance > 0
+               ? "Guidance takes one target: a human sigil or a second, "
+                 "smaller element sigil."
+               : "One sigil per spell. Two only with guidance: the smaller "
+                 "one is what it chases.";
+  if (guidance > 0 && !c.guideValid)
+    return "Guidance needs a target: a human sigil or a second, smaller "
+           "element sigil.";
+  if (c.kind == SpellKind::None)
+    return "That sigil does nothing on its own.";
+  bool pulled = c.mods.pull != 0.0f;
+  if (c.kind == SpellKind::Field && !pulled)
+    return "Wind only moves what's there: add a pulling sign.";
+  if (pulled && (c.kind == SpellKind::Flight || c.element == Element::LIGHT))
+    return "Pulling can't take hold of that sigil.";
+  if (c.homeTarget != HomeTarget::None &&
+      (pulled || c.kind != SpellKind::Element))
+    return "Only fired spells (elements, light) can be guided.";
+  if (signs == 0)
+    return "Add at least one sign.";
+  return "";
+}
+
+} // namespace
+
+std::string SpellSystem::Problem(const Spell &spell) {
+  if (!spell.Layered())
+    return CircleProblem(spell.glyphs);
+  for (const PlacedGlyph &g : spell.glyphs)
+    if (g.kind == GlyphKind::Sigil)
+      return "The outer ring holds signs only.";
+  if ((int)spell.components.size() > LAYER_MAX_COMPONENTS)
+    return "A layered spell holds at most 5 spells.";
+  for (const SpellComponent &c : spell.components) {
+    // Ring signs count too (a ring pulling sign makes every part a field)
+    std::vector<PlacedGlyph> glyphs = c.glyphs;
+    glyphs.insert(glyphs.end(), spell.glyphs.begin(), spell.glyphs.end());
+    if (std::string p = CircleProblem(glyphs); !p.empty())
+      return (c.source.empty() ? std::string("A part") : c.source) + ": " + p;
+  }
+  return "";
+}
 
 SpellStats SpellSystem::Evaluate(const Spell &spell) {
   if (spell.Layered())
@@ -557,6 +681,10 @@ void SpawnSpellParticle(SpellEffect &effect, ElementContext &ctx, Vector2 pos,
     p->restore = s.restore;
     p->flashRadius = s.flashRadius;
     p->flashTime = s.flashTime;
+    p->homeTarget = static_cast<uint8_t>(s.homeTarget);
+    p->homeElement = s.homeElement;
+    p->homeTurnRate = s.homeTurnRate;
+    p->homeRadius = s.homeRadius;
   }
   effect.emitted++;
 }

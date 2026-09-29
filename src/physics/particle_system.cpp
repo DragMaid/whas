@@ -3,6 +3,7 @@
 #include "whas/core/config.h"
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
+#include "whas/spell/spell_system.h"
 #include "whas/world/grid.h"
 #include <algorithm>
 #include <cmath>
@@ -40,6 +41,10 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.temperature = 0.0f;
       p.flashRadius = 0.0f;
       p.flashTime = 0.0f;
+      p.homeTarget = 0;
+      p.homeElement = Element::AIR;
+      p.homeTurnRate = 0.0f;
+      p.homeRadius = 0.0f;
       return &p;
     }
   }
@@ -231,6 +236,115 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
 
 } // namespace
 
+namespace {
+
+// Turn a velocity toward `to` by at most `maxTurn` radians, keeping its
+// speed
+void TurnToward(Particle &p, Vector2 to, float maxTurn) {
+  float want = std::atan2(to.y - p.pos.y, to.x - p.pos.x);
+  float have = std::atan2(p.vel.y, p.vel.x);
+  float diff = want - have;
+  while (diff > PI)
+    diff -= 2.0f * PI;
+  while (diff < -PI)
+    diff += 2.0f * PI;
+  float turn = std::clamp(diff, -maxTurn, maxTurn);
+  float c = std::cos(turn), s = std::sin(turn);
+  p.vel = {p.vel.x * c - p.vel.y * s, p.vel.x * s + p.vel.y * c};
+}
+
+// The nearest cell of an element within `radius` of `from`, ring by ring
+bool NearestCell(const Grid &grid, Vector2 from, Element element, int radius,
+                 Vector2 &out) {
+  int cx = static_cast<int>(std::floor(from.x));
+  int cy = static_cast<int>(std::floor(from.y));
+  for (int r = 0; r <= radius; ++r) {
+    for (int dy = -r; dy <= r; ++dy) {
+      int step = (dy == -r || dy == r) ? 1 : 2 * r; // ring edges only
+      for (int dx = -r; dx <= r; dx += std::max(1, step)) {
+        int x = cx + dx, y = cy + dy;
+        if (grid.InBounds(x, y) && grid.Get(x, y).element == element) {
+          out = {x + 0.5f, y + 0.5f};
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+} // namespace
+
+void ParticleSystem::Steer(const Grid &grid, float dt) {
+  // Guided particles of one cast share a target: found once a tick from
+  // where the group is, in pool order so every client picks the same
+  struct Group {
+    int owner;
+    uint8_t target;
+    Element element;
+    float radius = 0.0f;
+    Vector2 sum{0.0f, 0.0f};
+    int count = 0;
+    bool found = false;
+    Vector2 point{0.0f, 0.0f};
+  };
+  std::vector<Group> groups;
+  auto groupOf = [&groups](const Particle &p) -> Group * {
+    for (Group &g : groups)
+      if (g.owner == p.owner && g.target == p.homeTarget &&
+          g.element == p.homeElement)
+        return &g;
+    return nullptr;
+  };
+  auto guided = [](const Particle &p) {
+    return p.active && p.homeTarget != 0 && p.isProjectile &&
+           p.remainingDistance > 0.0f;
+  };
+
+  for (const Particle &p : m_particles) {
+    if (!guided(p))
+      continue;
+    Group *g = groupOf(p);
+    if (!g) {
+      groups.push_back({p.owner, p.homeTarget, p.homeElement});
+      g = &groups.back();
+    }
+    g->radius = std::max(g->radius, p.homeRadius);
+    g->sum.x += p.pos.x;
+    g->sum.y += p.pos.y;
+    g->count++;
+  }
+  if (groups.empty())
+    return;
+
+  for (Group &g : groups) {
+    Vector2 at{g.sum.x / g.count, g.sum.y / g.count};
+    if (g.target == static_cast<uint8_t>(HomeTarget::Human)) {
+      float best = g.radius * g.radius;
+      for (const Hurtbox &box : m_hurtboxes) {
+        if (box.id == g.owner)
+          continue;
+        Vector2 c{box.bounds.x + box.bounds.width * 0.5f,
+                  box.bounds.y + box.bounds.height * 0.5f};
+        float d = (c.x - at.x) * (c.x - at.x) + (c.y - at.y) * (c.y - at.y);
+        if (d <= best) {
+          best = d;
+          g.point = c;
+          g.found = true;
+        }
+      }
+    } else {
+      g.found = NearestCell(grid, at, g.element, static_cast<int>(g.radius),
+                            g.point);
+    }
+  }
+
+  for (Particle &p : m_particles)
+    if (guided(p))
+      if (const Group *g = groupOf(p); g && g->found)
+        TurnToward(p, g->point, p.homeTurnRate * dt);
+}
+
 void ParticleSystem::Burst(Particle &p) {
   p.active = false;
   if (p.flashRadius <= 0.0f)
@@ -255,6 +369,7 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
     f.age += dt;
   std::erase_if(m_visualFlashes,
                 [](const VisualFlash &f) { return f.age > 0.5f; });
+  Steer(grid, dt);
 
   for (auto &p : m_particles) {
     if (!p.active)

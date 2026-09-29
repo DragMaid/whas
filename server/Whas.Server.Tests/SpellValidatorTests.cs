@@ -59,7 +59,7 @@ public class SpellValidatorTests
         Assert.Contains("signs only", SpellValidator.Check("x", [Sigil("fire")], [Part(Water)]));
         Assert.Contains("core", SpellValidator.Check("x", [], [Part(Water, 100, 0.5f)]));
         Assert.Contains("scale", SpellValidator.Check("x", [], [Part(Water, 0, 0.9f)]));
-        Assert.Contains("layer: a spell needs exactly one sigil",
+        Assert.Contains("layer: a spell needs one sigil to fire",
             SpellValidator.Check("x", [], [Part([Sign("column")])]));
     }
 }
