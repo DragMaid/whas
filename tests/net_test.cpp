@@ -30,6 +30,21 @@ Spell MakeSpell(const char *name, const char *sigil, float sigilScale, int signs
   return spell;
 }
 
+// Two plain spells cast together, with a crushing, cooling outer ring
+Spell MakeLayered() {
+  Spell spell;
+  spell.name = "Storm";
+  Spell sand = MakeSpell("Sand", "sand", 1.0f, 2);
+  sand.glyphs.push_back({"orb", GlyphKind::Sign, {80, 0}, 1.0f, 0.0f});
+  Spell water = MakeSpell("Water", "water", 1.0f, 2);
+  water.glyphs.push_back({"dragon", GlyphKind::Sigil, {0, 80}, 1.0f, 0.0f});
+  spell.components = {{"Sand", sand.glyphs, {-60, 0}, 0.3f, 0.0f},
+                      {"Water", water.glyphs, {60, 0}, 0.3f, -45.0f}};
+  spell.glyphs = {{"crushing", GlyphKind::Sign, {0, -210}, 1.0f, 0.0f},
+                  {"cooling", GlyphKind::Sign, {0, 210}, 0.5f, 180.0f}};
+  return spell;
+}
+
 // A player without a screen: walks at the opponent and fires everything
 struct Bot {
   Simulation sim;
@@ -40,11 +55,12 @@ struct Bot {
     client.SetIdentityFile(identity);
     LockstepClient::Library lib;
     lib.spells = {{"bolt", MakeSpell("Bolt", "fire", 1.6f, 3)},
-                  {"rock", MakeSpell("Rock", "rock", 1.5f, 4)}};
+                  {"rock", MakeSpell("Rock", "rock", 1.5f, 4)},
+                  {"storm", MakeLayered()}};
     Deck deck;
     deck.id = "bot-deck";
     deck.name = "Bot";
-    deck.slots = {"bolt", "rock", "", "", "", ""};
+    deck.slots = {"storm", "bolt", "rock", "", "", ""};
     lib.decks = {deck};
     lib.match.deckIds = {"bot-deck", "bot-deck", "bot-deck"};
     client.SetLibrary(lib);

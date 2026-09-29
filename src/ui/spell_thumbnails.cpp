@@ -14,10 +14,19 @@ uint64_t LayoutHash(const Spell &spell) {
       h *= 0x100000001b3ull;
     }
   };
-  for (const PlacedGlyph &g : spell.glyphs) {
-    mix(g.assetId.data(), g.assetId.size());
-    float v[4] = {g.position.x, g.position.y, g.scale, g.rotationDeg};
+  auto glyphs = [&](const std::vector<PlacedGlyph> &list) {
+    for (const PlacedGlyph &g : list) {
+      mix(g.assetId.data(), g.assetId.size());
+      float v[5] = {g.position.x, g.position.y, g.scale, g.rotationDeg,
+                    g.inverted ? 1.0f : 0.0f};
+      mix(v, sizeof v);
+    }
+  };
+  glyphs(spell.glyphs);
+  for (const SpellComponent &c : spell.components) {
+    float v[4] = {c.position.x, c.position.y, c.scale, c.rotationDeg};
     mix(v, sizeof v);
+    glyphs(c.glyphs);
   }
   return h;
 }
@@ -30,6 +39,12 @@ SpellThumbnails::~SpellThumbnails() {
 }
 
 Color SpellThumbnails::Tint(const Spell &spell) {
+  // A layered spell takes the colour of its first part
+  if (spell.Layered()) {
+    Spell first;
+    first.glyphs = spell.components.front().glyphs;
+    return Tint(first);
+  }
   for (const PlacedGlyph &g : spell.glyphs) {
     if (g.kind != GlyphKind::Sigil)
       continue;
@@ -70,18 +85,28 @@ void SpellThumbnails::Render(const Spell &spell, RenderTexture2D &target) {
   ClearBackground(BLANK);
   DrawRing({half, half}, SPELL_OUTER_RADIUS * scale - 2.0f,
            SPELL_OUTER_RADIUS * scale, 0, 360, 64, tint);
-  DrawCircleLinesV({half, half}, SPELL_INNER_RADIUS * scale, faint);
-  for (const PlacedGlyph &glyph : spell.glyphs) {
+  auto drawGlyph = [&](const PlacedGlyph &glyph, float thickness) {
     const SvgAsset *asset = m_glyphs.FindById(glyph.assetId);
     if (!asset)
-      continue;
-    auto segments = SpellGeometry::TransformSegments(
-        asset->segments, asset->localCenter, glyph.position, glyph.scale,
-        glyph.rotationDeg);
+      return;
     Color c = glyph.kind == GlyphKind::Sigil ? tint : RAYWHITE;
-    for (const LineSeg &seg : segments)
-      DrawLineEx(toTex(seg.a), toTex(seg.b), 3.0f, c);
+    for (const LineSeg &seg : SpellGeometry::GlyphSegments(*asset, glyph))
+      DrawLineEx(toTex(seg.a), toTex(seg.b), thickness, c);
+  };
+  if (spell.Layered()) {
+    DrawCircleLinesV({half, half}, LAYER_RING_INNER * scale, faint);
+    for (const SpellComponent &comp : spell.components) {
+      Vector2 c = toTex(comp.position);
+      DrawCircleLinesV(c, SpellGeometry::ComponentRadius(comp.scale) * scale,
+                       tint);
+      for (const PlacedGlyph &glyph : comp.glyphs)
+        drawGlyph(SpellGeometry::ComponentGlyph(comp, glyph), 2.0f);
+    }
+  } else {
+    DrawCircleLinesV({half, half}, SPELL_INNER_RADIUS * scale, faint);
   }
+  for (const PlacedGlyph &glyph : spell.glyphs)
+    drawGlyph(glyph, 3.0f);
   EndTextureMode();
   SetTextureFilter(target.texture, TEXTURE_FILTER_BILINEAR);
 }

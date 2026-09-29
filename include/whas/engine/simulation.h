@@ -78,6 +78,10 @@ public:
                  int owner = -1);
 
 private:
+  // Collection: draw matching cells around the caster into the spell,
+  // returns how many
+  int Collect(const SpellStats &stats, Vector2 origin);
+
   SimulationConfig m_config;      // Editable source
   SimulationConfig m_frameConfig; // Per-frame snapshot
   uint32_t m_frameCounter = 0;

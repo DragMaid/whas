@@ -22,6 +22,9 @@ struct BodyData {
   int minX, maxX, minY, maxY;
   std::vector<uint8_t> pixelMask;
   std::vector<Element> localElements;
+  // Each pixel's temperature, carried while the body moves (the grid cells
+  // are cleared and rewritten every frame)
+  std::vector<float> localTemperatures;
 
   bool shouldBreak = false;
 };

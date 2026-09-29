@@ -27,11 +27,22 @@ constexpr Filter kFilters[] = {
     {"Rock", "rock"},    {"Wind", "wind"}, {"Gust", "gust"},
 };
 
-const char *SigilOf(const Spell &spell) {
-  for (const PlacedGlyph &g : spell.glyphs)
-    if (g.kind == GlyphKind::Sigil)
+// The sigil that picks what a plain spell (or a component) does
+const char *SigilOf(const std::vector<PlacedGlyph> &glyphs) {
+  for (const PlacedGlyph &g : glyphs)
+    if (g.kind == GlyphKind::Sigil && !SpellSystem::IsShapeSigil(g.assetId))
       return g.assetId.c_str();
   return "";
+}
+
+// A layered spell matches the sigil of any of its parts
+bool HasSigil(const Spell &spell, const char *sigil) {
+  if (std::strcmp(SigilOf(spell.glyphs), sigil) == 0)
+    return true;
+  return std::any_of(spell.components.begin(), spell.components.end(),
+                     [sigil](const SpellComponent &c) {
+                       return std::strcmp(SigilOf(c.glyphs), sigil) == 0;
+                     });
 }
 
 bool ContainsNoCase(const std::string &hay, const char *needle) {
@@ -91,7 +102,7 @@ void SpellEditor::DrawSpellGrid(float width) {
   int shown = 0;
   for (const Spell &spell : m_spells->All()) {
     const char *sigil = kFilters[m_filter].sigil;
-    if (sigil && std::strcmp(SigilOf(spell), sigil) != 0)
+    if (sigil && !HasSigil(spell, sigil))
       continue;
     if (!ContainsNoCase(spell.name, m_search))
       continue;
@@ -184,9 +195,11 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
               spell.name.c_str());
   ImGui::PopClipRect();
   const char *kind = !stats.valid                         ? "invalid"
+                     : stats.kind == SpellKind::Compound
+                         ? TextFormat("layered x%d", (int)stats.parts.size())
                      : stats.kind == SpellKind::Flight    ? "wind"
                      : stats.kind == SpellKind::Gust      ? "gust"
-                                                          : SigilOf(spell);
+                                                          : SigilOf(spell.glyphs);
   int ticks = stats.valid ? TurnController::CastTicks(stats) : 0;
   dl->AddText(ImGui::GetFont(), 12.0f, {p0.x + 8, t0.y + thumb + 20},
               stats.valid ? ToU32(tint, 200) : IM_COL32(230, 90, 90, 255),
@@ -471,14 +484,20 @@ void SpellEditor::DrawPreviewStrip(ImVec2 size) {
     float frac = std::min(1.0f, (float)ticks / TurnController::TURN_TICKS);
     dl->AddRectFilled(b0, {b0.x + barW * frac, b0.y + 6},
                       IM_COL32(255, 190, 70, 255), 2.0f);
+    bool tooSlow = ticks > TurnController::TURN_TICKS;
     dl->AddText(ImGui::GetFont(), 12.0f, {tx, p1.y - 32},
-                IM_COL32(170, 170, 190, 255),
-                TextFormat("cast time %.2fs of %.0fs",
+                tooSlow ? IM_COL32(230, 90, 90, 255)
+                        : IM_COL32(170, 170, 190, 255),
+                TextFormat(tooSlow ? "cast time %.2fs: longer than a %.0fs turn"
+                                   : "cast time %.2fs of %.0fs",
                            ticks * TurnController::TICK_DT,
                            TurnController::TURN_SECONDS));
   } else {
     dl->AddText(ImGui::GetFont(), 12.0f, {tx, p1.y - 32},
-                IM_COL32(230, 90, 90, 255), "needs exactly one sigil");
+                IM_COL32(230, 90, 90, 255),
+                m_currentSpell.Layered()
+                    ? "each part needs one sigil; the ring holds signs"
+                    : "needs exactly one sigil");
   }
   ImGui::Dummy(size);
 }

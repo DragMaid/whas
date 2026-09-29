@@ -22,12 +22,13 @@ the clients report.
 | Different builds | `hello.buildId` (git hash, compiler, CPU). Matchmaking only pairs equal builds. |
 | Spell stats computed in C# vs C++ | The server sends quantized integer stats. Clients simulate on those numbers and never re-evaluate. |
 | Aims | Sent as `int16` pairs scaled by 16383 |
-| Cast time | Integer formula `max(1, (180 + 3*particles + 5) / 10)` on both sides |
+| Cast time | Integer formula `max(1, (180 + 3*particles + 5) / 10)` on both sides. A layered spell takes its slowest part, plus half the other parts rounded up, plus `8 + 2*(parts-1)`. |
 | Tuning sliders | Online matches use the default config (ruleset 1) |
 
-`tests/fixtures/spells.json` holds 326 golden spells. The C++ and C#
-evaluators must produce exactly the listed quantized stats (`whas_tests`,
-`dotnet test`).
+`tests/fixtures/spells.json` holds 538 golden spells (evaluator version 4).
+They cover plain spells, modifier signs, the dragon sigil and layered spells.
+The C++ and C# evaluators must produce exactly the listed quantized stats
+(`whas_tests`, `dotnet test`).
 
 ## Messages
 
@@ -41,21 +42,46 @@ evaluators must produce exactly the listed quantized stats (`whas_tests`,
 
 | Client → server | Server → client |
 |---|---|
-| `uploadSpell {ref, name, glyphs[]}` | `spellAccepted {ref, spellId, stats}` / `spellRejected {ref, reason}` |
+| `uploadSpell {ref, name, glyphs[], components[]?}` | `spellAccepted {ref, spellId, stats}` / `spellRejected {ref, reason}` |
 | `listSpells {}` | `spells {spells: SpellCard[]}` |
 | `upsertDeck {ref, deckId?, name, spellIds[6]}` (0 = empty) | `deckAccepted {ref, deckId}` / `deckRejected {ref, reason}` |
 | `deleteDeck {deckId}`, `listDecks {}` | `decks {decks[]}` |
 
 A glyph has the same shape as the spell files:
-`{assetId, kind: "sign"|"sigil", x, y, scale, rotation}`.
+`{assetId, kind: "sign"|"sigil", x, y, scale, rotation, inverted?}`.
+`inverted` is only sent when it is true, and only `crushing` and `expansion`
+may set it.
 
-A `SpellCard` is `{id, name, glyphs, stats}`, where `stats` is the quantized
-`SpellQuant::Stats`:
+- Signs: `column` (thrust), plus the modifiers `convergence`, `crushing`,
+  `repetition`, `cooling`, `strengthening`, `collection`, `expansion` and
+  `orb`.
+- Sigils: the element and kind sigils, plus `dragon`. `dragon` is a shape
+  sigil and needs exactly one other sigil beside it.
+
+A layered spell also has `components`: 1 to 5 entries of
+`{source, x, y, scale (0.2-0.5), rotation, glyphs[]}`.
+
+- Each entry is a plain spell.
+- The top-level `glyphs` are the outer ring and must all be signs.
+- Plain spells leave out `components`, which keeps their upload hash
+  unchanged.
+
+A `SpellCard` is `{id, name, glyphs, stats, components?}`, where `stats` is
+the quantized `SpellQuant::Stats`:
 
 - `speed`, `range`, `density`, `power`, `diameter`, `temperature`,
-  `launchSpeed`, `force`, `duration` and `imbalance` are in units of 1/1024.
+  `launchSpeed`, `force`, `duration`, `imbalance`, `temperatureDelta`,
+  `hardnessScale`, `crush`, `restore` and `collectRadius` are in units of
+  1/1024.
 - `offset` is in radians, in units of 1/65536.
-- `particleCount` is a plain count.
+- `particleCount` and `collectMax` are plain counts.
+- `shape` is 0 (stream), 1 (orb) or 2 (dragon).
+- A missing modifier field means its default: 0, or 1024 for
+  `hardnessScale`. The C++ side leaves out default modifier fields; the
+  server always writes them.
+- A layered spell has `kind` 4 and a `parts` array. Each entry is the full
+  stats of one embedded spell, with the outer ring already applied. All the
+  parts fire on the same tick.
 
 ### Matchmaking
 

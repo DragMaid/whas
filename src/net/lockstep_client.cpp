@@ -1,6 +1,7 @@
 #include "whas/net/lockstep_client.h"
 #include "whas/core/sha256.h"
 #include "whas/engine/simulation.h"
+#include "whas/spell/spell_json.h"
 #include <filesystem>
 #ifndef _WIN32
 #include <fcntl.h>
@@ -17,33 +18,13 @@ namespace {
 
 constexpr int PROTOCOL = 1;
 
-json GlyphsJson(const Spell &spell) {
-  json glyphs = json::array();
-  for (const PlacedGlyph &g : spell.glyphs)
-    glyphs.push_back({{"assetId", g.assetId},
-                      {"kind", g.kind == GlyphKind::Sigil ? "sigil" : "sign"},
-                      {"x", g.position.x},
-                      {"y", g.position.y},
-                      {"scale", g.scale},
-                      {"rotation", g.rotationDeg}});
-  return glyphs;
-}
-
 std::optional<MatchCard> ParseCard(const json &j) {
   if (!j.is_object())
     return std::nullopt;
   MatchCard card;
   card.id = j.at("id").get<int64_t>();
   card.spell.name = j.at("name").get<std::string>();
-  for (const auto &g : j.at("glyphs")) {
-    PlacedGlyph pg;
-    pg.assetId = g.at("assetId").get<std::string>();
-    pg.kind = g.at("kind") == "sigil" ? GlyphKind::Sigil : GlyphKind::Sign;
-    pg.position = {g.at("x").get<float>(), g.at("y").get<float>()};
-    pg.scale = g.at("scale").get<float>();
-    pg.rotationDeg = g.at("rotation").get<float>();
-    card.spell.glyphs.push_back(pg);
-  }
+  SpellJson::Read(j, card.spell);
   card.stats = SpellQuant::Dequantize(j.at("stats").get<SpellQuant::Stats>());
   return card;
 }
@@ -227,11 +208,11 @@ void LockstepClient::StartSync(const char *then) {
   m_syncStage = SyncStage::Spells;
   m_spellIds.clear();
   m_pendingUploads = static_cast<int>(m_library.spells.size());
-  for (const LibrarySpell &s : m_library.spells)
-    m_net.Send({{"type", "uploadSpell"},
-                {"ref", s.ref},
-                {"name", s.spell.name},
-                {"glyphs", GlyphsJson(s.spell)}});
+  for (const LibrarySpell &s : m_library.spells) {
+    json msg{{"type", "uploadSpell"}, {"ref", s.ref}, {"name", s.spell.name}};
+    SpellJson::Write(msg, s.spell);
+    m_net.Send(msg);
+  }
   if (m_pendingUploads == 0)
     ContinueSync();
 }

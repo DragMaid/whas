@@ -42,7 +42,8 @@ public sealed class SessionHandler(PlayerService players, SpellService spells,
             case "uploadSpell":
             {
                 string clientRef = msg.OptStr("ref") ?? "";
-                var result = await spells.UploadAsync(me, msg.Str("name"), msg.Glyphs());
+                var result = await spells.UploadAsync(me, msg.Str("name"), msg.Glyphs(),
+                                                       msg.Components());
                 if (result.Card is { } card)
                     session.Send("spellAccepted", new { @ref = clientRef, spellId = card.Id, stats = card.Stats });
                 else

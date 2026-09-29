@@ -2,6 +2,7 @@
 #include "whas/spell/spell_system.h"
 #include <cstdint>
 #include <nlohmann/json_fwd.hpp>
+#include <vector>
 
 // Spell stats as integers, the form the server hands out. Both lockstep
 // clients run the simulation on Dequantize() of these exact numbers, so it
@@ -15,7 +16,7 @@ constexpr int32_t AIM_SCALE = 16384;   // unit aim vectors in 1/16384
 
 // Bump whenever SpellSystem::Evaluate or its tuning changes; the server keeps
 // stats per evaluator version so old replays still reproduce
-constexpr int EVALUATOR_VERSION = 1;
+constexpr int EVALUATOR_VERSION = 4;
 
 struct Stats {
   bool valid = false;
@@ -33,8 +34,16 @@ struct Stats {
   int32_t launchSpeed = 0;
   int32_t force = 0;
   int32_t duration = 0;
+  uint8_t shape = 0; // SpellShape
+  int32_t temperatureDelta = 0;
+  int32_t hardnessScale = STAT_SCALE;
+  int32_t crush = 0;
+  int32_t restore = 0;
+  int32_t collectRadius = 0;
+  int32_t collectMax = 0;  // plain count
+  std::vector<Stats> parts; // layered spells
 
-  bool operator==(const Stats &) const = default;
+  bool operator==(const Stats &) const;
 };
 
 Stats Quantize(const SpellStats &stats);

@@ -1,6 +1,8 @@
 #include "whas/spell/spell_editor.h"
 #include "whas/constants.h"
+#include "whas/game/turn_controller.h"
 #include "whas/spell/spell_geometry.h"
+#include "whas/ui/spell_thumbnails.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -47,7 +49,60 @@ Color SpellEditor::BalanceColor(float imbalance) {
   return {255, static_cast<unsigned char>(170 - 140 * t), 30, 255};
 }
 
+namespace {
+
+const char *KindLabel(const SpellStats &stats) {
+  switch (stats.kind) {
+  case SpellKind::Flight:
+    return "Wind";
+  case SpellKind::Gust:
+    return "Gust";
+  case SpellKind::Element:
+    return ElementName(stats.element);
+  default:
+    return "?";
+  }
+}
+
+void DrawLayeredStats(const SpellStats &stats) {
+  int parts = static_cast<int>(stats.parts.size());
+  if (!stats.valid)
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                       "1-%d parts, each with one sigil;\nthe ring holds "
+                       "signs only",
+                       LAYER_MAX_COMPONENTS);
+  ImGui::Text("Layered: %d part%s, cast together", parts,
+              parts == 1 ? "" : "s");
+  Color c = SpellEditor::BalanceColor(stats.imbalance);
+  ImGui::TextColored(ImVec4(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, 1.0f),
+                     "Ring balance: %.0f%%  Offset: %+.0f deg",
+                     (1.0f - stats.imbalance) * 100.0f,
+                     stats.offsetRad * RAD2DEG);
+  int ticks = TurnController::CastTicks(stats);
+  if (ticks > TurnController::TURN_TICKS)
+    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+                       "Cast: %.2fs, longer than a turn",
+                       ticks * TurnController::TICK_DT);
+  else
+    ImGui::Text("Cast: %.2fs", ticks * TurnController::TICK_DT);
+  for (int i = 0; i < parts; ++i) {
+    ImGui::PushID(i);
+    if (ImGui::TreeNode("part", "Part %d: %s", i + 1,
+                        KindLabel(stats.parts[i]))) {
+      SpellEditor::DrawStats(stats.parts[i]);
+      ImGui::TreePop();
+    }
+    ImGui::PopID();
+  }
+}
+
+} // namespace
+
 void SpellEditor::DrawStats(const SpellStats &stats) {
+  if (stats.kind == SpellKind::Compound) {
+    DrawLayeredStats(stats);
+    return;
+  }
   if (!stats.valid) {
     ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
                        "Needs exactly one known sigil");
@@ -85,6 +140,41 @@ void SpellEditor::DrawStats(const SpellStats &stats) {
               stats.particleCount);
   if (stats.temperature > 0.0f)
     ImGui::Text("Heat: %.0f C", stats.temperature);
+  if (stats.shape != SpellShape::Stream) {
+    const ShapeDef &shape = SpellShapes::Get(stats.shape);
+    ImGui::Text("Shape: %s", shape.name);
+    // A figure takes a set amount of material: the sigil gives some,
+    // collection draws in more (when there's that much nearby)
+    int need = SpellShapes::MaterialNeeded(shape, stats.diameter);
+    if (need > stats.particleCount + stats.collectMax)
+      ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f),
+                         "Needs %d %s, has %d%s: it'll be cut short.\n"
+                         "Add collection signs (or a bigger sigil).",
+                         need, ElementName(stats.element), stats.particleCount,
+                         stats.collectMax > 0
+                             ? TextFormat(" + up to %d collected",
+                                          stats.collectMax)
+                             : "");
+    else if (need > stats.particleCount)
+      ImGui::Text("Needs %d %s: %d + collection, if there's enough nearby",
+                  need, ElementName(stats.element), stats.particleCount);
+    else if (need >= 0)
+      ImGui::Text("Needs %d %s, has %d", need, ElementName(stats.element),
+                  stats.particleCount);
+  }
+  if (stats.temperatureDelta < 0.0f)
+    ImGui::Text("Cooled: %.0f C", stats.temperatureDelta);
+  if (stats.hardnessScale != 1.0f)
+    ImGui::Text("Lands x%.2f as hard", stats.hardnessScale);
+  if (stats.crush > 0.0f)
+    ImGui::Text("Crushes what it hits to sand (%.1f)", stats.crush);
+  else if (stats.crush < 0.0f)
+    ImGui::Text("Reforms sand into earth (%.1f)", -stats.crush);
+  if (stats.restore > 0.0f)
+    ImGui::Text("Restores what it hits (%.1f)", stats.restore);
+  if (stats.collectMax > 0)
+    ImGui::Text("Collects up to %d cells within %.0f", stats.collectMax,
+                stats.collectRadius);
 }
 
 
@@ -111,9 +201,7 @@ std::vector<LineSeg> SpellEditor::GetWorldSegments(const PlacedGlyph &glyph,
                                                    ImVec2 canvasCenter) const {
   (void)canvasOrigin;
   (void)canvasCenter;
-  return SpellGeometry::TransformSegments(asset.segments, asset.localCenter,
-                                          glyph.position, glyph.scale,
-                                          glyph.rotationDeg);
+  return SpellGeometry::GlyphSegments(asset, glyph);
 }
 
 bool SpellEditor::IsPlacementValid(const PlacedGlyph &candidate,
@@ -142,10 +230,7 @@ void SpellEditor::DrawGlyphLines(ImDrawList *dl, const SvgAsset &asset,
                                  const PlacedGlyph &glyph, ImVec2 canvasOrigin,
                                  ImVec2 canvasCenter, ImU32 color,
                                  float thickness) {
-  auto segments = SpellGeometry::TransformSegments(
-      asset.segments, asset.localCenter, glyph.position, glyph.scale,
-      glyph.rotationDeg);
-  for (const auto &seg : segments) {
+  for (const auto &seg : SpellGeometry::GlyphSegments(asset, glyph)) {
     ImVec2 a = SpellToCanvasSpace(canvasOrigin, canvasCenter, seg.a);
     ImVec2 b = SpellToCanvasSpace(canvasOrigin, canvasCenter, seg.b);
     dl->AddLine(a, b, color, thickness);
@@ -168,11 +253,12 @@ void SpellEditor::DrawAssetThumbnail(const SvgAsset &asset, bool selected) {
 
   if (anyInvalid) ImGui::BeginDisabled();
   if (ImGui::Selectable("##thumb", selected, 0, size)) {
+    ClearSelection();
     m_paletteAssetId = asset.id;
     m_isPlacing = true;
-    m_selectedGlyphIndex = -1;
     m_ghostScale = 1.0f;
     m_ghostRotation = 0.0f;
+    m_ghostInverted = false;
   }
   if (anyInvalid) ImGui::EndDisabled();
 
@@ -203,8 +289,20 @@ void SpellEditor::DrawAssetThumbnail(const SvgAsset &asset, bool selected) {
   ImGui::PopID();
 }
 
+void SpellEditor::ClearSelection() {
+  m_isPlacing = false;
+  m_paletteAssetId.clear();
+  m_paletteSpellRef.clear();
+  m_selectedGlyphIndex = -1;
+  m_selectedComponent = -1;
+}
+
 bool SpellEditor::TryPlaceAt(Vector2 spellPos) {
-  if (!m_isPlacing || m_paletteAssetId.empty())
+  if (!m_isPlacing)
+    return false;
+  if (!m_paletteSpellRef.empty())
+    return TryPlaceComponentAt(spellPos);
+  if (m_paletteAssetId.empty())
     return false;
 
   const SvgAsset *asset = m_library.FindById(m_paletteAssetId);
@@ -217,23 +315,72 @@ bool SpellEditor::TryPlaceAt(Vector2 spellPos) {
   glyph.position = spellPos;
   glyph.scale = m_ghostScale;
   glyph.rotationDeg = m_ghostRotation;
+  glyph.inverted =
+      m_ghostInverted && SpellSystem::SignInvertible(m_paletteAssetId);
 
   if (!IsPlacementValid(glyph, std::nullopt)) {
     return false;
   }
 
-  if (glyph.kind == GlyphKind::Sigil &&
-      std::any_of(m_currentSpell.glyphs.begin(), m_currentSpell.glyphs.end(),
-                  [](const PlacedGlyph &g) {
-                    return g.kind == GlyphKind::Sigil;
-                  })) {
-    m_statusMessage = "A spell can only hold one sigil.";
-    return false;
+  if (glyph.kind == GlyphKind::Sigil) {
+    if (m_currentSpell.Layered()) {
+      m_statusMessage = "The outer ring holds signs only.";
+      return false;
+    }
+    // One sigil for what the spell is, and at most one dragon for its shape
+    bool shape = SpellSystem::IsShapeSigil(glyph.assetId);
+    if (std::any_of(m_currentSpell.glyphs.begin(), m_currentSpell.glyphs.end(),
+                    [shape](const PlacedGlyph &g) {
+                      return g.kind == GlyphKind::Sigil &&
+                             SpellSystem::IsShapeSigil(g.assetId) == shape;
+                    })) {
+      m_statusMessage = shape ? "A spell can only hold one dragon sigil."
+                              : "A spell can only hold one element sigil "
+                                "(plus a dragon).";
+      return false;
+    }
   }
 
   m_currentSpell.glyphs.push_back(glyph);
   m_isPlacing = false;
   m_paletteAssetId.clear();
+  return true;
+}
+
+bool SpellEditor::CanAddComponent(std::string *why) const {
+  auto fail = [why](const char *message) {
+    if (why)
+      *why = message;
+    return false;
+  };
+  if (!m_currentSpell.Layered() && !m_currentSpell.glyphs.empty())
+    return fail("Layered spells start from an empty circle: press New, "
+                "place spells, then ring signs.");
+  if ((int)m_currentSpell.components.size() >= LAYER_MAX_COMPONENTS)
+    return fail("A layered spell holds at most 5 spells.");
+  return true;
+}
+
+std::optional<SpellComponent>
+SpellEditor::GhostComponent(Vector2 spellPos) const {
+  const Spell *source = m_spells ? m_spells->Find(m_paletteSpellRef) : nullptr;
+  if (!source || source->Layered())
+    return std::nullopt;
+  return SpellComponent{source->name, source->glyphs, spellPos,
+                        m_ghostComponentScale, m_ghostRotation};
+}
+
+bool SpellEditor::TryPlaceComponentAt(Vector2 spellPos) {
+  auto component = GhostComponent(spellPos);
+  if (!component || !SpellGeometry::IsComponentPlacementValid(
+                        *component, m_currentSpell))
+    return false;
+  if (!CanAddComponent(&m_statusMessage))
+    return false;
+  m_currentSpell.components.push_back(std::move(*component));
+  m_isPlacing = false;
+  m_paletteSpellRef.clear();
+  m_selectedComponent = (int)m_currentSpell.components.size() - 1;
   return true;
 }
 
@@ -245,14 +392,65 @@ bool SpellEditor::TrySelectAt(Vector2 spellPos) {
     if (!asset)
       continue;
     if (SpellGeometry::HitTestGlyph(g, *asset, spellPos, 12.0f)) {
+      ClearSelection();
       m_selectedGlyphIndex = i;
-      m_isPlacing = false;
-      m_paletteAssetId.clear();
+      return true;
+    }
+  }
+  for (int i = static_cast<int>(m_currentSpell.components.size()) - 1; i >= 0;
+       --i) {
+    const SpellComponent &c = m_currentSpell.components[i];
+    if (std::hypot(spellPos.x - c.position.x, spellPos.y - c.position.y) <=
+        SpellGeometry::ComponentRadius(c.scale)) {
+      ClearSelection();
+      m_selectedComponent = i;
       return true;
     }
   }
   return false;
 }
+
+void SpellEditor::DrawComponent(ImDrawList *dl,
+                                const SpellComponent &component,
+                                ImVec2 canvasOrigin, ImVec2 canvasCenter,
+                                ImU32 color) {
+  ImVec2 c = SpellToCanvasSpace(canvasOrigin, canvasCenter, component.position);
+  dl->AddCircle(c, SpellGeometry::ComponentRadius(component.scale), color, 48,
+                2.0f);
+  dl->AddCircle(c, SPELL_INNER_RADIUS * component.scale, color, 48, 1.0f);
+  for (const PlacedGlyph &glyph : component.glyphs) {
+    const SvgAsset *asset = GetAssetForGlyph(glyph);
+    if (!asset)
+      continue;
+    DrawGlyphLines(dl, *asset, SpellGeometry::ComponentGlyph(component, glyph),
+                   canvasOrigin, canvasCenter, color, 1.5f);
+  }
+  // Which way it fires, relative to the circle's aim
+  float rad = component.rotationDeg * DEG2RAD;
+  ImVec2 dir{std::sin(rad), -std::cos(rad)};
+  float r = SpellGeometry::ComponentRadius(component.scale);
+  AddArrow(dl, {c.x + dir.x * r, c.y + dir.y * r}, dir, 14.0f,
+           IM_COL32(90, 90, 200, 200), 2.0f);
+}
+
+namespace {
+
+// R turns by 45 degrees, wrapping into -180..180
+void Turn(float &rotationDeg) {
+  rotationDeg += 45.0f;
+  if (rotationDeg > GLYPH_ROTATION_MAX)
+    rotationDeg -= 360.0f;
+}
+
+// W / E grow and shrink by `step` within [minV, maxV]
+void Resize(float &scale, float step, float minV, float maxV) {
+  if (ImGui::IsKeyPressed(ImGuiKey_W))
+    scale = std::min(scale + step, maxV);
+  if (ImGui::IsKeyPressed(ImGuiKey_E))
+    scale = std::max(minV, scale - step);
+}
+
+} // namespace
 
 void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
   ImDrawList *dl = ImGui::GetWindowDrawList();
@@ -266,8 +464,28 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
 
   dl->AddCircleFilled(circleCenter, SPELL_OUTER_RADIUS,
                       IM_COL32(255, 255, 255, 255));
-  dl->AddCircle(circleCenter, SPELL_INNER_RADIUS, IM_COL32(0, 0, 0, 255), 64,
-                2.0f);
+  bool layered = m_currentSpell.Layered();
+  if (layered) {
+    // The core holds the embedded spells, the band around it the ring signs
+    dl->AddCircle(circleCenter, LAYER_CORE_RADIUS, IM_COL32(0, 0, 0, 255), 64,
+                  2.0f);
+    dl->AddCircle(circleCenter, LAYER_RING_INNER, IM_COL32(0, 0, 0, 255), 64,
+                  1.0f);
+  } else {
+    dl->AddCircle(circleCenter, SPELL_INNER_RADIUS, IM_COL32(0, 0, 0, 255), 64,
+                  2.0f);
+  }
+
+  for (size_t i = 0; i < m_currentSpell.components.size(); ++i) {
+    const SpellComponent &component = m_currentSpell.components[i];
+    bool valid = SpellGeometry::IsComponentPlacementValid(
+        component, m_currentSpell, i);
+    bool selected = static_cast<int>(i) == m_selectedComponent;
+    ImU32 color = !valid    ? IM_COL32(220, 40, 40, 255)
+                  : selected ? IM_COL32(80, 200, 80, 255)
+                             : IM_COL32(0, 0, 0, 255);
+    DrawComponent(dl, component, canvasOrigin, canvasCenter, color);
+  }
 
   for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
     const PlacedGlyph &glyph = m_currentSpell.glyphs[i];
@@ -295,30 +513,34 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
   Vector2 spellMouse =
       CanvasToSpellSpace(canvasOrigin, canvasCenter, ImGui::GetIO().MousePos);
 
-  if (m_isPlacing && canvasHovered) {
+  if (m_isPlacing && canvasHovered && !m_paletteSpellRef.empty()) {
+    if (ImGui::IsKeyPressed(ImGuiKey_R))
+      Turn(m_ghostRotation);
+    Resize(m_ghostComponentScale, 0.05f, COMPONENT_SCALE_MIN,
+           COMPONENT_SCALE_MAX);
+    if (auto ghost = GhostComponent(spellMouse)) {
+      bool valid = CanAddComponent() && SpellGeometry::IsComponentPlacementValid(
+                                            *ghost, m_currentSpell);
+      DrawComponent(dl, *ghost, canvasOrigin, canvasCenter,
+                    valid ? IM_COL32(0, 0, 0, 150) : IM_COL32(220, 40, 40, 180));
+    }
+  } else if (m_isPlacing && canvasHovered) {
     const SvgAsset *asset = m_library.FindById(m_paletteAssetId);
     if (asset) {
+      if (ImGui::IsKeyPressed(ImGuiKey_R))
+        Turn(m_ghostRotation);
+      Resize(m_ghostScale, 0.1f, GLYPH_SCALE_MIN, GLYPH_SCALE_MAX);
+      if (ImGui::IsKeyPressed(ImGuiKey_F) &&
+          SpellSystem::SignInvertible(m_paletteAssetId))
+        m_ghostInverted = !m_ghostInverted;
+
       PlacedGlyph ghost;
       ghost.assetId = m_paletteAssetId;
       ghost.kind = asset->kind;
       ghost.position = spellMouse;
       ghost.scale = m_ghostScale;
       ghost.rotationDeg = m_ghostRotation;
-
-      if (ImGui::IsKeyPressed(ImGuiKey_R)) {
-        m_ghostRotation += 45.0f;
-        if (m_ghostRotation > GLYPH_ROTATION_MAX) m_ghostRotation -= 360.0f;
-      }
-      if (ImGui::IsKeyPressed(ImGuiKey_W)) {
-        m_ghostScale += 0.1f;
-        m_ghostScale = std::min(m_ghostScale, GLYPH_SCALE_MAX);
-      }
-      if (ImGui::IsKeyPressed(ImGuiKey_E)) {
-        m_ghostScale = std::max(GLYPH_SCALE_MIN, m_ghostScale - 0.1f);
-      }
-      
-      ghost.scale = m_ghostScale;
-      ghost.rotationDeg = m_ghostRotation;
+      ghost.inverted = m_ghostInverted;
 
       bool valid = IsPlacementValid(ghost, std::nullopt);
       ImU32 ghostColor =
@@ -332,23 +554,28 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     if (m_isPlacing) {
       TryPlaceAt(spellMouse);
     } else if (!TrySelectAt(spellMouse)) {
-      m_selectedGlyphIndex = -1;
+      ClearSelection();
     }
+  }
+
+  if (!m_isPlacing && m_selectedComponent >= 0 &&
+      m_selectedComponent < (int)m_currentSpell.components.size()) {
+    SpellComponent &component = m_currentSpell.components[m_selectedComponent];
+    if (ImGui::IsKeyPressed(ImGuiKey_R))
+      Turn(component.rotationDeg);
+    Resize(component.scale, 0.05f, COMPONENT_SCALE_MIN, COMPONENT_SCALE_MAX);
+    if (canvasHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+      component.position = spellMouse; // turns red while out of place
   }
 
   if (!m_isPlacing && m_selectedGlyphIndex >= 0) {
     PlacedGlyph &selectedGlyph = m_currentSpell.glyphs[m_selectedGlyphIndex];
-    if (ImGui::IsKeyPressed(ImGuiKey_R)) {
-      selectedGlyph.rotationDeg += 45.0f;
-      if (selectedGlyph.rotationDeg > GLYPH_ROTATION_MAX) selectedGlyph.rotationDeg -= 360.0f;
-    }
-    if (ImGui::IsKeyPressed(ImGuiKey_W)) {
-      selectedGlyph.scale += 0.1f;
-      selectedGlyph.scale = std::min(selectedGlyph.scale, GLYPH_SCALE_MAX);
-    }
-    if (ImGui::IsKeyPressed(ImGuiKey_E)) {
-      selectedGlyph.scale = std::max(GLYPH_SCALE_MIN, selectedGlyph.scale - 0.1f);
-    }
+    if (ImGui::IsKeyPressed(ImGuiKey_R))
+      Turn(selectedGlyph.rotationDeg);
+    Resize(selectedGlyph.scale, 0.1f, GLYPH_SCALE_MIN, GLYPH_SCALE_MAX);
+    if (ImGui::IsKeyPressed(ImGuiKey_F) &&
+        SpellSystem::SignInvertible(selectedGlyph.assetId))
+      selectedGlyph.inverted = !selectedGlyph.inverted;
 
     if (canvasHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
       selectedGlyph.position = spellMouse;
@@ -423,9 +650,104 @@ void SpellEditor::DrawPalette() {
 
   drawSection("Signs", GlyphKind::Sign);
   drawSection("Sigils", GlyphKind::Sigil);
+  DrawSpellPalette();
+}
+
+// Saved single-layer spells, to embed in a layered one
+void SpellEditor::DrawSpellPalette() {
+  if (!m_spells ||
+      !ImGui::CollapsingHeader("Spells (layer)", ImGuiTreeNodeFlags_DefaultOpen))
+    return;
+  std::string why;
+  if (!CanAddComponent(&why)) {
+    ImGui::PushTextWrapPos(0.0f);
+    ImGui::TextDisabled("%s", why.c_str());
+    ImGui::PopTextWrapPos();
+    return;
+  }
+
+  ImGui::BeginChild("SpellPalette", ImVec2(0, 160), true);
+  float panelWidth = ImGui::GetContentRegionAvail().x;
+  int columns = std::max(1, static_cast<int>(panelWidth / 84.0f));
+  int shown = 0;
+  for (const Spell &spell : m_spells->All()) {
+    if (spell.Layered() || !SpellSystem::Evaluate(spell).valid)
+      continue;
+    std::string ref = m_spells->RefOf(spell);
+    if (shown++ % columns != 0)
+      ImGui::SameLine();
+    ImGui::BeginGroup();
+    ImGui::PushID(ref.c_str());
+    bool selected = m_isPlacing && m_paletteSpellRef == ref;
+    ImVec2 size(72, 72);
+    if (ImGui::Selectable("##spell", selected, 0, size)) {
+      ClearSelection();
+      m_paletteSpellRef = ref;
+      m_isPlacing = true;
+      m_ghostRotation = 0.0f;
+    }
+    ImVec2 p0 = ImGui::GetItemRectMin();
+    ImVec2 p1 = ImGui::GetItemRectMax();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p0, p1, IM_COL32(26, 26, 36, 255));
+    if (m_thumbnails)
+      m_thumbnails->Draw(dl, spell, {p0.x + 4, p0.y + 4},
+                         {p1.x - 4, p1.y - 4});
+    ImGui::PushClipRect({p0.x, p1.y}, {p1.x, p1.y + 20}, true);
+    ImGui::TextUnformatted(spell.name.c_str());
+    ImGui::PopClipRect();
+    ImGui::PopID();
+    ImGui::EndGroup();
+  }
+  if (shown == 0)
+    ImGui::TextDisabled("Save a single-layer spell first.");
+  ImGui::EndChild();
+}
+
+void SpellEditor::DrawComponentPanel() {
+  SpellComponent &component = m_currentSpell.components[m_selectedComponent];
+  ImGui::Separator();
+  ImGui::Text("Layer: %s", component.source.empty() ? "(spell)"
+                                                    : component.source.c_str());
+  float rotation = component.rotationDeg;
+  DrawClampedFloat("Scale", &component.scale, COMPONENT_SCALE_MIN,
+                   COMPONENT_SCALE_MAX, 0.05f);
+  DrawClampedFloat("Rotation", &rotation, GLYPH_ROTATION_MIN,
+                   GLYPH_ROTATION_MAX, 45.0f);
+  component.rotationDeg = rotation;
+  ImGui::TextDisabled("Strength: %.0f%%",
+                      SpellSystem::ComponentEffectiveness(component.scale) *
+                          100.0f);
+  if (ImGui::Button("Remove")) {
+    m_currentSpell.components.erase(m_currentSpell.components.begin() +
+                                    m_selectedComponent);
+    m_selectedComponent = -1;
+  }
 }
 
 void SpellEditor::DrawEditPanel() {
+  if (m_isPlacing && !m_paletteSpellRef.empty()) {
+    ImGui::Separator();
+    ImGui::Text("Placing spell: %s", m_paletteSpellRef.c_str());
+    DrawClampedFloat("Scale", &m_ghostComponentScale, COMPONENT_SCALE_MIN,
+                     COMPONENT_SCALE_MAX, 0.05f);
+    DrawClampedFloat("Rotation", &m_ghostRotation, GLYPH_ROTATION_MIN,
+                     GLYPH_ROTATION_MAX, 45.0f);
+    ImGui::TextDisabled("Strength: %.0f%%",
+                        SpellSystem::ComponentEffectiveness(
+                            m_ghostComponentScale) *
+                            100.0f);
+    if (ImGui::Button("Cancel"))
+      ClearSelection();
+    return;
+  }
+
+  if (m_selectedComponent >= 0 &&
+      m_selectedComponent < (int)m_currentSpell.components.size()) {
+    DrawComponentPanel();
+    return;
+  }
+
   if (m_isPlacing && !m_paletteAssetId.empty()) {
     const SvgAsset *asset = m_library.FindById(m_paletteAssetId);
     if (!asset) return;
@@ -446,7 +768,9 @@ void SpellEditor::DrawEditPanel() {
 
     m_ghostScale = scale;
     m_ghostRotation = rotation;
-    
+    if (SpellSystem::SignInvertible(asset->id))
+      ImGui::Checkbox("Inverted (F)", &m_ghostInverted);
+
     if (ImGui::Button("Cancel")) {
       m_isPlacing = false;
       m_paletteAssetId.clear();
@@ -484,6 +808,8 @@ void SpellEditor::DrawEditPanel() {
 
   glyph.scale = scale;
   glyph.rotationDeg = rotation;
+  if (SpellSystem::SignInvertible(asset->id))
+    ImGui::Checkbox("Inverted (F)", &glyph.inverted);
 
   if (ImGui::Button("Remove")) {
     m_currentSpell.glyphs.erase(m_currentSpell.glyphs.begin() +
@@ -496,16 +822,14 @@ void SpellEditor::OpenSpell(const Spell &spell) {
   m_currentSpell = spell;
   std::strncpy(m_nameBuffer, spell.name.c_str(), SPELL_NAME_MAX_LEN);
   m_nameBuffer[SPELL_NAME_MAX_LEN] = '\0';
-  m_selectedGlyphIndex = -1;
-  m_isPlacing = false;
-  m_paletteAssetId.clear();
+  ClearSelection();
   m_statusMessage.clear();
   m_tab = Tab::Edit;
   m_switchTab = true;
 }
 
 void SpellEditor::SaveCurrent() {
-  int signCount = 0, sigilCount = 0;
+  int signCount = 0, sigilCount = 0, shapeCount = 0;
   bool anyInvalid = false;
   for (size_t i = 0; i < m_currentSpell.glyphs.size(); ++i) {
     const PlacedGlyph &g = m_currentSpell.glyphs[i];
@@ -516,21 +840,43 @@ void SpellEditor::SaveCurrent() {
     }
     if (a->kind == GlyphKind::Sign)
       signCount++;
-    if (a->kind == GlyphKind::Sigil)
+    else if (SpellSystem::IsShapeSigil(a->id))
+      shapeCount++;
+    else
       sigilCount++;
     if (!IsPlacementValid(g, i))
       anyInvalid = true;
   }
-  if (signCount == 0 || sigilCount != 1) {
+  for (size_t i = 0; i < m_currentSpell.components.size(); ++i)
+    if (!SpellGeometry::IsComponentPlacementValid(m_currentSpell.components[i],
+                                                  m_currentSpell, i))
+      anyInvalid = true;
+
+  if (m_currentSpell.Layered()) {
+    if ((int)m_currentSpell.components.size() > LAYER_MAX_COMPONENTS) {
+      m_statusMessage = "A layered spell holds at most 5 spells.";
+      return;
+    }
+    if (sigilCount + shapeCount > 0) {
+      m_statusMessage = "The outer ring holds signs only.";
+      return;
+    }
+    if (!SpellSystem::Evaluate(m_currentSpell).valid) {
+      m_statusMessage = "Every embedded spell needs exactly one sigil.";
+      return;
+    }
+  } else if (signCount == 0 || sigilCount != 1 || shapeCount > 1) {
     m_statusMessage =
         "Spell must contain at least one sign and exactly one sigil.";
-  } else if (anyInvalid) {
-    m_statusMessage = "Spell contains invalid glyph placements (red).";
-  } else {
-    m_currentSpell.name = m_nameBuffer;
-    std::string err;
-    m_statusMessage = m_spells->Save(m_currentSpell, err) ? "Saved." : err;
+    return;
   }
+  if (anyInvalid) {
+    m_statusMessage = "Spell contains invalid placements (red).";
+    return;
+  }
+  m_currentSpell.name = m_nameBuffer;
+  std::string err;
+  m_statusMessage = m_spells->Save(m_currentSpell, err) ? "Saved." : err;
 }
 
 void SpellEditor::DrawOverlay() {
@@ -588,7 +934,7 @@ void SpellEditor::DrawOverlay() {
   if (ImGui::Button("New")) {
     m_currentSpell = {};
     m_nameBuffer[0] = '\0';
-    m_selectedGlyphIndex = -1;
+    ClearSelection();
     m_statusMessage.clear();
   }
   ImGui::SameLine();

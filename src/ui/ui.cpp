@@ -297,6 +297,15 @@ Vector2 UI::GetMouseCell() const {
 
 void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
                        Vector2 castDir, Color color, float worldGravity) const {
+  if (stats.kind == SpellKind::Compound) {
+    // Each part turns the aim its own way; undo the outer ring's turn first
+    float c = std::cos(-stats.offsetRad), s = std::sin(-stats.offsetRad);
+    Vector2 aim{castDir.x * c - castDir.y * s, castDir.x * s + castDir.y * c};
+    for (const SpellStats &part : stats.parts)
+      DrawSpellBeam(part, originCells, SpellSystem::ResolveDirection(part, aim),
+                    color, worldGravity);
+    return;
+  }
   Vector2 o{originCells.x * CELL_SIZE, originCells.y * CELL_SIZE};
   Vector2 d = castDir;
   Vector2 n{-d.y, d.x};
@@ -349,10 +358,45 @@ void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
     return;
   }
 
-  // Element stream: beam edges and a dashed spine
-  DrawLineEx(at(0, halfWidth), at(length, halfWidth), 1.5f, color);
-  DrawLineEx(at(0, -halfWidth), at(length, -halfWidth), 1.5f, color);
-  DrawDashedLine(o, at(length, 0), 5.0f, 1.0f, faint);
+  const ShapeDef &shape = SpellShapes::Get(stats.shape);
+  const ShapePart &lead = shape.parts.front();
+  bool ball = lead.kind == ShapePart::Kind::Burst && lead.disk;
+  bool figure = lead.kind == ShapePart::Kind::Burst && !lead.disk;
+  if (ball) {
+    // One ball flying the whole way
+    float r = std::max(3.0f, std::sqrt(stats.particleCount / PI) * CELL_SIZE);
+    DrawDashedLine(o, at(length, 0), 5.0f, 1.0f, faint);
+    DrawCircleLinesV(at(r, 0), r, faint);
+    DrawCircleLinesV(at(length, 0), r, color);
+  } else if (figure || shape.weaveAmplitude > 0.0f) {
+    // A leading figure (drawn as a wedge as long as its pattern) and the
+    // body behind it, weaving like the emitter does
+    float head = figure ? SpellShapes::ScaledRows(
+                              lead, SpellShapes::PartScale(lead, stats.diameter)) *
+                              lead.rowSpacing * CELL_SIZE
+                        : 0.0f;
+    constexpr int kSegments = 32;
+    float amp = shape.weaveAmplitude * CELL_SIZE;
+    Vector2 prev = at(0, 0);
+    for (int i = 1; i <= kSegments; ++i) {
+      float t = (length - head) * i / kSegments;
+      float ticks = t / (stats.speed * CELL_SIZE) * 60.0f;
+      Vector2 cur =
+          at(t, amp * std::sin(ticks * 2.0f * PI / shape.weaveWavelength));
+      DrawLineEx(prev, cur, 2.0f, color);
+      prev = cur;
+    }
+    if (figure) {
+      float w = 3.0f * CELL_SIZE;
+      DrawTriangleLines(at(length, 0), at(length - head, w),
+                        at(length - head, -w), color);
+    }
+  } else {
+    // Element stream: beam edges and a dashed spine
+    DrawLineEx(at(0, halfWidth), at(length, halfWidth), 1.5f, color);
+    DrawLineEx(at(0, -halfWidth), at(length, -halfWidth), 1.5f, color);
+    DrawDashedLine(o, at(length, 0), 5.0f, 1.0f, faint);
+  }
 
   // Chevron at the end of the straight flight
   float head = std::max(8.0f, halfWidth * 1.6f);

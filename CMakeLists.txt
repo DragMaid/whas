@@ -110,6 +110,8 @@ set(SOURCES
     src/spell/spell_geometry.cpp
     src/spell/svg_library.cpp
     src/spell/spell_store.cpp
+    src/spell/spell_json.cpp
+    src/spell/spell_shapes.cpp
     src/spell/spell_editor.cpp
     src/spell/spell_editor_library.cpp
     src/spell/spell_system.cpp
@@ -203,6 +205,7 @@ if(WHAS_BUILD_TESTS)
         tests/burning_test.cpp
         tests/match_test.cpp
         tests/spell_golden_test.cpp
+        tests/spell_modifier_test.cpp
         tests/net_test.cpp
         tests/replay_test.cpp
         tests/bench_test.cpp

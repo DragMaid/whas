@@ -6,6 +6,7 @@
 #include "whas/physics/heat_system.h"
 #include "whas/physics/pressure_system.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <type_traits>
 #include <utility>
@@ -50,9 +51,6 @@ void Simulation::Update(float dt, bool isPainting) {
                      m_frameCounter,
                      m_particles};
 
-  // 1. Damage check — detect erased/painted-over body pixels and release them
-  m_rigidBodies.PreUpdate(m_grid, ctx);
-
   PressureSystem::Update(ctx);
 
   // 2. Run falling-sand simulation on worker threads
@@ -67,6 +65,12 @@ void Simulation::Update(float dt, bool isPainting) {
     m_syncBarrier.arrive_and_wait();
   }
   FlushWorkerSpawns();
+
+  // Damage check: release bodies whose pixels were erased, painted over,
+  // broken by last frame's projectiles or changed by this frame's elements
+  // (ice melting). It must run before the bodies move, or a changed pixel
+  // is no longer where the body looks for it.
+  m_rigidBodies.PreUpdate(m_grid, ctx);
 
   // 3. Extract new rigid bodies from freshly painted pixels (skip while
   // painting to avoid extracting a body from an incomplete stroke).
@@ -244,6 +248,14 @@ void Simulation::CastSpell(const Spell &spell, Vector2 origin,
 
 void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
                            Vector2 aimDirection, int owner) {
+  // A layered spell fires every part at once, each as its own effect
+  if (stats.kind == SpellKind::Compound) {
+    if (stats.valid)
+      for (const SpellStats &part : stats.parts)
+        CastSpell(part, origin, aimDirection, owner);
+    return;
+  }
+
   SpellEffect effect;
   effect.stats = stats;
   // Flight moves the caster, which the game layer handles
@@ -253,7 +265,57 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   effect.origin = origin;
   effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
   effect.owner = owner;
+  if (stats.collectMax > 0)
+    effect.bonusParticles = Collect(stats, origin);
   m_activeSpellEffects.push_back(effect);
+}
+
+namespace {
+
+// What collection can draw in for a spell of this element
+bool Collectable(Element spell, const Cell &cell) {
+  if (cell.bodyID >= 0)
+    return false; // rigid bodies stay whole
+  switch (spell) {
+  case Element::WATER:
+  case Element::ICE:
+    return cell.element == Element::WATER || cell.element == Element::ICE;
+  case Element::EARTH:
+  case Element::SAND:
+  case Element::ROCK:
+    return cell.element == Element::EARTH || cell.element == Element::SAND;
+  case Element::FIRE:
+    return cell.element == Element::FIRE;
+  default:
+    return false;
+  }
+}
+
+} // namespace
+
+int Simulation::Collect(const SpellStats &stats, Vector2 origin) {
+  int r = static_cast<int>(std::ceil(stats.collectRadius));
+  int cx = static_cast<int>(std::floor(origin.x));
+  int cy = static_cast<int>(std::floor(origin.y));
+  float r2 = stats.collectRadius * stats.collectRadius;
+  int taken = 0;
+  // Row by row from the top: the same cells go on every client
+  for (int y = cy - r; y <= cy + r && taken < stats.collectMax; ++y) {
+    for (int x = cx - r; x <= cx + r && taken < stats.collectMax; ++x) {
+      float dx = x + 0.5f - origin.x, dy = y + 0.5f - origin.y;
+      if (dx * dx + dy * dy > r2 || !m_grid.InBounds(x, y))
+        continue;
+      Cell &c = m_grid.Get(x, y);
+      if (!Collectable(stats.element, c))
+        continue;
+      bool wasStatic =
+          m_config.elements[static_cast<size_t>(c.element)].staticTerrain;
+      c = ElementFactory::Create(Element::AIR, m_config);
+      m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
+      taken++;
+    }
+  }
+  return taken;
 }
 
 void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {

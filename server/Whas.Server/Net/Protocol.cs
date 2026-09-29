@@ -35,6 +35,12 @@ public static class Protocol
         e.GetProperty("glyphs").Deserialize<List<Glyph>>(Json)
         ?? throw new FormatException("missing glyphs");
 
+    // Layered spells only; plain spells send none
+    public static List<Component> Components(this JsonElement e) =>
+        e.TryGetProperty("components", out var p) && p.ValueKind == JsonValueKind.Array
+            ? p.Deserialize<List<Component>>(Json) ?? []
+            : [];
+
     // 64-bit values (seeds, state hashes) travel as strings: JSON numbers
     // lose precision past 2^53 in many parsers
     public static string U64(ulong v) => v.ToString();
@@ -47,4 +53,7 @@ public sealed record SpellCard(
     [property: JsonPropertyName("id")] long Id,
     [property: JsonPropertyName("name")] string Name,
     [property: JsonPropertyName("glyphs")] List<Glyph> Glyphs,
-    [property: JsonPropertyName("stats")] QuantizedStats Stats);
+    [property: JsonPropertyName("stats")] QuantizedStats Stats,
+    [property: JsonPropertyName("components"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    List<Component>? Components = null);

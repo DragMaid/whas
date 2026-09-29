@@ -21,6 +21,28 @@ bool AllEndpointsInsideCircle(const std::vector<LineSeg> &segments,
 bool SegmentsCrossAny(const std::vector<LineSeg> &candidate,
                       const std::vector<LineSeg> &existing);
 
+// A glyph's segments where it's placed (inverted drawing if inverted)
+std::vector<LineSeg> GlyphSegments(const SvgAsset &asset,
+                                   const PlacedGlyph &glyph);
+
+// Where one of a component's glyphs lands in the layered circle: shrunk to
+// the component's scale, turned with it and moved to its position
+PlacedGlyph ComponentGlyph(const SpellComponent &component,
+                           const PlacedGlyph &glyph);
+
+// A component's outer radius in the layered circle
+inline float ComponentRadius(float scale) {
+  return SPELL_OUTER_RADIUS * scale;
+}
+
+// A component must sit inside the core and clear the other components
+bool IsComponentPlacementValid(const SpellComponent &component,
+                               const Spell &spell,
+                               std::optional<size_t> ignoreIndex =
+                                   std::nullopt);
+
+// Plain spells keep glyphs inside innerRadius; in a layered spell the glyphs
+// are the outer ring's and must stay in the ring band
 bool IsGlyphPlacementValid(const SvgAsset &asset, const PlacedGlyph &glyph,
                            Vector2 canvasCenter, float innerRadius,
                            const Spell &spell,

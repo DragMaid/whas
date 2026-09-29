@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr uint32_t MAGIC = 0x314E5357; // "WSN1"
+constexpr uint32_t MAGIC = 0x324E5357; // "WSN2"
 constexpr uint16_t MAX_RUN = 0xFFFF;
 
 // Cells are stored field by field ("columns"), each column run-length
@@ -71,6 +71,12 @@ void PutStats(ByteWriter &out, const SpellStats &s) {
   out.Put(s.particleCount);
   for (float v : {s.temperature, s.launchSpeed, s.force, s.duration})
     out.Put(v);
+  // Effects are always single parts, so `parts` is never stored
+  out.Put(static_cast<uint8_t>(s.shape));
+  for (float v : {s.temperatureDelta, s.hardnessScale, s.crush, s.restore,
+                  s.collectRadius})
+    out.Put(v);
+  out.Put(s.collectMax);
 }
 
 SpellStats GetStats(ByteReader &in) {
@@ -86,6 +92,11 @@ SpellStats GetStats(ByteReader &in) {
   s.particleCount = in.Get<int>();
   for (float *v : {&s.temperature, &s.launchSpeed, &s.force, &s.duration})
     *v = in.Get<float>();
+  s.shape = static_cast<SpellShape>(in.Get<uint8_t>());
+  for (float *v : {&s.temperatureDelta, &s.hardnessScale, &s.crush,
+                   &s.restore, &s.collectRadius})
+    *v = in.Get<float>();
+  s.collectMax = in.Get<int>();
   return s;
 }
 
@@ -144,6 +155,10 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(p.power);
     out.Put(p.owner);
     out.Put(p.temperature);
+    out.Put(p.temperatureDelta);
+    out.Put(p.hardnessScale);
+    out.Put(p.crush);
+    out.Put(p.restore);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -156,6 +171,10 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(e.emitted);
     out.Put(e.owner);
     out.Put(e.timeRemaining);
+    out.Put(e.shapePart);
+    out.Put(e.rows);
+    out.Put(e.partRows);
+    out.Put(e.bonusParticles);
   }
   return std::move(out.Data());
 }
@@ -227,6 +246,10 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.power = in.Get<float>();
       p.owner = in.Get<int>();
       p.temperature = in.Get<float>();
+      p.temperatureDelta = in.Get<float>();
+      p.hardnessScale = in.Get<float>();
+      p.crush = in.Get<float>();
+      p.restore = in.Get<float>();
     }
 
     uint32_t effects = in.Get<uint32_t>();
@@ -242,6 +265,10 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       e.emitted = in.Get<int>();
       e.owner = in.Get<int>();
       e.timeRemaining = in.Get<float>();
+      e.shapePart = in.Get<uint8_t>();
+      e.rows = in.Get<int>();
+      e.partRows = in.Get<int>();
+      e.bonusParticles = in.Get<int>();
     }
     if (!in.Done())
       return false;

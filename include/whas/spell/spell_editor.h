@@ -43,7 +43,11 @@ private:
   void DrawOverlay();
   void DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize);
   void DrawPalette();
+  void DrawSpellPalette();
   void DrawEditPanel();
+  void DrawComponentPanel();
+  void DrawComponent(ImDrawList *dl, const SpellComponent &component,
+                     ImVec2 canvasOrigin, ImVec2 canvasCenter, ImU32 color);
   // Library & Decks tab (spell_editor_library.cpp)
   void DrawLibraryTab();
   void DrawSpellGrid(float width);
@@ -68,6 +72,11 @@ private:
                             Vector2 spellPos) const;
 
   bool TryPlaceAt(Vector2 spellPos);
+  bool TryPlaceComponentAt(Vector2 spellPos);
+  // The component the palette is placing, at a canvas position
+  std::optional<SpellComponent> GhostComponent(Vector2 spellPos) const;
+  bool CanAddComponent(std::string *why = nullptr) const;
+  void ClearSelection();
   bool TrySelectAt(Vector2 spellPos);
   void SaveCurrent();
 
@@ -109,6 +118,13 @@ private:
   int m_selectedGlyphIndex = -1;
   float m_ghostScale = 1.0f;
   float m_ghostRotation = 0.0f;
+  bool m_ghostInverted = false;
+
+  // Layered spells: a library spell being placed as a component, or the
+  // component selected on the canvas
+  std::string m_paletteSpellRef;
+  int m_selectedComponent = -1;
+  float m_ghostComponentScale = 0.35f;
 
   char m_nameBuffer[SPELL_NAME_MAX_LEN + 1]{};
   std::string m_statusMessage;

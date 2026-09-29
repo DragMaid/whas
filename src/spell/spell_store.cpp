@@ -1,4 +1,5 @@
 #include "whas/spell/spell_store.h"
+#include "whas/spell/spell_json.h"
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
@@ -23,16 +24,6 @@ std::string SpellStore::SanitizeFilename(const std::string &name) const {
   return out;
 }
 
-static GlyphKind ParseKind(const std::string &s) {
-  if (s == "sigil")
-    return GlyphKind::Sigil;
-  return GlyphKind::Sign;
-}
-
-static std::string KindToString(GlyphKind kind) {
-  return kind == GlyphKind::Sigil ? "sigil" : "sign";
-}
-
 std::vector<Spell> SpellStore::LoadAll() const {
   std::vector<Spell> spells;
   std::filesystem::path dir(SPELLS_DIR);
@@ -52,20 +43,7 @@ std::vector<Spell> SpellStore::LoadAll() const {
       file >> j;
       Spell spell;
       spell.name = j.value("name", entry.path().stem().string());
-
-      if (j.contains("glyphs") && j["glyphs"].is_array()) {
-        for (const auto &g : j["glyphs"]) {
-          PlacedGlyph pg;
-          pg.assetId = g.value("assetId", "");
-          pg.kind = ParseKind(g.value("kind", "sign"));
-          pg.position.x = g.value("x", 0.0f);
-          pg.position.y = g.value("y", 0.0f);
-          pg.scale = g.value("scale", 1.0f);
-          pg.rotationDeg = g.value("rotation", 0.0f);
-          if (!pg.assetId.empty())
-            spell.glyphs.push_back(pg);
-        }
-      }
+      SpellJson::Read(j, spell);
 
       if (!spell.name.empty())
         spells.push_back(std::move(spell));
@@ -110,16 +88,7 @@ bool SpellStore::Save(const Spell &spell, std::string &errorOut) const {
 
   json j;
   j["name"] = spell.name;
-  j["glyphs"] = json::array();
-
-  for (const auto &g : spell.glyphs) {
-    j["glyphs"].push_back({{"assetId", g.assetId},
-                           {"kind", KindToString(g.kind)},
-                           {"x", g.position.x},
-                           {"y", g.position.y},
-                           {"scale", g.scale},
-                           {"rotation", g.rotationDeg}});
-  }
+  SpellJson::Write(j, spell);
 
   std::filesystem::path path =
       std::filesystem::path(SPELLS_DIR) / (filename + ".json");

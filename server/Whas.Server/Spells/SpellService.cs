@@ -17,15 +17,25 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
 
     public sealed record UploadResult(SpellCard? Card, string? Error);
 
+    public Task<UploadResult> UploadAsync(long ownerId, string name, List<Glyph> glyphs,
+                                          CancellationToken ct = default) =>
+        UploadAsync(ownerId, name, glyphs, [], ct);
+
     public async Task<UploadResult> UploadAsync(long ownerId, string name, List<Glyph> glyphs,
+                                                List<Component> components,
                                                 CancellationToken ct = default)
     {
-        if (SpellValidator.Check(name, glyphs) is { } problem)
+        if (SpellValidator.Check(name, glyphs, components) is { } problem)
             return new(null, problem);
 
         string glyphsJson = JsonSerializer.Serialize(glyphs, Protocol.Json);
-        string hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(glyphsJson)));
-        var stats = SpellEvaluator.EvaluateQuantized(glyphs);
+        // Plain spells hash their glyphs alone, as before layered spells
+        string? componentsJson = components.Count == 0
+            ? null : JsonSerializer.Serialize(components, Protocol.Json);
+        string hash = Convert.ToHexString(SHA256.HashData(
+            Encoding.UTF8.GetBytes(glyphsJson + (componentsJson ?? ""))));
+        var stats = SpellEvaluator.EvaluateQuantized(glyphs, components);
+        var cardComponents = components.Count == 0 ? null : components;
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var existing = await db.Spells.FirstOrDefaultAsync(
@@ -36,7 +46,7 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
             // Same circle uploaded again (maybe renamed): reuse its id
             existing.Name = name;
             await db.SaveChangesAsync(ct);
-            return new(new SpellCard(existing.Id, name, glyphs, stats), null);
+            return new(new SpellCard(existing.Id, name, glyphs, stats, cardComponents), null);
         }
 
         if (await db.Spells.CountAsync(s => s.OwnerId == ownerId, ct) >= MaxSpellsPerPlayer)
@@ -47,6 +57,7 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
             OwnerId = ownerId,
             Name = name,
             GlyphsJson = glyphsJson,
+            ComponentsJson = componentsJson,
             StatsJson = JsonSerializer.Serialize(stats, Protocol.Json),
             GlyphsHash = hash,
             EvaluatorVersion = SpellEvaluator.Version,
@@ -54,7 +65,7 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
         };
         db.Spells.Add(row);
         await db.SaveChangesAsync(ct);
-        return new(new SpellCard(row.Id, name, glyphs, stats), null);
+        return new(new SpellCard(row.Id, name, glyphs, stats, cardComponents), null);
     }
 
     public async Task<List<SpellCard>> MineAsync(long ownerId, CancellationToken ct = default)
@@ -138,7 +149,8 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
         foreach (var s in spells.Values.Where(s => s.EvaluatorVersion != SpellEvaluator.Version))
         {
             var glyphs = JsonSerializer.Deserialize<List<Glyph>>(s.GlyphsJson, Protocol.Json)!;
-            s.StatsJson = JsonSerializer.Serialize(SpellEvaluator.EvaluateQuantized(glyphs), Protocol.Json);
+            s.StatsJson = JsonSerializer.Serialize(
+                SpellEvaluator.EvaluateQuantized(glyphs, ComponentsOf(s) ?? []), Protocol.Json);
             s.EvaluatorVersion = SpellEvaluator.Version;
         }
         await db.SaveChangesAsync(ct);
@@ -158,8 +170,13 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
         return (rounds, null);
     }
 
+    static List<Component>? ComponentsOf(SpellDefinition s) =>
+        s.ComponentsJson is null
+            ? null : JsonSerializer.Deserialize<List<Component>>(s.ComponentsJson, Protocol.Json);
+
     static SpellCard ToCard(SpellDefinition s) => new(
         s.Id, s.Name,
         JsonSerializer.Deserialize<List<Glyph>>(s.GlyphsJson, Protocol.Json)!,
-        JsonSerializer.Deserialize<QuantizedStats>(s.StatsJson, Protocol.Json)!);
+        JsonSerializer.Deserialize<QuantizedStats>(s.StatsJson, Protocol.Json)!,
+        ComponentsOf(s));
 }

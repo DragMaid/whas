@@ -36,6 +36,11 @@ struct Particle {
     float power = 0.0f;
     int owner = -1; // hurtbox id that cast it; never hits its owner
     float temperature = 0.0f; // heat it lands with; 0 keeps the element default
+    // Spell modifiers (see SpellStats)
+    float temperatureDelta = 0.0f; // added to the landing temperature
+    float hardnessScale = 1.0f;    // landed cell's hardness multiplier
+    float crush = 0.0f;   // > 0 grinds what it hits to sand, < 0 reforms sand
+    float restore = 0.0f; // resets what it hits to its natural state
 };
 
 class ParticleSystem {

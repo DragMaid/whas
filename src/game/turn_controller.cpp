@@ -3,14 +3,6 @@
 #include <algorithm>
 #include <cmath>
 
-namespace {
-
-Vector2 FlightVelocity(const SpellStats &stats, Vector2 dir) {
-  return {dir.x * stats.launchSpeed, dir.y * stats.launchSpeed};
-}
-
-} // namespace
-
 PlannedCast PlannedCast::Local(const Spell &spell, Vector2 aim) {
   SpellQuant::Aim q = SpellQuant::QuantizeAim(aim);
   return {spell, SpellQuant::Canonical(spell), 0, q,
@@ -31,8 +23,8 @@ void PlanPreview::Append(const Simulation &sim, const TurnPlan &plan,
     const SpellStats &stats = cast.stats;
     Vector2 dir = SpellSystem::ResolveDirection(stats, cast.aim);
     casts.push_back({cast.spell, end.Center(), dir, stats});
-    if (stats.kind == SpellKind::Flight)
-      end.Launch(FlightVelocity(stats, dir));
+    if (stats.HasFlight())
+      end.Launch(SpellSystem::FlightVelocity(stats, cast.aim));
   }
   end.Step(sim, step.input, dt);
   path.push_back(end.Center());
@@ -60,6 +52,20 @@ void TurnController::BeginPlanning(const Character &localPlayer) {
 }
 
 int TurnController::CastTicks(const SpellStats &stats) {
+  if (stats.kind == SpellKind::Compound) {
+    // The slowest part in full, half of each other part, and a little to
+    // bind the layers: slower than any one part, quicker than casting them
+    // one by one. Half of the rest is rounded up.
+    int longest = 0, sum = 0;
+    for (const SpellStats &part : stats.parts) {
+      int t = CastTicks(part);
+      longest = std::max(longest, t);
+      sum += t;
+    }
+    int parts = static_cast<int>(stats.parts.size());
+    int rest = (sum - longest + 1) / 2;
+    return std::max(1, longest + rest + 8 + 2 * std::max(0, parts - 1));
+  }
   // 0.3s + 0.005s per particle = 18 ticks + 0.3 ticks per particle, rounded
   // half up: (180 + 3 * particles + 5) / 10
   int ticks = (18 * 10 + 3 * stats.particleCount + 5) / 10;
@@ -70,11 +76,9 @@ TurnController::CastResult TurnController::QueueCast(PlannedCast cast) {
   if (m_phase != Phase::Planning)
     return CastResult::NoTime;
 
-  bool flight = cast.stats.kind == SpellKind::Flight;
-  if (flight && std::any_of(m_pending.begin(), m_pending.end(),
-                            [](const PlannedCast &c) {
-                              return c.stats.kind == SpellKind::Flight;
-                            }))
+  if (cast.stats.HasFlight() &&
+      std::any_of(m_pending.begin(), m_pending.end(),
+                  [](const PlannedCast &c) { return c.stats.HasFlight(); }))
     return CastResult::SecondFlight;
 
   int ticks = CastTicks(cast.stats);
@@ -170,12 +174,10 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
     for (const PlannedCast &cast : step.casts) {
       if (!character.Alive())
         break;
-      if (cast.stats.kind == SpellKind::Flight) {
-        Vector2 dir = SpellSystem::ResolveDirection(cast.stats, cast.aim);
-        character.Launch(FlightVelocity(cast.stats, dir));
-      } else {
-        sim.CastSpell(cast.stats, character.Center(), cast.aim, character.id);
-      }
+      // Cast from where the caster stands, then any flight carries them off
+      sim.CastSpell(cast.stats, character.Center(), cast.aim, character.id);
+      if (cast.stats.HasFlight())
+        character.Launch(SpellSystem::FlightVelocity(cast.stats, cast.aim));
     }
   }
   // The fallen don't walk, but they still fall

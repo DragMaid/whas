@@ -9,7 +9,8 @@ namespace Whas.Server.Tests;
 // evaluator (whas_tests "[.generate]") and checked by both test suites.
 public class SpellGoldenTests
 {
-    sealed record Case(string Name, List<Glyph> Glyphs, QuantizedStats Stats);
+    sealed record Case(string Name, List<Glyph> Glyphs, QuantizedStats Stats,
+                       List<Component>? Components);
     sealed record Fixture(int EvaluatorVersion, List<Case> Cases);
 
     static Fixture Load()
@@ -34,10 +35,34 @@ public class SpellGoldenTests
         var fixture = Load();
         Assert.True(fixture.Cases.Count > 300);
         var mismatches = fixture.Cases
-            .Where(c => SpellEvaluator.EvaluateQuantized(c.Glyphs) != c.Stats)
-            .Select(c => $"{c.Name}: expected {c.Stats}, got {SpellEvaluator.EvaluateQuantized(c.Glyphs)}")
+            .Where(c => Evaluate(c) != c.Stats)
+            .Select(c => $"{c.Name}: expected {c.Stats}, got {Evaluate(c)}")
             .ToList();
         Assert.True(mismatches.Count == 0, string.Join("\n", mismatches.Take(10)));
+    }
+
+    static QuantizedStats Evaluate(Case c) =>
+        SpellEvaluator.EvaluateQuantized(c.Glyphs, c.Components ?? []);
+
+    [Fact]
+    public void GoldenCasesCoverLayeredSpellsAndModifiers()
+    {
+        var fixture = Load();
+        Assert.Contains(fixture.Cases, c => c.Stats.Kind == (byte)SpellKind.Compound && c.Stats.Valid);
+        Assert.Contains(fixture.Cases, c => c.Glyphs.Any(g => g.Inverted));
+        Assert.Contains(fixture.Cases, c => c.Stats.Shape == (byte)SpellShape.Dragon);
+    }
+
+    [Fact]
+    public void LayeredCastTicksTakeTheSlowestPartAndHalfTheRest()
+    {
+        // Parts of 18, 32 and 78 ticks: 78 + ceil((18 + 32) / 2) + 8 + 2 * 2
+        var layered = Stats(particles: 0) with
+        {
+            Kind = (byte)SpellKind.Compound,
+            Parts = [Stats(particles: 0), Stats(particles: 45), Stats(particles: 200)],
+        };
+        Assert.Equal(78 + 25 + 8 + 4, SpellEvaluator.CastTicks(layered));
     }
 
     [Fact]

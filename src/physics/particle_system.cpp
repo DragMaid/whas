@@ -33,6 +33,10 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.remainingDistance = remainingDistance;
       p.power = power;
       p.owner = owner;
+      p.temperatureDelta = 0.0f;
+      p.hardnessScale = 1.0f;
+      p.crush = 0.0f;
+      p.restore = 0.0f;
       p.temperature = 0.0f;
       return &p;
     }
@@ -45,7 +49,7 @@ namespace {
 // Loose rock would immediately be re-extracted and crumbled by the rigid body
 // system, so it settles as rubble instead.
 Element DepositedElement(Element element) {
-  return element == Element::ROCK ? Element::SAND : element;
+  return element; // PROBE
 }
 
 // How impacts spend a projectile's power
@@ -142,10 +146,12 @@ void Deposit(Particle &p, Grid &grid, ElementContext &ctx) {
         if (!grid.InBounds(x, y) || grid.Get(x, y).element != Element::AIR)
           continue;
 
-        Element element = DepositedElement(p.element);
+        Element element = p.element;
         Cell cell = ElementFactory::Create(element, ctx.config);
         if (p.temperature > 0.0f)
           cell.temperature = p.temperature;
+        cell.temperature += p.temperatureDelta;
+        cell.hardness *= p.hardnessScale;
         if (element == Element::FIRE && p.temperature > 0.0f) {
           // Hotter fire carries more fuel and burns longer
           const auto &fire = ctx.config.elements[static_cast<size_t>(element)];
@@ -157,6 +163,65 @@ void Deposit(Particle &p, Grid &grid, ElementContext &ctx) {
         const auto &props = ctx.config.elements[static_cast<size_t>(element)];
         ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, props.staticTerrain);
         return;
+      }
+    }
+  }
+}
+
+// How crushing and repetition reach into what a projectile hits
+struct ModifierTuning {
+  float crushChancePerSign = 0.35f; // per cell, per hit
+  float reformChancePerSign = 0.25f;
+  float radiusPerSign = 1.0f; // cells beyond the one that was hit
+  int maxRadius = 4;
+};
+
+constexpr ModifierTuning kModifier;
+
+void ReplaceCell(Grid &grid, ElementContext &ctx, int x, int y,
+                 Element element) {
+  Cell &c = grid.Get(x, y);
+  bool wasStatic =
+      ctx.config.elements[static_cast<size_t>(c.element)].staticTerrain;
+  float temperature = c.temperature;
+  c = ElementFactory::Create(element, ctx.config);
+  c.temperature = temperature;
+  bool isStatic =
+      ctx.config.elements[static_cast<size_t>(element)].staticTerrain;
+  ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, wasStatic || isStatic);
+}
+
+// Crushing grinds rock and earth into sand; inverted, it packs sand back into
+// earth. Repetition puts cells back the way the world made them: default
+// temperature and hardness, no longer burning.
+void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
+                       int tx, int ty) {
+  float strength = std::max(std::abs(p.crush), p.restore);
+  if (strength <= 0.0f)
+    return;
+  int r = std::min(kModifier.maxRadius,
+                   static_cast<int>(strength * kModifier.radiusPerSign));
+  for (int dy = -r; dy <= r; ++dy) {
+    for (int dx = -r; dx <= r; ++dx) {
+      int x = tx + dx, y = ty + dy;
+      if (dx * dx + dy * dy > r * r || !grid.InBounds(x, y))
+        continue;
+      Cell &c = grid.Get(x, y);
+      if (p.crush > 0.0f &&
+          (c.element == Element::ROCK || c.element == Element::EARTH) &&
+          RandomUnit(ctx) < p.crush * kModifier.crushChancePerSign) {
+        ReplaceCell(grid, ctx, x, y, Element::SAND);
+      } else if (p.crush < 0.0f && c.element == Element::SAND &&
+                 RandomUnit(ctx) < -p.crush * kModifier.reformChancePerSign) {
+        ReplaceCell(grid, ctx, x, y, Element::EARTH);
+      }
+      if (p.restore > 0.0f && c.element != Element::AIR) {
+        const auto &props =
+            ctx.config.elements[static_cast<size_t>(c.element)];
+        c.temperature = props.defaultTemperature;
+        c.hardness = props.defaultHardness;
+        c.flags &= ~CELL_BURNING;
+        ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex);
       }
     }
   }
@@ -201,11 +266,13 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
         break;
       }
 
+      bool flyingNow = p.isProjectile && p.remainingDistance > 0.0f;
+      if (flyingNow && grid.Get(tx, ty).element != Element::AIR)
+        ApplyHitModifiers(p, grid, ctx, tx, ty); // may turn rock into sand
       const Cell &target = grid.Get(tx, ty);
       const auto &targetProps =
           ctx.config.elements[static_cast<size_t>(target.element)];
       if (target.element != Element::AIR && !targetProps.passable) {
-        bool flyingNow = p.isProjectile && p.remainingDistance > 0.0f;
         // Projectiles slip through liquids rather than erasing them
         bool liquid = targetProps.mobile && !targetProps.solid;
         bool penetrated =
@@ -273,6 +340,9 @@ void ParticleSystem::Draw() {
         break;
       case Element::STEAM:
         color = {200, 200, 215, 255};
+        break;
+      case Element::SMOKE:
+        color = {110, 105, 105, 255};
         break;
       default:
         color = WHITE;

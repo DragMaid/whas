@@ -1,3 +1,4 @@
+#include "whas/spell/spell_json.h"
 #include "whas/spell/spell_quant.h"
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
@@ -12,27 +13,10 @@ namespace {
 
 constexpr const char *FIXTURE = WHAS_SOURCE_DIR "/tests/fixtures/spells.json";
 
-nlohmann::json GlyphJson(const PlacedGlyph &g) {
-  return {{"assetId", g.assetId},
-          {"kind", g.kind == GlyphKind::Sigil ? "sigil" : "sign"},
-          {"x", g.position.x},
-          {"y", g.position.y},
-          {"scale", g.scale},
-          {"rotation", g.rotationDeg}};
-}
-
 Spell FromJson(const nlohmann::json &j) {
   Spell s;
   s.name = j.at("name").get<std::string>();
-  for (const auto &g : j.at("glyphs")) {
-    PlacedGlyph pg;
-    pg.assetId = g.at("assetId").get<std::string>();
-    pg.kind = g.at("kind") == "sigil" ? GlyphKind::Sigil : GlyphKind::Sign;
-    pg.position = {g.at("x").get<float>(), g.at("y").get<float>()};
-    pg.scale = g.at("scale").get<float>();
-    pg.rotationDeg = g.at("rotation").get<float>();
-    s.glyphs.push_back(pg);
-  }
+  SpellJson::Read(j, s);
   return s;
 }
 
@@ -66,6 +50,117 @@ std::vector<Spell> Cases() {
   out.push_back({"two-sigils",
                  {{"fire", GlyphKind::Sigil, {0, 0}, 1, 0},
                   {"water", GlyphKind::Sigil, {40, 0}, 1, 0}}});
+
+  // Modifier signs, alone and doubled, plain and inverted
+  const char *modifiers[] = {"convergence", "crushing",      "repetition",
+                             "cooling",     "strengthening", "collection",
+                             "expansion",   "orb"};
+  const char *modSigils[] = {"water", "fire", "earth", "rock", "gust", "wind"};
+  const float modScales[] = {0.3f, 1.0f, 2.5f};
+  for (const char *mod : modifiers) {
+    for (const char *sigil : modSigils) {
+      for (float scale : modScales) {
+        for (int inverted = 0; inverted <= 1; ++inverted) {
+          if (inverted && !SpellSystem::SignInvertible(mod))
+            continue;
+          Spell s;
+          s.name = "case" + std::to_string(n++);
+          s.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, 1.1f, 0.0f});
+          s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.0f,
+                              0.0f});
+          s.glyphs.push_back({mod, GlyphKind::Sign, {-100, 60}, scale, 45.0f,
+                              inverted == 1});
+          if (scale > 2.0f)
+            s.glyphs.push_back({mod, GlyphKind::Sign, {100, 60}, 0.7f, 0.0f});
+          out.push_back(std::move(s));
+        }
+      }
+    }
+  }
+
+  // Everything at once
+  {
+    Spell s;
+    s.name = "kitchen-sink";
+    s.glyphs.push_back({"fire", GlyphKind::Sigil, {0, 0}, 1.4f, 0.0f});
+    float x = -150;
+    for (const char *mod : modifiers) {
+      s.glyphs.push_back({mod, GlyphKind::Sign, {x, 80}, 0.6f, 0.0f});
+      x += 40;
+    }
+    s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.5f, -45.0f});
+    out.push_back(std::move(s));
+  }
+
+  // Dragon: a shape sigil that needs an element sigil beside it
+  for (const char *sigil : {"water", "fire", "earth", "gust", "wind"}) {
+    for (float scale : {0.5f, 1.5f}) {
+      Spell s;
+      s.name = "case" + std::to_string(n++);
+      s.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, scale, 0.0f});
+      s.glyphs.push_back({"dragon", GlyphKind::Sigil, {0, 80}, 1.0f, 0.0f});
+      s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.2f, 0.0f});
+      if (scale > 1.0f)
+        s.glyphs.push_back({"orb", GlyphKind::Sign, {90, 0}, 1.0f, 0.0f});
+      out.push_back(std::move(s));
+    }
+  }
+  out.push_back({"dragon-alone",
+                 {{"dragon", GlyphKind::Sigil, {0, 0}, 1, 0},
+                  {"column", GlyphKind::Sign, {0, -120}, 1, 0}}});
+  out.push_back({"two-dragons",
+                 {{"water", GlyphKind::Sigil, {0, 0}, 1, 0},
+                  {"dragon", GlyphKind::Sigil, {60, 0}, 1, 0},
+                  {"dragon", GlyphKind::Sigil, {-60, 0}, 1, 0},
+                  {"column", GlyphKind::Sign, {0, -120}, 1, 0}}});
+
+  // Layered spells: 1-6 embedded spells (6 is too many), varied scales and
+  // turns, with and without outer ring signs
+  const char *partSigils[] = {"water", "fire", "earth", "gust", "wind", "ice"};
+  for (int parts = 1; parts <= 6; ++parts) {
+    for (int ring = 0; ring < 3; ++ring) {
+      Spell s;
+      s.name = "layered" + std::to_string(parts) + "-" + std::to_string(ring);
+      for (int i = 0; i < parts; ++i) {
+        SpellComponent c;
+        c.source = partSigils[i];
+        c.scale = 0.2f + 0.06f * static_cast<float>((i * 3 + ring) % 6);
+        c.rotationDeg = rotations[(i * 2 + ring) % 9] / 4.0f;
+        c.position = {60.0f * i - 120.0f, 0.0f};
+        c.glyphs.push_back(
+            {partSigils[i], GlyphKind::Sigil, {0, 0}, 0.4f + 0.3f * i, 0.0f});
+        c.glyphs.push_back({"column", GlyphKind::Sign, {0, -120},
+                            0.5f + 0.2f * (i + ring), rotations[(i + ring) % 9]});
+        if (i % 2 == 1)
+          c.glyphs.push_back({"crushing", GlyphKind::Sign, {80, 0}, 0.8f, 0.0f,
+                              ring == 1});
+        s.components.push_back(std::move(c));
+      }
+      if (ring >= 1) {
+        s.glyphs.push_back({"column", GlyphKind::Sign, {0, -210}, 0.8f,
+                            ring == 1 ? 0.0f : 45.0f});
+        s.glyphs.push_back({"cooling", GlyphKind::Sign, {150, 150}, 0.6f, 0.0f});
+      }
+      if (ring == 2) {
+        s.glyphs.push_back({"expansion", GlyphKind::Sign, {-150, 150}, 0.7f,
+                            0.0f, true});
+        s.glyphs.push_back({"collection", GlyphKind::Sign, {0, 210}, 0.5f,
+                            180.0f});
+      }
+      out.push_back(std::move(s));
+    }
+  }
+  {
+    // A sigil in the outer ring is not allowed
+    Spell s;
+    s.name = "layered-ring-sigil";
+    SpellComponent c;
+    c.glyphs.push_back({"water", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f});
+    c.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f});
+    s.components.push_back(c);
+    s.glyphs.push_back({"fire", GlyphKind::Sigil, {0, -210}, 0.5f, 0.0f});
+    out.push_back(std::move(s));
+  }
   return out;
 }
 
@@ -74,12 +169,10 @@ std::vector<Spell> Cases() {
 TEST_CASE("write golden spell vectors", "[.generate]") {
   nlohmann::json cases = nlohmann::json::array();
   for (const Spell &s : Cases()) {
-    nlohmann::json glyphs = nlohmann::json::array();
-    for (const PlacedGlyph &g : s.glyphs)
-      glyphs.push_back(GlyphJson(g));
-    cases.push_back({{"name", s.name},
-                     {"glyphs", glyphs},
-                     {"stats", SpellQuant::Quantize(SpellSystem::Evaluate(s))}});
+    nlohmann::json c{{"name", s.name},
+                     {"stats", SpellQuant::Quantize(SpellSystem::Evaluate(s))}};
+    SpellJson::Write(c, s);
+    cases.push_back(std::move(c));
   }
   std::ofstream(FIXTURE) << nlohmann::json{
       {"evaluatorVersion", SpellQuant::EVALUATOR_VERSION},

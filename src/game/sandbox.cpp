@@ -100,13 +100,9 @@ Vector2 Sandbox::AimAtMouse() const {
 }
 
 void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
-  if (cast.stats.kind == SpellKind::Flight) {
-    Vector2 dir = SpellSystem::ResolveDirection(cast.stats, cast.aim);
-    m_avatar.Launch({dir.x * cast.stats.launchSpeed,
-                     dir.y * cast.stats.launchSpeed});
-  } else {
-    sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
-  }
+  sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
+  if (cast.stats.HasFlight())
+    m_avatar.Launch(SpellSystem::FlightVelocity(cast.stats, cast.aim));
 }
 
 void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {

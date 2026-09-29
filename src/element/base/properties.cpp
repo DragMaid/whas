@@ -123,7 +123,7 @@ constexpr ElementProperties MakeIce() {
           .rigidBodyCandidate = true,
           .staticTerrain = false,
           .bodyMovable = true,
-          .defaultTemperature = -100.0f,
+          .defaultTemperature = -10.0f,
           .defaultMass = 0.9f,
           .defaultHardness = 100.0f,
           .defaultLifetime = 0.0f,

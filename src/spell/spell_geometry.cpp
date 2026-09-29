@@ -87,17 +87,58 @@ bool SegmentsCrossAny(const std::vector<LineSeg> &candidate,
   return false;
 }
 
+std::vector<LineSeg> GlyphSegments(const SvgAsset &asset,
+                                   const PlacedGlyph &glyph) {
+  return TransformSegments(asset.SegmentsFor(glyph.inverted),
+                           asset.localCenter, glyph.position, glyph.scale,
+                           glyph.rotationDeg);
+}
+
+PlacedGlyph ComponentGlyph(const SpellComponent &component,
+                           const PlacedGlyph &glyph) {
+  PlacedGlyph out = glyph;
+  out.position = TransformPoint(glyph.position, {0, 0}, component.position,
+                                component.scale, component.rotationDeg);
+  out.scale = glyph.scale * component.scale;
+  out.rotationDeg = glyph.rotationDeg + component.rotationDeg;
+  return out;
+}
+
+bool IsComponentPlacementValid(const SpellComponent &component,
+                               const Spell &spell,
+                               std::optional<size_t> ignoreIndex) {
+  float r = ComponentRadius(component.scale);
+  if (std::hypot(component.position.x, component.position.y) + r >
+      LAYER_CORE_RADIUS + EPS)
+    return false;
+  for (size_t i = 0; i < spell.components.size(); ++i) {
+    if (ignoreIndex && *ignoreIndex == i)
+      continue;
+    const SpellComponent &other = spell.components[i];
+    float d = std::hypot(component.position.x - other.position.x,
+                         component.position.y - other.position.y);
+    if (d < r + ComponentRadius(other.scale) - EPS)
+      return false;
+  }
+  return true;
+}
+
 bool IsGlyphPlacementValid(const SvgAsset &asset, const PlacedGlyph &glyph,
                            Vector2 canvasCenter, float innerRadius,
                            const Spell &spell,
                            const std::vector<SvgAsset> &assets,
                            std::optional<size_t> ignoreIndex) {
-  auto world = TransformSegments(asset.segments, asset.localCenter,
-                                 glyph.position, glyph.scale,
-                                 glyph.rotationDeg);
+  auto world = GlyphSegments(asset, glyph);
 
-  if (!AllEndpointsInsideCircle(world, canvasCenter, innerRadius))
+  if (spell.Layered()) {
+    if (!AllEndpointsInsideCircle(world, canvasCenter, LAYER_RING_OUTER))
+      return false;
+    for (const LineSeg &seg : world)
+      if (PointToSegmentDistance(canvasCenter, seg) < LAYER_RING_INNER - EPS)
+        return false;
+  } else if (!AllEndpointsInsideCircle(world, canvasCenter, innerRadius)) {
     return false;
+  }
 
   for (size_t i = 0; i < spell.glyphs.size(); ++i) {
     if (ignoreIndex && *ignoreIndex == i)
@@ -114,9 +155,7 @@ bool IsGlyphPlacementValid(const SvgAsset &asset, const PlacedGlyph &glyph,
     if (!otherAsset)
       continue;
 
-    auto otherWorld =
-        TransformSegments(otherAsset->segments, otherAsset->localCenter,
-                          other.position, other.scale, other.rotationDeg);
+    auto otherWorld = GlyphSegments(*otherAsset, other);
 
     if (SegmentsCrossAny(world, otherWorld))
       return false;
@@ -139,9 +178,7 @@ float PointToSegmentDistance(Vector2 p, const LineSeg &seg) {
 
 bool HitTestGlyph(const PlacedGlyph &glyph, const SvgAsset &asset,
                   Vector2 canvasPoint, float threshold) {
-  auto world = TransformSegments(asset.segments, asset.localCenter,
-                                 glyph.position, glyph.scale,
-                                 glyph.rotationDeg);
+  auto world = GlyphSegments(asset, glyph);
 
   for (const auto &seg : world) {
     if (PointToSegmentDistance(canvasPoint, seg) <= threshold)

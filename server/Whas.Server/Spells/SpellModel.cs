@@ -7,10 +7,12 @@ namespace Whas.Server.Spells;
 public enum Element : byte
 {
     Air = 0, Water = 1, Earth = 2, Fire = 3, Steam = 4, Cloud = 5, Ice = 6,
-    Sand = 7, Rock = 8,
+    Sand = 7, Rock = 8, Wood = 9, Grass = 10, Smoke = 11,
 }
 
-public enum SpellKind : byte { None = 0, Element = 1, Flight = 2, Gust = 3 }
+public enum SpellKind : byte { None = 0, Element = 1, Flight = 2, Gust = 3, Compound = 4 }
+
+public enum SpellShape : byte { Stream = 0, Orb = 1, Dragon = 2 }
 
 // A glyph as the client's spell files and editor store it
 public sealed record Glyph(
@@ -19,10 +21,23 @@ public sealed record Glyph(
     [property: JsonPropertyName("x")] float X,
     [property: JsonPropertyName("y")] float Y,
     [property: JsonPropertyName("scale")] float Scale,
-    [property: JsonPropertyName("rotation")] float Rotation)
+    [property: JsonPropertyName("rotation")] float Rotation,
+    // Left out when false, so plain glyphs serialize (and hash) as before
+    [property: JsonPropertyName("inverted"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    bool Inverted = false)
 {
     public bool IsSigil => Kind == "sigil";
 }
+
+// A single-layer spell embedded in a layered one (C++ SpellComponent)
+public sealed record Component(
+    [property: JsonPropertyName("source")] string Source,
+    [property: JsonPropertyName("x")] float X,
+    [property: JsonPropertyName("y")] float Y,
+    [property: JsonPropertyName("scale")] float Scale,
+    [property: JsonPropertyName("rotation")] float Rotation,
+    [property: JsonPropertyName("glyphs")] List<Glyph> Glyphs);
 
 // Float stats, the same fields as the C++ SpellStats
 public sealed class SpellStats
@@ -44,6 +59,14 @@ public sealed class SpellStats
     public float LaunchSpeed;
     public float Force;
     public float Duration;
+    public SpellShape Shape;
+    public float TemperatureDelta;
+    public float HardnessScale = 1.0f;
+    public float Crush;
+    public float Restore;
+    public float CollectRadius;
+    public int CollectMax;
+    public List<SpellStats> Parts = [];
 }
 
 // The integer stats both clients simulate with (C++ SpellQuant::Stats)
@@ -62,4 +85,34 @@ public sealed record QuantizedStats(
     [property: JsonPropertyName("temperature")] int Temperature,
     [property: JsonPropertyName("launchSpeed")] int LaunchSpeed,
     [property: JsonPropertyName("force")] int Force,
-    [property: JsonPropertyName("duration")] int Duration);
+    [property: JsonPropertyName("duration")] int Duration,
+    [property: JsonPropertyName("shape")] byte Shape = 0,
+    [property: JsonPropertyName("temperatureDelta")] int TemperatureDelta = 0,
+    [property: JsonPropertyName("hardnessScale")] int HardnessScale = SpellEvaluator.StatScale,
+    [property: JsonPropertyName("crush")] int Crush = 0,
+    [property: JsonPropertyName("restore")] int Restore = 0,
+    [property: JsonPropertyName("collectRadius")] int CollectRadius = 0,
+    [property: JsonPropertyName("collectMax")] int CollectMax = 0,
+    [property: JsonPropertyName("parts"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    List<QuantizedStats>? Parts = null)
+{
+    public bool HasFlight =>
+        Kind == (byte)SpellKind.Flight || (Parts?.Any(p => p.HasFlight) ?? false);
+
+    // Parts compare by content (a missing list is the same as an empty one)
+    public bool Equals(QuantizedStats? o) =>
+        o is not null && Valid == o.Valid && Kind == o.Kind && Element == o.Element &&
+        Imbalance == o.Imbalance && Offset == o.Offset && Speed == o.Speed &&
+        Range == o.Range && Density == o.Density && Power == o.Power &&
+        Diameter == o.Diameter && ParticleCount == o.ParticleCount &&
+        Temperature == o.Temperature && LaunchSpeed == o.LaunchSpeed &&
+        Force == o.Force && Duration == o.Duration && Shape == o.Shape &&
+        TemperatureDelta == o.TemperatureDelta && HardnessScale == o.HardnessScale &&
+        Crush == o.Crush && Restore == o.Restore && CollectRadius == o.CollectRadius &&
+        CollectMax == o.CollectMax &&
+        (Parts ?? []).SequenceEqual(o.Parts ?? []);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Kind, Element, Speed, Power, ParticleCount, Parts?.Count ?? 0);
+}

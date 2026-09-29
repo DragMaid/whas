@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Whas.Server.Data;
+using Whas.Server.Spells;
 
 namespace Whas.Server.Tests;
 
@@ -303,6 +304,24 @@ public class MatchFlowTests(ServerFixture server)
         await c.SendAsync(new { type = "uploadSpell", @ref = "z", name = "Bolt", glyphs = WaterGlyphs, stats = new { power = 999999 } });
         var ok = await c.ExpectAsync("spellAccepted");
         Assert.True(ok.GetProperty("stats").GetProperty("power").GetInt32() < 999999);
+
+        // A layered spell: the server evaluates every part
+        await c.SendAsync(new
+        {
+            type = "uploadSpell", @ref = "l", name = "Layered",
+            glyphs = new object[]
+            {
+                new { assetId = "cooling", kind = "sign", x = 0f, y = -210f, scale = 0.5f, rotation = 0f },
+            },
+            components = new object[]
+            {
+                new { source = "a", x = -60f, y = 0f, scale = 0.2f, rotation = 0f, glyphs = WaterGlyphs },
+                new { source = "b", x = 60f, y = 0f, scale = 0.2f, rotation = 45f, glyphs = WaterGlyphs },
+            },
+        });
+        var layered = (await c.ExpectAsync("spellAccepted")).GetProperty("stats");
+        Assert.Equal((int)SpellKind.Compound, layered.GetProperty("kind").GetInt32());
+        Assert.Equal(2, layered.GetProperty("parts").GetArrayLength());
 
         // Decks can only hold your own spells
         var other = await TestClient.ConnectAsync(server, "b");

@@ -96,7 +96,8 @@ PlannedCast Game::MakeCast(const Spell &spell, Vector2 aim) const {
   // Online the server's card is what counts: its id and its stats
   for (const auto &card : m_online->Cards(Local()))
     if (card && card->spell.name == spell.name &&
-        card->spell.glyphs.size() == spell.glyphs.size()) {
+        card->spell.glyphs.size() == spell.glyphs.size() &&
+        card->spell.components.size() == spell.components.size()) {
       cast.spell = card->spell;
       cast.stats = card->stats;
       cast.spellId = card->id;

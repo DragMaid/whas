@@ -75,17 +75,44 @@ void SvgLibrary::LoadFromDirectories(const std::string &signsDir,
     std::filesystem::path p(dir);
     if (!std::filesystem::exists(p))
       return;
+    std::vector<std::filesystem::path> inverted;
     for (const auto &entry : std::filesystem::directory_iterator(p)) {
       if (!entry.is_regular_file())
         continue;
       if (entry.path().extension() != ".svg")
         continue;
+      // "<id>.inverted.svg" is another drawing of <id>, not its own glyph
+      if (entry.path().stem().extension() == ".inverted") {
+        inverted.push_back(entry.path());
+        continue;
+      }
       LoadSvgFile(entry.path().string(), kind);
+    }
+    for (const auto &path : inverted) {
+      std::string id = path.stem().stem().string();
+      for (auto &asset : m_assets) {
+        if (asset.id != id)
+          continue;
+        SvgAsset shape;
+        if (ParseShape(path.string(), shape))
+          asset.invertedSegments = std::move(shape.segments);
+      }
     }
   };
 
   scan(signsDir, GlyphKind::Sign);
   scan(sigilsDir, GlyphKind::Sigil);
+
+  // Without a drawing of its own, an inverted glyph is turned 180 degrees
+  for (auto &asset : m_assets) {
+    if (!asset.invertedSegments.empty())
+      continue;
+    Vector2 c = asset.localCenter;
+    for (const LineSeg &seg : asset.segments)
+      asset.invertedSegments.push_back(
+          {{2 * c.x - seg.a.x, 2 * c.y - seg.a.y},
+           {2 * c.x - seg.b.x, 2 * c.y - seg.b.y}});
+  }
 
   std::sort(m_assets.begin(), m_assets.end(),
             [](const SvgAsset &a, const SvgAsset &b) { return a.id < b.id; });
@@ -110,6 +137,17 @@ std::vector<const SvgAsset *> SvgLibrary::GetByKind(GlyphKind kind) const {
 }
 
 bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
+  SvgAsset asset;
+  asset.id = std::filesystem::path(path).stem().string();
+  asset.kind = kind;
+  asset.path = path;
+  if (!ParseShape(path, asset))
+    return false;
+  m_assets.push_back(std::move(asset));
+  return true;
+}
+
+bool SvgLibrary::ParseShape(const std::string &path, SvgAsset &asset) {
   std::ifstream file(path);
   if (!file)
     return false;
@@ -121,11 +159,6 @@ bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
   std::vector<char> mutableContent(content.begin(), content.end());
   mutableContent.push_back('\0');
   NSVGimage *image = nsvgParse(mutableContent.data(), "px", 96.0f);
-
-  SvgAsset asset;
-  asset.id = std::filesystem::path(path).stem().string();
-  asset.kind = kind;
-  asset.path = path;
 
   if (image) {
     asset.viewWidth = image->width > 0 ? image->width : 64.0f;
@@ -177,7 +210,5 @@ bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
   asset.viewWidth *= scale;
   asset.viewHeight *= scale;
   asset.localCenter = {asset.viewWidth * 0.5f, asset.viewHeight * 0.5f};
-
-  m_assets.push_back(std::move(asset));
   return true;
 }

@@ -17,6 +17,8 @@ public sealed class SpellDefinition
     public long OwnerId { get; set; }
     public required string Name { get; set; }
     public required string GlyphsJson { get; set; }  // jsonb
+    // Layered spells: the embedded spells (jsonb); null for plain spells
+    public string? ComponentsJson { get; set; }
     public required string StatsJson { get; set; }   // jsonb, quantized
     // Same owner + same glyphs reuses the row
     public required string GlyphsHash { get; set; }

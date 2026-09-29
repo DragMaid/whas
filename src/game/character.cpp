@@ -56,6 +56,19 @@ bool Collides(const Simulation &sim, Vector2 pos) {
 } // namespace
 
 void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
+  // Buried (a spell dropped sand or earth on us, or made it under our feet):
+  // pop up onto the top of the pile instead of being stuck inside it
+  if (Collides(sim, pos)) {
+    for (float y = std::floor(pos.y) - 1.0f; y >= -HEIGHT; y -= 1.0f) {
+      if (!Collides(sim, {pos.x, y})) {
+        pos.y = y;
+        vel.y = std::min(vel.y, 0.0f);
+        grounded = true;
+        break;
+      }
+    }
+  }
+
   Vector2 center = Center();
   bool inLiquid = IsLiquid(sim, static_cast<int>(center.x),
                            static_cast<int>(center.y));

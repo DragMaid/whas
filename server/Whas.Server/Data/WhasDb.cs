@@ -20,6 +20,7 @@ public sealed class WhasDb(DbContextOptions<WhasDb> options) : DbContext(options
         b.Entity<SpellDefinition>(e =>
         {
             e.Property(s => s.GlyphsJson).HasColumnType("jsonb");
+            e.Property(s => s.ComponentsJson).HasColumnType("jsonb");
             e.Property(s => s.StatsJson).HasColumnType("jsonb");
             e.HasIndex(s => new { s.OwnerId, s.GlyphsHash, s.EvaluatorVersion });
             e.HasOne<Player>().WithMany().HasForeignKey(s => s.OwnerId);

@@ -76,7 +76,7 @@ struct EarthConfig {
 
 struct IceConfig {
   float meltPoint = 0.0f;
-  int meltChance = 10;
+  int meltChance = 3; // 1 in this many ticks, once above the melt point
 };
 
 struct SimulationConfig {

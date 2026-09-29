@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whas/core/element.h"
+#include "whas/spell/spell_shapes.h"
 #include "whas/spell/spell_types.h"
 #include <raylib.h>
 #include <string>
@@ -15,7 +16,9 @@ enum class SpellKind : uint8_t {
   Element, // fires a stream of an element
   Flight,  // launches the caster along the spell direction (wind sigil)
   Gust,    // a push field that sends everything in it flying (gust sigil)
+  Compound, // a layered spell: fires every one of its parts at once
 };
+
 
 // Everything a spell does, derived from its glyphs.
 //
@@ -43,6 +46,20 @@ struct SpellStats {
   float launchSpeed = 0.0f; // Flight: caster velocity, cells/s
   float force = 0.0f;       // Gust: push strength; acceleration = force/mass
   float duration = 0.0f;    // Gust: seconds the field lasts
+
+  // Modifier signs (element spells)
+  SpellShape shape = SpellShape::Stream;
+  float temperatureDelta = 0.0f; // cooling: added to what lands
+  float hardnessScale = 1.0f;    // strengthening/convergence: landed hardness
+  float crush = 0.0f;   // crushing: > 0 grinds what it hits to sand, < 0 reforms
+  float restore = 0.0f; // repetition: resets what it hits to its natural state
+  float collectRadius = 0.0f; // collection: cells around the caster...
+  int collectMax = 0;         // ...and how many of them it can draw in
+
+  // Compound: one entry per embedded spell, each ready to fire
+  std::vector<SpellStats> parts;
+
+  bool HasFlight() const;
 };
 
 struct SpellEffect {
@@ -52,6 +69,10 @@ struct SpellEffect {
   int emitted = 0;
   int owner = -1;             // hurtbox id of the caster
   float timeRemaining = 0.0f; // Gust
+  uint8_t shapePart = 0;      // which ShapeDef part is emitting
+  int rows = 0;               // rows emitted so far (for the weave)
+  int partRows = 0;           // rows emitted by the current part
+  int bonusParticles = 0;     // drawn in by collection when cast
 };
 
 namespace SpellSystem {
@@ -61,11 +82,22 @@ constexpr float BALANCED_THRESHOLD = 0.05f;
 // Sigil asset id -> what it does. Unknown ids give SpellKind::None.
 SpellKind SigilKind(const std::string &assetId);
 Element SigilElement(const std::string &assetId);
+// Sigils that only shape a spell and need an element sigil beside them
+bool IsShapeSigil(const std::string &assetId);
+// Signs that can be drawn inverted
+bool SignInvertible(const std::string &assetId);
 
 SpellStats Evaluate(const Spell &spell);
 
+// How much an embedded spell of this scale is worth (0.5..1.25)
+float ComponentEffectiveness(float scale);
+
 // Rotate the aim direction by the spell's sign offset
 Vector2 ResolveDirection(const SpellStats &stats, Vector2 aim);
+
+// Caster velocity from the spell's flight (a wind spell, or the wind parts
+// of a layered one); zero when it has none
+Vector2 FlightVelocity(const SpellStats &stats, Vector2 aim);
 
 // Whether a point (cells) is inside a gust's field, and how strongly (0..1,
 // fading toward the far end)
