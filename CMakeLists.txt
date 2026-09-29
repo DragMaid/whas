@@ -114,6 +114,7 @@ set(SOURCES
     src/spell/spell_json.cpp
     src/spell/spell_shapes.cpp
     src/spell/spell_editor.cpp
+    src/spell/glyph_docs.cpp
     src/spell/spell_editor_library.cpp
     src/spell/spell_system.cpp
     src/spell/spell_quant.cpp

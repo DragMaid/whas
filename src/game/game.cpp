@@ -408,7 +408,9 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
     if (!spell) {
       Notify("Pick a spell from the hotbar first (1-6)", 2.0f);
     } else if (!SpellSystem::Evaluate(*spell).valid) {
-      Notify("That spell needs exactly one known sigil", 2.0f);
+      // Notify keeps the pointer: hold the text in the game
+      m_noticeText = SpellSystem::Problem(*spell);
+      Notify(m_noticeText.c_str(), 3.0f);
     } else {
       Vector2 origin = ghost.Center();
       Vector2 mouse = View::MouseCells();
@@ -423,7 +425,7 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
         Notify("Not enough time left in this turn to cast that", 2.0f);
         break;
       case TurnController::CastResult::SecondFlight:
-        Notify("Only one wind sigil (movement) cast per pause", 2.0f);
+        Notify("Only one wind underfoot (movement) cast per pause", 2.0f);
         break;
       }
     }

@@ -63,6 +63,19 @@ private:
                          ImVec2 canvasCenter);
 
   void DrawAssetThumbnail(const SvgAsset &asset, bool selected);
+  void DrawGlyphGrid(GlyphKind kind);
+  // Context-sensitive shortcuts along the bottom of the canvas
+  void DrawHints(ImDrawList *dl, ImVec2 canvasOrigin, ImVec2 canvasSize);
+  // Undo / redo / delete / deselect from the keyboard
+  void HandleShortcuts();
+  void RemoveSelected();
+  // Undo history: a finished edit (nothing held down) becomes one step
+  void CommitEdits();
+  void ResetHistory();
+  void Undo();
+  void Redo();
+  // The glyph being placed, at a spell position
+  std::optional<PlacedGlyph> GhostGlyph(Vector2 spellPos) const;
   void DrawGlyphLines(ImDrawList *dl, const SvgAsset &asset,
                       const PlacedGlyph &glyph, ImVec2 canvasOrigin,
                       ImVec2 canvasCenter, ImU32 color, float thickness);
@@ -114,6 +127,27 @@ private:
   char m_renameBuffer[SPELL_NAME_MAX_LEN + 1]{};
   const char *m_openPopup = nullptr;
   std::string m_testRef;
+
+  // Right panel palette tabs; selecting on the canvas switches to its tab
+  enum class PaletteTab { Sigils, Signs, Spells };
+  PaletteTab m_paletteTab = PaletteTab::Sigils;
+  bool m_switchPalette = false;
+  bool m_scrollToCard = false; // bring the selected glyph's card into view
+  void ShowPaletteTab(PaletteTab tab) {
+    m_paletteTab = tab;
+    m_switchPalette = true;
+    m_scrollToCard = true;
+  }
+
+  // Undo history, and what the stat changes compare against: the spell
+  // before the edit in progress (or the last finished one)
+  std::vector<Spell> m_undo;
+  std::vector<Spell> m_redo;
+  Spell m_committed;  // the spell as of the last finished edit
+  Spell m_actionBase; // the spell before that edit
+  // The spell as it would be with the ghost placed (while hovering a
+  // valid spot), for the stat changes
+  std::optional<Spell> m_previewSpell;
 
   bool m_isPlacing = false;
   std::string m_paletteAssetId;
