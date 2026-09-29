@@ -1,5 +1,6 @@
 #include "imgui.h"
 #include "whas/constants.h"
+#include "whas/engine/view.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/spell_quant.h"
 #include "whas/ui/ui.h"
@@ -11,9 +12,12 @@
 
 namespace {
 
-constexpr float PAD = 6.0f;
-constexpr float DECK_W = 210.0f;
-constexpr float TOGGLE_W = 58.0f;
+// At UI scale 1 (720p); scaled where they're used
+constexpr float BASE_PAD = 6.0f;
+constexpr float BASE_DECK_W = 210.0f;
+constexpr float BASE_TOGGLE_W = 58.0f;
+
+float Px(float v) { return v * View::UiScale(); }
 
 ImU32 Rgba(int r, int g, int b, int a = 255) { return IM_COL32(r, g, b, a); }
 
@@ -45,9 +49,18 @@ void Arc(ImDrawList *dl, ImVec2 c, float r, float from01, float to01,
 
 } // namespace
 
+float UI::BarHeight() { return Px(60); }
+float UI::BarY() { return GetScreenHeight() - BarHeight(); }
+
 void UI::DrawActionBar(UIState &state) {
-  ImGui::SetNextWindowPos({0, (float)BAR_Y});
-  ImGui::SetNextWindowSize({(float)WINDOW_WIDTH, (float)BAR_HEIGHT});
+  const float PAD = Px(BASE_PAD);
+  const float DECK_W = Px(BASE_DECK_W);
+  const float TOGGLE_W = Px(BASE_TOGGLE_W);
+  const float BAR_Y = BarY();
+  const float BAR_HEIGHT = BarHeight();
+  const float WIDTH = static_cast<float>(GetScreenWidth());
+  ImGui::SetNextWindowPos({0, BAR_Y});
+  ImGui::SetNextWindowSize({WIDTH, BAR_HEIGHT});
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
   ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.09f, 0.09f, 0.12f, 0.97f));
@@ -57,8 +70,7 @@ void UI::DrawActionBar(UIState &state) {
                    ImGuiWindowFlags_NoBringToFrontOnFocus |
                    ImGuiWindowFlags_NoScrollWithMouse);
   ImDrawList *dl = ImGui::GetWindowDrawList();
-  dl->AddLine({0, (float)BAR_Y}, {(float)WINDOW_WIDTH, (float)BAR_Y},
-              Rgba(60, 60, 80), 1.0f);
+  dl->AddLine({0, BAR_Y}, {WIDTH, BAR_Y}, Rgba(60, 60, 80), 1.0f);
 
   float h = BAR_HEIGHT - 2 * PAD;
   float x = PAD + 2;
@@ -89,13 +101,13 @@ void UI::DrawActionBar(UIState &state) {
   }
 
   ImVec2 contentPos{x, BAR_Y + PAD};
-  ImVec2 contentSize{WINDOW_WIDTH - x - DECK_W - PAD * 3, h};
+  ImVec2 contentSize{WIDTH - x - DECK_W - PAD * 3, h};
   if (sandbox && state.tool == SandboxTool::Draw)
     DrawMaterials(state, contentPos, contentSize);
   else
     DrawHotbar(state, contentPos, contentSize);
 
-  DrawDeckPicker(state, {WINDOW_WIDTH - DECK_W - PAD, BAR_Y + PAD},
+  DrawDeckPicker(state, {WIDTH - DECK_W - PAD, BAR_Y + PAD},
                  {DECK_W, h});
 
   ImGui::End();
@@ -170,8 +182,9 @@ void UI::DrawTimeButton(UIState &state, ImVec2 pos, float size) {
 }
 
 void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
+  const float PAD = Px(BASE_PAD);
   ImDrawList *dl = ImGui::GetWindowDrawList();
-  float slotW = std::min(170.0f, (size.x - PAD * (DECK_SLOTS - 1)) / DECK_SLOTS);
+  float slotW = std::min(Px(170), (size.x - PAD * (DECK_SLOTS - 1)) / DECK_SLOTS);
   bool inMatch = state.matchRound >= 0;
 
   for (int i = 0; i < DECK_SLOTS; ++i) {
@@ -242,11 +255,11 @@ void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
                         fits ? Rgba(255, 190, 70, alpha)
                              : Rgba(200, 80, 60, 200),
                         2.0f);
-      dl->AddText(ImGui::GetFont(), 12.0f, {tx, p1.y - 28},
+      dl->AddText(ImGui::GetFont(), Px(12), {tx, p1.y - Px(28)},
                   Rgba(170, 170, 190, alpha),
                   TextFormat("%.2fs", ticks * TurnController::TICK_DT));
     } else {
-      dl->AddText(ImGui::GetFont(), 12.0f, {tx, p1.y - 28},
+      dl->AddText(ImGui::GetFont(), Px(12), {tx, p1.y - Px(28)},
                   Rgba(230, 90, 90), "invalid");
     }
 
@@ -269,6 +282,7 @@ void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
 }
 
 void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
+  const float PAD = Px(BASE_PAD);
   struct Material {
     Element element;
     const char *label;
@@ -289,7 +303,7 @@ void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
   };
   constexpr int count = static_cast<int>(std::size(kMaterials));
   float brushW = 90.0f;
-  float w = std::min(84.0f, (size.x - brushW - PAD * count) / count);
+  float w = std::min(Px(84), (size.x - brushW - PAD * count) / count);
   ImDrawList *dl = ImGui::GetWindowDrawList();
 
   for (int i = 0; i < count; ++i) {
@@ -315,13 +329,14 @@ void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
 
   float bx = pos.x + count * (w + PAD) + 4;
   dl->AddText({bx, pos.y + 8}, Rgba(200, 200, 215), "Brush");
-  dl->AddText(ImGui::GetFont(), 22.0f, {bx, pos.y + 24}, Rgba(240, 240, 250),
+  dl->AddText(ImGui::GetFont(), Px(22), {bx, pos.y + Px(24)}, Rgba(240, 240, 250),
               TextFormat("%d", state.brushRadius));
-  dl->AddText(ImGui::GetFont(), 12.0f, {bx + 30, pos.y + 32},
+  dl->AddText(ImGui::GetFont(), Px(12), {bx + Px(30), pos.y + Px(32)},
               Rgba(140, 140, 160), "wheel");
 }
 
 void UI::DrawDeckPicker(UIState &state, ImVec2 pos, ImVec2 size) {
+  const float PAD = Px(BASE_PAD);
   constexpr float playW = 58.0f;
   ImGui::SetCursorScreenPos(pos);
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.32f, 0.12f, 1));

@@ -23,4 +23,8 @@ Vector2 MouseCells();
 // A world pixel position on screen
 Vector2 WorldToScreen(Vector2 world);
 
+// How much bigger the UI is drawn than at 720p (1 to 2.5, in quarter
+// steps so resizing doesn't restyle every frame)
+float UiScale();
+
 } // namespace View

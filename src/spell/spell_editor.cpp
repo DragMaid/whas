@@ -1,5 +1,6 @@
 #include "whas/spell/spell_editor.h"
 #include "whas/constants.h"
+#include "whas/engine/view.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/spell_geometry.h"
 #include "whas/ui/spell_thumbnails.h"
@@ -40,14 +41,15 @@ void AddArrow(ImDrawList *dl, ImVec2 from, ImVec2 dir, float length,
 
 ImU32 ToImU32(Color c) { return IM_COL32(c.r, c.g, c.b, c.a); }
 
-// An open ring around `center` (canvas position of the spell's centre)
+// An open ring around `center` (canvas position of the spell's centre),
+// spell units drawn `zoom` pixels each
 void AddRing(ImDrawList *dl, const SpellGeometry::Ring &ring, ImVec2 center,
-             ImU32 color, float thickness) {
+             float zoom, ImU32 color, float thickness) {
   auto points = SpellGeometry::RingPoints(ring);
   std::vector<ImVec2> screen;
   screen.reserve(points.size());
   for (Vector2 p : points)
-    screen.push_back({center.x + p.x, center.y + p.y});
+    screen.push_back({center.x + p.x * zoom, center.y + p.y * zoom});
   dl->AddPolyline(screen.data(), (int)screen.size(), color, ImDrawFlags_None,
                   thickness);
 }
@@ -225,14 +227,14 @@ const SvgAsset *SpellEditor::GetAssetForGlyph(const PlacedGlyph &glyph) const {
 Vector2 SpellEditor::CanvasToSpellSpace(ImVec2 canvasOrigin,
                                         ImVec2 canvasCenter,
                                         ImVec2 screenPos) const {
-  return {screenPos.x - canvasOrigin.x - canvasCenter.x,
-          screenPos.y - canvasOrigin.y - canvasCenter.y};
+  return {(screenPos.x - canvasOrigin.x - canvasCenter.x) / m_zoom,
+          (screenPos.y - canvasOrigin.y - canvasCenter.y) / m_zoom};
 }
 
 ImVec2 SpellEditor::SpellToCanvasSpace(ImVec2 canvasOrigin, ImVec2 canvasCenter,
                                        Vector2 spellPos) const {
-  return {canvasOrigin.x + canvasCenter.x + spellPos.x,
-          canvasOrigin.y + canvasCenter.y + spellPos.y};
+  return {canvasOrigin.x + canvasCenter.x + spellPos.x * m_zoom,
+          canvasOrigin.y + canvasCenter.y + spellPos.y * m_zoom};
 }
 
 std::vector<LineSeg> SpellEditor::GetWorldSegments(const PlacedGlyph &glyph,
@@ -469,7 +471,7 @@ void SpellEditor::DrawComponent(ImDrawList *dl,
   ImVec2 spellCenter = SpellToCanvasSpace(canvasOrigin, canvasCenter, {0, 0});
   for (const SpellGeometry::Ring &ring :
        SpellGeometry::ComponentRings(component))
-    AddRing(dl, ring, spellCenter, color, 2.5f * ring.weight);
+    AddRing(dl, ring, spellCenter, m_zoom, color, 2.5f * ring.weight);
   for (const PlacedGlyph &glyph : component.glyphs) {
     const SvgAsset *asset = GetAssetForGlyph(glyph);
     if (!asset)
@@ -481,7 +483,8 @@ void SpellEditor::DrawComponent(ImDrawList *dl,
   float rad = component.rotationDeg * DEG2RAD;
   ImVec2 dir{std::sin(rad), -std::cos(rad)};
   float r = SpellGeometry::ComponentRadius(component.scale);
-  AddArrow(dl, {c.x + dir.x * r, c.y + dir.y * r}, dir, 14.0f,
+  r *= m_zoom;
+  AddArrow(dl, {c.x + dir.x * r, c.y + dir.y * r}, dir, 14.0f * m_zoom,
            IM_COL32(90, 90, 200, 200), 2.0f);
 }
 
@@ -509,12 +512,16 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
   ImVec2 canvasEnd = {canvasOrigin.x + canvasSize.x,
                       canvasOrigin.y + canvasSize.y};
   ImVec2 canvasCenter = {canvasSize.x * 0.5f, canvasSize.y * 0.5f};
+  // The whole circle fits the canvas, whatever the window size
+  m_zoom = std::clamp(std::min(canvasSize.x, canvasSize.y) /
+                          (2.0f * SPELL_OUTER_RADIUS + 24.0f),
+                      0.3f, 4.0f);
   ImVec2 circleCenter = {canvasOrigin.x + canvasCenter.x,
                          canvasOrigin.y + canvasCenter.y};
 
   dl->AddRectFilled(canvasOrigin, canvasEnd, IM_COL32(40, 40, 50, 255));
 
-  dl->AddCircleFilled(circleCenter, SPELL_OUTER_RADIUS + 6.0f,
+  dl->AddCircleFilled(circleCenter, (SPELL_OUTER_RADIUS + 6.0f) * m_zoom,
                       IM_COL32(255, 255, 255, 255));
   // The spell's own rings; the embedded spells draw theirs below, in their
   // selection colours. In a layered spell the core holds the embedded
@@ -522,7 +529,7 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
   auto rings = SpellGeometry::Rings(m_currentSpell);
   size_t ownRings = rings.size() - 2 * m_currentSpell.components.size();
   for (size_t i = 0; i < ownRings; ++i)
-    AddRing(dl, rings[i], circleCenter, IM_COL32(0, 0, 0, 255),
+    AddRing(dl, rings[i], circleCenter, m_zoom, IM_COL32(0, 0, 0, 255),
             3.0f * rings[i].weight);
 
   for (size_t i = 0; i < m_currentSpell.components.size(); ++i) {
@@ -639,7 +646,7 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
   ImVec2 center = SpellToCanvasSpace(canvasOrigin, canvasCenter, {0, 0});
 
   // "Up" on the circle is where the caster aims
-  ImVec2 aimMark{center.x, center.y - SPELL_OUTER_RADIUS + 6.0f};
+  ImVec2 aimMark{center.x, center.y - (SPELL_OUTER_RADIUS - 6.0f) * m_zoom};
   dl->AddTriangleFilled({aimMark.x, aimMark.y - 8.0f},
                         {aimMark.x - 6.0f, aimMark.y + 4.0f},
                         {aimMark.x + 6.0f, aimMark.y + 4.0f},
@@ -651,7 +658,8 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
     float rad = glyph.rotationDeg * DEG2RAD;
     ImVec2 dir{std::sin(rad), -std::cos(rad)};
     ImVec2 from = SpellToCanvasSpace(canvasOrigin, canvasCenter, glyph.position);
-    AddArrow(dl, from, dir, 30.0f * glyph.scale, IM_COL32(70, 110, 220, 200),
+    AddArrow(dl, from, dir, 30.0f * glyph.scale * m_zoom,
+             IM_COL32(70, 110, 220, 200),
              2.0f);
   }
 
@@ -666,7 +674,8 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
     return;
   }
   ImVec2 dir{stats.netLocal.x / netLen, stats.netLocal.y / netLen};
-  AddArrow(dl, center, dir, std::min(SPELL_INNER_RADIUS * 0.8f, netLen * 60.0f),
+  AddArrow(dl, center, dir,
+           std::min(SPELL_INNER_RADIUS * 0.8f, netLen * 60.0f) * m_zoom,
            color, 4.0f);
 }
 
@@ -908,7 +917,8 @@ void SpellEditor::SaveCurrent() {
 
 void SpellEditor::DrawOverlay() {
   ImGui::SetNextWindowPos({0, 0});
-  ImGui::SetNextWindowSize({(float)WINDOW_WIDTH, (float)WINDOW_HEIGHT});
+  ImGui::SetNextWindowSize(
+      {(float)GetScreenWidth(), (float)GetScreenHeight()});
   ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.96f));
   ImGui::Begin("SpellEditorOverlay", nullptr,
                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
@@ -977,7 +987,8 @@ void SpellEditor::DrawOverlay() {
 
   ImGui::Separator();
 
-  float rightW = 280.0f;
+  float rightW = std::max(280.0f * View::UiScale(),
+                          ImGui::GetContentRegionAvail().x * 0.24f);
   float leftW = ImGui::GetContentRegionAvail().x - rightW - 8.0f;
   constexpr float stripH = 64.0f;
 

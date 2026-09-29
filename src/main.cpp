@@ -2,6 +2,7 @@
 #include "whas/constants.h"
 #include "whas/engine/renderer.h"
 #include "whas/engine/simulation.h"
+#include "whas/engine/view.h"
 #include "whas/game/game.h"
 #include "whas/game/replay.h"
 #include "whas/game/replay_view.h"
@@ -56,8 +57,10 @@ int main(int argc, char **argv) {
       (argc < 4 || std::strcmp(argv[3], "--verify") == 0))
     return VerifyReplay(argv[2]);
 
-  SetConfigFlags(FLAG_MSAA_4X_HINT); // smooth vector lines
+  // Smooth vector lines; any window size (the world is scaled to fit)
+  SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
   InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Witch Hat Atelier Simulator");
+  SetWindowMinSize(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
   SetExitKey(KEY_NULL); // Escape closes the spell editor, not the game
   SetTargetFPS(FPS);
 
@@ -85,6 +88,9 @@ int main(int argc, char **argv) {
   });
 
   while (!WindowShouldClose()) {
+    if (IsKeyPressed(KEY_F11))
+      ToggleBorderlessWindowed();
+    View::Update();
     ui.HandleInput(uiState, sim);
 
     if (uiState.menuRequested) {
@@ -138,7 +144,10 @@ int main(int argc, char **argv) {
     }
 
     BeginDrawing();
-    ClearBackground(Color{15, 15, 20, 255});
+    ClearBackground(Color{8, 8, 11, 255}); // the bars beside the world
+    BeginMode2D(View::Camera());
+    DrawRectangle(0, 0, GRID_W * CELL_SIZE, GRID_H * CELL_SIZE,
+                  Color{15, 15, 20, 255});
     renderer.DrawWorld(sim);
 
     if (replay.Active())
@@ -148,9 +157,11 @@ int main(int argc, char **argv) {
     else
       sandbox.Draw(sim, ui, uiState);
 
+    ui.DrawWorld(uiState, sim);
+    EndMode2D();
+
     if (uiState.debugOverlay)
       renderer.DrawDebugOverlay(sim);
-
     ui.Draw(uiState, sim);
     EndDrawing();
   }

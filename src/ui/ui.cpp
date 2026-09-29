@@ -1,4 +1,5 @@
 #include "whas/ui/ui.h"
+#include "whas/engine/view.h"
 #include "imgui.h"
 #include "raylib.h"
 #include "rlImGui.h"
@@ -44,6 +45,7 @@ constexpr float kParticleGravity = 20.0f;
 
 UI::UI() {
   rlImGuiSetup(true);
+  m_baseStyle = ImGui::GetStyle();
   m_library.Load();
   std::vector<std::string> starter;
   for (const Spell &spell : m_library.All())
@@ -126,15 +128,28 @@ void UI::SelectSlot(int slot) {
   m_selectedSlot = std::clamp(slot, 0, DECK_SLOTS - 1);
 }
 
+void UI::DrawWorld(const UIState &state, Simulation &sim) {
+  if (state.debugOverlay)
+    sim.GetRigidBodySystem().DrawDebug();
+  DrawActiveFields(sim);
+}
+
+void UI::ApplyUiScale() {
+  float scale = View::UiScale();
+  if (scale == m_uiScale)
+    return;
+  m_uiScale = scale;
+  ImGuiStyle &style = ImGui::GetStyle();
+  style = m_baseStyle;
+  style.ScaleAllSizes(scale);
+  style.FontScaleMain = scale;
+}
+
 void UI::Draw(UIState &state, Simulation &sim) {
   m_lastState = &state;
-  if (state.debugOverlay) {
-    sim.GetRigidBodySystem().DrawDebug();
-  }
-
-  DrawActiveFields(sim);
   DrawBlindness();
 
+  ApplyUiScale();
   rlImGuiBegin();
 
   if (state.showConfigEditor && !state.configLocked && !m_spellEditor.IsOpen()) {
@@ -184,7 +199,7 @@ void UI::DrawInspector(Simulation &sim) {
 
   if (mousePos.y < 160)
     pivot.y = -0.1f;
-  if (mousePos.x > WINDOW_WIDTH - 200)
+  if (mousePos.x > GetScreenWidth() - 200)
     pivot.x = 1.1f;
 
   ImGui::SetNextWindowPos(ImGui::GetMousePos(), ImGuiCond_Always, pivot);
@@ -308,8 +323,8 @@ void UI::DrawElementPropertyEditor(SimulationConfig &config) {
 }
 
 Vector2 UI::GetMouseCell() const {
-  Vector2 m = GetMousePosition();
-  return {std::floor(m.x / CELL_SIZE), std::floor(m.y / CELL_SIZE)};
+  Vector2 m = View::MouseCells();
+  return {std::floor(m.x), std::floor(m.y)};
 }
 
 void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
@@ -473,8 +488,9 @@ void UI::DrawAimIndicator(const Spell &spell, Vector2 originCells,
   DrawSpellBeam(stats, originCells, castDir, GetSpellColor(spell),
                 worldGravity);
 
+  // World pixels: this is drawn inside the view's camera
   Vector2 screenOrigin{originCells.x * CELL_SIZE, originCells.y * CELL_SIZE};
-  Vector2 mousePos = GetMousePosition();
+  Vector2 mousePos = View::MouseWorld();
   float mouseDist =
       std::hypot(mousePos.x - screenOrigin.x, mousePos.y - screenOrigin.y);
   float arrowLen = std::max(40.0f, mouseDist);
@@ -525,7 +541,7 @@ Color UI::GetSpellColor(const Spell &spell) const {
 }
 
 bool UI::IsMouseOverPanel() const {
-  return GetMouseY() >= BAR_Y || ImGui::GetIO().WantCaptureMouse;
+  return GetMouseY() >= BarY() || ImGui::GetIO().WantCaptureMouse;
 }
 
 const Deck *UI::HotbarDeck(const UIState &state) const {

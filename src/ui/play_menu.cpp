@@ -1,3 +1,4 @@
+#include "whas/engine/view.h"
 #include "whas/ui/play_menu.h"
 #include "imgui.h"
 #include "whas/constants.h"
@@ -72,7 +73,7 @@ void PlayMenu::Draw() {
   if (!m_open)
     return;
 
-  ImGui::SetNextWindowPos({WINDOW_WIDTH * 0.5f, 120}, ImGuiCond_Appearing,
+  ImGui::SetNextWindowPos({GetScreenWidth() * 0.5f, 120.0f * View::UiScale()}, ImGuiCond_Appearing,
                           {0.5f, 0.0f});
   if (!ImGui::Begin("Play", &m_open,
                     ImGuiWindowFlags_NoCollapse |

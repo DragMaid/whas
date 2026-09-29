@@ -1,3 +1,4 @@
+#include "whas/engine/view.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/spell_editor.h"
 #include "whas/spell/spell_quant.h"
@@ -13,9 +14,11 @@
 namespace {
 
 constexpr const char *SPELL_PAYLOAD = "WHAS_SPELL_REF";
-constexpr float CARD_W = 118.0f;
-constexpr float CARD_H = 150.0f;
-constexpr float DECK_PANEL_W = 430.0f;
+// Sizes at 720p; the UI scale grows them
+float Px(float v) { return v * View::UiScale(); }
+float CardW() { return Px(118); }
+float CardH() { return Px(150); }
+float DeckPanelW() { return Px(430); }
 
 struct Filter {
   const char *label;
@@ -67,12 +70,12 @@ void SpellEditor::DrawLibraryTab() {
   if (!m_decks->Find(m_selectedDeck))
     m_selectedDeck = m_decks->ActiveId();
 
-  float gridW = ImGui::GetContentRegionAvail().x - DECK_PANEL_W - 8;
+  float gridW = ImGui::GetContentRegionAvail().x - DeckPanelW() - 8;
   ImGui::BeginChild("SpellGrid", {gridW, 0}, true);
   DrawSpellGrid(gridW);
   ImGui::EndChild();
   ImGui::SameLine();
-  ImGui::BeginChild("DeckPanel", {DECK_PANEL_W, 0}, true);
+  ImGui::BeginChild("DeckPanel", {DeckPanelW(), 0}, true);
   DrawDeckPanel();
   ImGui::Separator();
   DrawRoundDecks();
@@ -98,7 +101,7 @@ void SpellEditor::DrawSpellGrid(float width) {
       "Drag a card onto a deck slot. Right-click for more. Double-click to edit.");
   ImGui::Spacing();
 
-  int columns = std::max(1, (int)((width - 16) / (CARD_W + 8)));
+  int columns = std::max(1, (int)((width - 16) / (CardW() + 8)));
   int shown = 0;
   for (const Spell &spell : m_spells->All()) {
     const char *sigil = kFilters[m_filter].sigil;
@@ -108,7 +111,7 @@ void SpellEditor::DrawSpellGrid(float width) {
       continue;
     if (shown % columns != 0)
       ImGui::SameLine(0, 8);
-    DrawSpellCard(spell, {CARD_W, CARD_H});
+    DrawSpellCard(spell, {CardW(), CardH()});
     ++shown;
   }
   if (shown == 0)
@@ -202,7 +205,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
                          ? (stats.pull > 0.0f ? "pull" : "push")
                                                           : SigilOf(spell.glyphs);
   int ticks = stats.valid ? TurnController::CastTicks(stats) : 0;
-  dl->AddText(ImGui::GetFont(), 12.0f, {p0.x + 8, t0.y + thumb + 20},
+  dl->AddText(ImGui::GetFont(), Px(12), {p0.x + 8, t0.y + thumb + Px(20)},
               stats.valid ? ToU32(tint, 200) : IM_COL32(230, 90, 90, 255),
               TextFormat("%s  %.2fs", kind, ticks * TurnController::TICK_DT));
   ImGui::PopID();
@@ -210,7 +213,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
 
 void SpellEditor::DrawDeckPanel() {
   ImGui::Text("Decks");
-  ImGui::SameLine(DECK_PANEL_W - 250);
+  ImGui::SameLine(DeckPanelW() - Px(250));
   if (ImGui::SmallButton("New")) {
     m_selectedDeck = m_decks->Create("New deck").id;
   }
@@ -486,7 +489,7 @@ void SpellEditor::DrawPreviewStrip(ImVec2 size) {
     dl->AddRectFilled(b0, {b0.x + barW * frac, b0.y + 6},
                       IM_COL32(255, 190, 70, 255), 2.0f);
     bool tooSlow = ticks > TurnController::TURN_TICKS;
-    dl->AddText(ImGui::GetFont(), 12.0f, {tx, p1.y - 32},
+    dl->AddText(ImGui::GetFont(), Px(12), {tx, p1.y - Px(32)},
                 tooSlow ? IM_COL32(230, 90, 90, 255)
                         : IM_COL32(170, 170, 190, 255),
                 TextFormat(tooSlow ? "cast time %.2fs: longer than a %.0fs turn"
@@ -494,11 +497,13 @@ void SpellEditor::DrawPreviewStrip(ImVec2 size) {
                            ticks * TurnController::TICK_DT,
                            TurnController::TURN_SECONDS));
   } else {
-    dl->AddText(ImGui::GetFont(), 12.0f, {tx, p1.y - 32},
+    // The problem text, clipped to the strip (the stats panel has it whole)
+    std::string problem = SpellSystem::Problem(m_currentSpell);
+    ImGui::PushClipRect(p0, p1, true);
+    dl->AddText(ImGui::GetFont(), Px(12), {tx, p1.y - Px(32)},
                 IM_COL32(230, 90, 90, 255),
-                m_currentSpell.Layered()
-                    ? "each part needs one sigil; the ring holds signs"
-                    : "needs exactly one sigil");
+                problem.empty() ? "not a working spell yet" : problem.c_str());
+    ImGui::PopClipRect();
   }
   ImGui::Dummy(size);
 }

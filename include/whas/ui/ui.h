@@ -55,6 +55,9 @@ public:
   ~UI();
 
   void HandleInput(UIState &state, Simulation &sim);
+  // World-space overlays (fields, debug bodies), inside the view's camera
+  void DrawWorld(const UIState &state, Simulation &sim);
+  // Screen-space UI on top
   void Draw(UIState &state, Simulation &sim);
   Vector2 GetMouseCell() const;
   bool IsMouseOverPanel() const;
@@ -94,8 +97,9 @@ public:
                      Vector2 castDir, Color color, float worldGravity) const;
   Color GetSpellColor(const Spell &spell) const;
 
-  static constexpr int BAR_HEIGHT = 60;
-  static constexpr int BAR_Y = WINDOW_HEIGHT - BAR_HEIGHT;
+  // The bottom bar, in screen pixels (it grows with the UI scale)
+  static float BarHeight();
+  static float BarY();
 
 private:
   void DrawPropertyEditor(SimulationConfig &config);
@@ -103,6 +107,10 @@ private:
   void DrawInspector(Simulation &sim);
   void DrawActiveFields(const Simulation &sim) const;
   void DrawBlindness();
+  // Restyle ImGui when the UI scale changes
+  void ApplyUiScale();
+  ImGuiStyle m_baseStyle;
+  float m_uiScale = 0.0f;
   float m_blind = 0.0f; // seconds of blindness left
   bool m_blindHold = false;
 

@@ -1,6 +1,7 @@
 #include "whas/engine/view.h"
 #include "whas/constants.h"
 #include <algorithm>
+#include <cmath>
 
 namespace View {
 
@@ -31,6 +32,11 @@ Vector2 MouseCells() {
 
 Vector2 WorldToScreen(Vector2 world) {
   return GetWorldToScreen2D(world, g_camera);
+}
+
+float UiScale() {
+  float s = std::clamp(GetScreenHeight() / 720.0f, 1.0f, 2.5f);
+  return std::floor(s * 4.0f) / 4.0f;
 }
 
 } // namespace View

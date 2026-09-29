@@ -95,6 +95,7 @@ private:
 
   bool m_open = false;
   Spell m_currentSpell;
+  float m_zoom = 1.0f; // canvas pixels per spell unit
 
   SvgLibrary m_library; // glyph shapes
   SpellLibrary *m_spells = nullptr;
