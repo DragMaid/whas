@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr uint32_t MAGIC = 0x324E5357; // "WSN2"
+constexpr uint32_t MAGIC = 0x334E5357; // "WSN3"
 constexpr uint16_t MAX_RUN = 0xFFFF;
 
 // Cells are stored field by field ("columns"), each column run-length
@@ -74,7 +74,7 @@ void PutStats(ByteWriter &out, const SpellStats &s) {
   // Effects are always single parts, so `parts` is never stored
   out.Put(static_cast<uint8_t>(s.shape));
   for (float v : {s.temperatureDelta, s.hardnessScale, s.crush, s.restore,
-                  s.collectRadius})
+                  s.collectRadius, s.pull, s.flashRadius, s.flashTime})
     out.Put(v);
   out.Put(s.collectMax);
 }
@@ -94,7 +94,8 @@ SpellStats GetStats(ByteReader &in) {
     *v = in.Get<float>();
   s.shape = static_cast<SpellShape>(in.Get<uint8_t>());
   for (float *v : {&s.temperatureDelta, &s.hardnessScale, &s.crush,
-                   &s.restore, &s.collectRadius})
+                   &s.restore, &s.collectRadius, &s.pull, &s.flashRadius,
+                   &s.flashTime})
     *v = in.Get<float>();
   s.collectMax = in.Get<int>();
   return s;
@@ -159,6 +160,8 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(p.hardnessScale);
     out.Put(p.crush);
     out.Put(p.restore);
+    out.Put(p.flashRadius);
+    out.Put(p.flashTime);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -250,6 +253,8 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.hardnessScale = in.Get<float>();
       p.crush = in.Get<float>();
       p.restore = in.Get<float>();
+      p.flashRadius = in.Get<float>();
+      p.flashTime = in.Get<float>();
     }
 
     uint32_t effects = in.Get<uint32_t>();

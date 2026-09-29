@@ -67,8 +67,10 @@ const char *KindLabel(const SpellStats &stats) {
   switch (stats.kind) {
   case SpellKind::Flight:
     return "Wind Underfoot";
-  case SpellKind::Gust:
-    return "Wind";
+  case SpellKind::Field:
+    return stats.element == Element::AIR
+               ? "Wind field"
+               : TextFormat("%s field", ElementName(stats.element));
   case SpellKind::Element:
     return ElementName(stats.element);
   default:
@@ -125,8 +127,15 @@ void SpellEditor::DrawStats(const SpellStats &stats) {
   case SpellKind::Flight:
     ImGui::Text("Wind Underfoot: carries the caster");
     break;
-  case SpellKind::Gust:
-    ImGui::Text("Wind: pushes everything in its path");
+  case SpellKind::Field:
+    if (stats.element == Element::AIR)
+      ImGui::Text("Wind field: %s everything loose",
+                  stats.pull > 0.0f ? "pulls in" : "pushes away");
+    else
+      ImGui::Text("%s field: %s existing %s only",
+                  stats.pull > 0.0f ? "Pull" : "Push",
+                  stats.pull > 0.0f ? "pulls in" : "pushes away",
+                  ElementName(stats.element));
     break;
   default:
     ImGui::Text("Element: %s", ElementName(stats.element));
@@ -142,7 +151,7 @@ void SpellEditor::DrawStats(const SpellStats &stats) {
   }
   ImGui::Text("Speed: %.0f cells/s", stats.speed);
   ImGui::Text("Range: %.0f cells", stats.range);
-  if (stats.kind == SpellKind::Gust) {
+  if (stats.kind == SpellKind::Field) {
     ImGui::Text("Force: %.0f  Duration: %.2fs", stats.force, stats.duration);
     ImGui::Text("Width: %.1f cells", stats.diameter);
     return;

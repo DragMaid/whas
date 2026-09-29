@@ -38,6 +38,8 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.crush = 0.0f;
       p.restore = 0.0f;
       p.temperature = 0.0f;
+      p.flashRadius = 0.0f;
+      p.flashTime = 0.0f;
       return &p;
     }
   }
@@ -229,6 +231,14 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
 
 } // namespace
 
+void ParticleSystem::Burst(Particle &p) {
+  p.active = false;
+  if (p.flashRadius <= 0.0f)
+    return;
+  m_flashes.push_back({p.pos, p.flashRadius, p.flashTime, p.owner});
+  m_visualFlashes.push_back({p.pos, p.flashRadius, 0.0f});
+}
+
 bool ParticleSystem::HitHurtbox(const Particle &p) {
   for (const Hurtbox &box : m_hurtboxes) {
     if (box.id == p.owner || !CheckCollisionPointRec(p.pos, box.bounds))
@@ -240,6 +250,12 @@ bool ParticleSystem::HitHurtbox(const Particle &p) {
 }
 
 void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
+  m_flashes.clear(); // only this tick's, whether or not anyone took them
+  for (VisualFlash &f : m_visualFlashes)
+    f.age += dt;
+  std::erase_if(m_visualFlashes,
+                [](const VisualFlash &f) { return f.age > 0.5f; });
+
   for (auto &p : m_particles) {
     if (!p.active)
       continue;
@@ -260,9 +276,13 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
       int tx = (int)std::floor(nextPos.x);
       int ty = (int)std::floor(nextPos.y);
 
+      bool light = p.element == Element::LIGHT;
       if (!grid.InBounds(tx, ty)) {
         // The world edge acts as a wall
-        Deposit(p, grid, ctx);
+        if (light)
+          Burst(p);
+        else
+          Deposit(p, grid, ctx);
         break;
       }
 
@@ -284,7 +304,10 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
         if (penetrated && !liquid && selfProps.mobile && !selfProps.solid)
           p.power = 0.0f;
         if (!penetrated) {
-          Deposit(p, grid, ctx);
+          if (light)
+            Burst(p);
+          else
+            Deposit(p, grid, ctx);
           break;
         }
       }
@@ -292,6 +315,8 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
       p.pos = nextPos;
 
       if (p.isProjectile && p.remainingDistance > 0.0f && HitHurtbox(p)) {
+        if (light)
+          Burst(p);
         p.active = false;
         break;
       }
@@ -299,6 +324,10 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
       if (p.isProjectile) {
         p.remainingDistance -= stepLength;
         if (p.remainingDistance <= 0.0f) {
+          if (light) {
+            Burst(p); // light doesn't fall: it goes off where it stops
+            break;
+          }
           // Out of range: the spell lets go and the element falls naturally
           p.isProjectile = false;
           p.power = 0.0f;
@@ -312,6 +341,8 @@ void ParticleSystem::Clear() {
   for (auto &p : m_particles)
     p.active = false;
   m_hits.clear();
+  m_flashes.clear();
+  m_visualFlashes.clear();
 }
 
 void ParticleSystem::Draw() {
@@ -344,6 +375,12 @@ void ParticleSystem::Draw() {
       case Element::SMOKE:
         color = {110, 105, 105, 255};
         break;
+      case Element::LIGHT:
+        color = {255, 250, 215, 255};
+        // A soft glow around each mote
+        DrawCircleV({(p.pos.x + 0.5f) * CELL_SIZE, (p.pos.y + 0.5f) * CELL_SIZE},
+                    CELL_SIZE * 2.0f, Color{255, 245, 190, 70});
+        break;
       default:
         color = WHITE;
         break;
@@ -351,5 +388,13 @@ void ParticleSystem::Draw() {
       DrawRectangle((int)(p.pos.x * CELL_SIZE), (int)(p.pos.y * CELL_SIZE),
                     CELL_SIZE, CELL_SIZE, color);
     }
+  }
+  // Bursts of light: a bright disc that swells and fades
+  for (const VisualFlash &f : m_visualFlashes) {
+    float t = f.age / 0.5f;
+    float r = f.radius * (0.4f + 0.6f * t) * CELL_SIZE;
+    unsigned char alpha = static_cast<unsigned char>(200 * (1.0f - t));
+    DrawCircleGradient({f.pos.x * CELL_SIZE, f.pos.y * CELL_SIZE}, r,
+                       Color{255, 255, 240, alpha}, Color{255, 240, 180, 0});
   }
 }

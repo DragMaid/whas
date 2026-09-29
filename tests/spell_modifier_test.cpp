@@ -1,6 +1,7 @@
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/character.h"
+#include "whas/game/match.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/spell_json.h"
 #include "whas/spell/spell_quant.h"
@@ -98,6 +99,108 @@ TEST_CASE("crushing grinds earth into sand and inverted crushing reforms it",
   sim.CastSpell(reform, {120, GRID_H - 10.0f}, {1, 0});
   Step(sim, 90);
   REQUIRE(Count(sim, Element::EARTH) > earth);
+}
+
+TEST_CASE("pulling signs turn a sigil into a field that moves its element",
+          "[spell]") {
+  REQUIRE_FALSE(SpellSystem::Evaluate(Make("wind")).valid);
+  REQUIRE_FALSE(
+      SpellSystem::Evaluate(Make("wind_underfoot", {Sign("pulling", 1.0f)}))
+          .valid);
+
+  SpellStats pull =
+      SpellQuant::Canonical(Make("wind", {Sign("pulling", 1.0f)}));
+  REQUIRE(pull.valid);
+  REQUIRE(pull.kind == SpellKind::Field);
+  REQUIRE(pull.element == Element::AIR);
+  REQUIRE(pull.pull > 0.0f);
+  SpellStats push =
+      SpellQuant::Canonical(Make("wind", {Sign("pulling", 1.0f, true)}));
+  REQUIRE(push.pull < 0.0f);
+  REQUIRE(push.force == pull.force);
+
+  SpellStats water =
+      SpellQuant::Canonical(Make("water", {Sign("pulling", 1.0f)}));
+  REQUIRE(water.kind == SpellKind::Field);
+  REQUIRE(water.element == Element::WATER);
+  REQUIRE(water.particleCount == 0); // moves water, makes none
+}
+
+TEST_CASE("an element's field only pulls that element toward the caster",
+          "[spell]") {
+  auto meanX = [](const Simulation &sim, Element e) {
+    float sum = 0.0f;
+    int n = 0;
+    for (int y = 0; y < GRID_H; ++y)
+      for (int x = 0; x < GRID_W; ++x)
+        if (sim.GetCell(x, y).element == e) {
+          sum += x;
+          n++;
+        }
+    return n > 0 ? sum / n : 0.0f;
+  };
+  auto pile = [](Simulation &sim) {
+    sim.SetSeed(11);
+    Floor(sim);
+    Fill(sim, 120, GRID_H - 10, 126, GRID_H - 5, Element::SAND);
+    Step(sim, 30); // settle
+  };
+  Vector2 caster{100, GRID_H - 7.0f};
+
+  Simulation sand;
+  pile(sand);
+  float before = meanX(sand, Element::SAND);
+  sand.CastSpell(
+      SpellQuant::Canonical(Make("sand", {Sign("pulling", 2.0f)})), caster,
+      {1, 0});
+  Step(sand, 60);
+  Step(sand, 120); // what was lifted lands again
+  REQUIRE(meanX(sand, Element::SAND) < before - 1.0f);
+
+  Simulation water;
+  pile(water);
+  before = meanX(water, Element::SAND);
+  water.CastSpell(
+      SpellQuant::Canonical(Make("water", {Sign("pulling", 2.0f)})), caster,
+      {1, 0});
+  Step(water, 180);
+  REQUIRE(std::abs(meanX(water, Element::SAND) - before) < 0.5f);
+}
+
+TEST_CASE("light is fast, weightless and blinds whoever it bursts near",
+          "[spell]") {
+  SpellStats water = SpellQuant::Canonical(Make("water"));
+  SpellStats light = SpellQuant::Canonical(Make("light"));
+  REQUIRE(light.valid);
+  REQUIRE(light.element == Element::LIGHT);
+  REQUIRE(light.power == 0.0f);
+  REQUIRE(light.speed > water.speed * 2.0f);
+  REQUIRE(light.flashRadius > 0.0f);
+  REQUIRE(light.flashTime > 0.0f);
+  REQUIRE_FALSE(
+      SpellSystem::Evaluate(Make("light", {Sign("pulling", 1.0f)})).valid);
+
+  Simulation sim;
+  sim.SetSeed(13);
+  Floor(sim);
+  // A wall past the target so the motes burst there as well
+  Fill(sim, 200, GRID_H - 60, 205, GRID_H - 5, Element::EARTH);
+  Character caster, target;
+  caster.id = 1;
+  caster.pos = {60, GRID_H - 4 - Character::HEIGHT};
+  target.id = 2;
+  target.pos = {190, GRID_H - 4 - Character::HEIGHT};
+  Character chars[] = {caster, target};
+  sim.GetParticleSystem().SetHurtboxes(
+      {{1, chars[0].Bounds()}, {2, chars[1].Bounds()}});
+  sim.CastSpell(light, chars[0].Center(), {1, 0}, 1);
+  for (int i = 0; i < 120; ++i) {
+    sim.Update(DT);
+    Match::ApplyEffects(sim, chars, 2);
+  }
+  REQUIRE(chars[1].flash > 0.0f);
+  REQUIRE(chars[0].flash == 0.0f); // far from every burst
+  REQUIRE(Count(sim, Element::LIGHT) == 0); // never lands as a cell
 }
 
 TEST_CASE("cooled water lands as ice", "[spell]") {

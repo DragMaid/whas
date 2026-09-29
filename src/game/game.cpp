@@ -338,6 +338,11 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
   state.clockProgress = TurnProgress();
   state.ticksFree = TicksFree();
   state.matchRound = m_match.round;
+
+  // Flashed during the turn: blind for the rest of it, then the white
+  // fades through the next planning phase
+  bool executing = GetClockState() == ClockState::Executing;
+  ui.Blind(LocalCharacter().TakeFlash(), executing);
 }
 
 void Game::Update(Simulation &sim, UI &ui) {

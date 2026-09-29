@@ -1,5 +1,6 @@
 #pragma once
 #include <raylib.h>
+#include <utility>
 
 class Simulation;
 
@@ -38,6 +39,12 @@ struct Character {
   static constexpr float BURN_DPS = 2.5f;    // per stack
   int burnStacks = 0;
   int burnExposure = 0; // ticks in fire towards the next stack
+
+  // Seconds of blindness from light bursts nearby. Deterministic, but only
+  // the game's screen reads it (it doesn't change what happens), so it's
+  // left out of the match hash; the game takes it with TakeFlash.
+  float flash = 0.0f;
+  float TakeFlash() { return std::exchange(flash, 0.0f); }
 
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.

@@ -14,6 +14,8 @@ enum class Element : uint8_t {
   WOOD = 9,
   GRASS = 10,
   SMOKE = 11,
+  // Only ever a spell projectile: it bursts into a flash instead of landing
+  LIGHT = 12,
 
   COUNT
 };
@@ -44,6 +46,8 @@ inline const char *ElementName(Element element) {
     return "GRASS";
   case Element::SMOKE:
     return "SMOKE";
+  case Element::LIGHT:
+    return "LIGHT";
   default:
     return "UNKNOWN";
   }

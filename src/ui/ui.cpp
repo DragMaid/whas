@@ -106,6 +106,22 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
   }
 }
 
+void UI::Blind(float seconds, bool hold) {
+  m_blind = std::max(m_blind, seconds);
+  m_blindHold = hold && m_blind > 0.0f;
+}
+
+void UI::DrawBlindness() {
+  if (m_blind <= 0.0f)
+    return;
+  if (!m_blindHold)
+    m_blind = std::max(0.0f, m_blind - GetFrameTime());
+  // Fully white until the last second, which fades
+  float alpha = m_blindHold ? 1.0f : std::min(1.0f, m_blind);
+  DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
+                Color{255, 255, 248, static_cast<unsigned char>(alpha * 250)});
+}
+
 void UI::SelectSlot(int slot) {
   m_selectedSlot = std::clamp(slot, 0, DECK_SLOTS - 1);
 }
@@ -116,7 +132,8 @@ void UI::Draw(UIState &state, Simulation &sim) {
     sim.GetRigidBodySystem().DrawDebug();
   }
 
-  DrawActiveGusts(sim);
+  DrawActiveFields(sim);
+  DrawBlindness();
 
   rlImGuiBegin();
 
@@ -344,16 +361,18 @@ void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
   float length = stats.range * CELL_SIZE;
   float halfWidth = std::max(2.0f, stats.diameter * 0.5f * CELL_SIZE);
 
-  if (stats.kind == SpellKind::Gust) {
-    // A wind field: dashed walls with chevrons blowing along it
+  if (stats.kind == SpellKind::Field) {
+    // A field: dashed walls with chevrons pointing the way it moves things
+    // (back toward the caster when pulling)
     DrawDashedLine(at(0, halfWidth), at(length, halfWidth), 6.0f, 1.5f, color);
     DrawDashedLine(at(0, -halfWidth), at(length, -halfWidth), 6.0f, 1.5f,
                    color);
     float spacing = std::max(14.0f, length / 8.0f);
     float chevron = std::min(halfWidth * 0.8f, 10.0f);
+    float back = stats.pull > 0.0f ? -chevron : chevron;
     for (float t = spacing; t < length; t += spacing) {
-      DrawLineEx(at(t - chevron, chevron), at(t, 0), 1.5f, faint);
-      DrawLineEx(at(t - chevron, -chevron), at(t, 0), 1.5f, faint);
+      DrawLineEx(at(t - back, chevron), at(t, 0), 1.5f, faint);
+      DrawLineEx(at(t - back, -chevron), at(t, 0), 1.5f, faint);
     }
     return;
   }
@@ -412,13 +431,15 @@ void UI::DrawSpellBeam(const SpellStats &stats, Vector2 originCells,
           0.5f, faint);
 }
 
-void UI::DrawActiveGusts(const Simulation &sim) const {
+void UI::DrawActiveFields(const Simulation &sim) const {
   float time = (float)GetTime();
   for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
-    if (effect.stats.kind != SpellKind::Gust)
+    if (effect.stats.kind != SpellKind::Field)
       continue;
     const SpellStats &s = effect.stats;
     Vector2 d = effect.direction;
+    // Streaks drift the way the field moves things
+    Vector2 push = SpellSystem::FieldPush(effect);
     Vector2 n{-d.y, d.x};
     float fade = std::clamp(effect.timeRemaining / std::max(0.01f, s.duration),
                             0.0f, 1.0f);
@@ -429,11 +450,15 @@ void UI::DrawActiveGusts(const Simulation &sim) const {
     float streak = 6.0f;
     for (int lane = 0; lane < lanes; ++lane) {
       float side = ((lane + 0.5f) / lanes - 0.5f) * s.diameter;
-      float phase = std::fmod(time * s.speed * 0.8f + lane * 7.3f, s.range);
+      float drift = s.pull > 0.0f ? -1.0f : 1.0f;
+      float phase = std::fmod(time * s.speed * 0.8f + lane * 7.3f, 18.0f);
+      if (drift < 0.0f)
+        phase = 18.0f - phase;
       for (float along = phase; along < s.range; along += 18.0f) {
         Vector2 a{(effect.origin.x + d.x * along + n.x * side) * CELL_SIZE,
                   (effect.origin.y + d.y * along + n.y * side) * CELL_SIZE};
-        Vector2 b{a.x - d.x * streak * CELL_SIZE, a.y - d.y * streak * CELL_SIZE};
+        Vector2 b{a.x - push.x * streak * CELL_SIZE,
+                  a.y - push.y * streak * CELL_SIZE};
         DrawLineEx(b, a, 1.5f, c);
       }
     }

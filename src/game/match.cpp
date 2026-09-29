@@ -54,20 +54,34 @@ void ApplyHits(Simulation &sim, Character *chars, int count) {
   }
 }
 
-// Gust fields push characters like everything else: acceleration = force/mass
-void ApplyGusts(const Simulation &sim, Character *chars, int count) {
+// Wind fields move characters like everything else: acceleration =
+// force/mass. An element's field only moves that element.
+void ApplyFields(const Simulation &sim, Character *chars, int count) {
   for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
-    if (effect.stats.kind != SpellKind::Gust)
+    if (effect.stats.kind != SpellKind::Field ||
+        effect.stats.element != Element::AIR)
       continue;
+    Vector2 push = SpellSystem::FieldPush(effect);
     for (Character &c : std::span(chars, count)) {
       if (c.id == effect.owner)
         continue;
-      float strength = SpellSystem::GustStrengthAt(effect, c.Center());
+      float strength = SpellSystem::FieldStrengthAt(effect, c.Center());
       if (strength <= 0.0f)
         continue;
       float dv = effect.stats.force * strength / Character::MASS *
                  TurnController::TICK_DT;
-      c.Launch({effect.direction.x * dv, effect.direction.y * dv});
+      c.Launch({push.x * dv, push.y * dv});
+    }
+  }
+}
+
+// Light bursts blind everyone close enough, the caster too
+void ApplyFlashes(Simulation &sim, Character *chars, int count) {
+  for (const Flash &flash : sim.GetParticleSystem().TakeFlashes()) {
+    for (Character &c : std::span(chars, count)) {
+      Vector2 d{c.Center().x - flash.pos.x, c.Center().y - flash.pos.y};
+      if (c.Alive() && d.x * d.x + d.y * d.y <= flash.radius * flash.radius)
+        c.flash = std::max(c.flash, flash.time);
     }
   }
 }
@@ -76,7 +90,8 @@ void ApplyGusts(const Simulation &sim, Character *chars, int count) {
 
 void ApplyEffects(Simulation &sim, Character *characters, int count) {
   ApplyHits(sim, characters, count);
-  ApplyGusts(sim, characters, count);
+  ApplyFlashes(sim, characters, count);
+  ApplyFields(sim, characters, count);
   for (Character &c : std::span(characters, count))
     c.UpdateBurn(sim, TurnController::TICK_DT);
 }

@@ -22,7 +22,7 @@ Spell FromJson(const nlohmann::json &j) {
 
 std::vector<Spell> Cases() {
   const char *sigils[] = {"water", "fire", "earth", "ice", "sand",
-                          "rock",  "wind_underfoot", "wind",  "bogus"};
+                          "rock",  "wind_underfoot", "wind",  "light", "bogus"};
   const float sigilScales[] = {0.1f, 0.5f, 1.0f, 1.3f, 2.2f, 3.0f};
   const float rotations[] = {-180, -135, -90, -45, 0, 45, 90, 135, 180};
   std::vector<Spell> out;
@@ -54,8 +54,10 @@ std::vector<Spell> Cases() {
   // Modifier signs, alone and doubled, plain and inverted
   const char *modifiers[] = {"convergence", "crushing",      "repetition",
                              "cooling",     "strengthening", "collection",
-                             "expansion",   "orb"};
-  const char *modSigils[] = {"water", "fire", "earth", "rock", "wind", "wind_underfoot"};
+                             "expansion",   "orb",           "pulling"};
+  const char *modSigils[] = {"water", "fire",           "earth",
+                             "rock",  "wind",           "wind_underfoot",
+                             "light"};
   const float modScales[] = {0.3f, 1.0f, 2.5f};
   for (const char *mod : modifiers) {
     for (const char *sigil : modSigils) {

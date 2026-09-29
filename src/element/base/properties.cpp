@@ -238,6 +238,25 @@ constexpr ElementProperties MakeSmoke() {
           .restitution = 0.0f};
 }
 
+// Light: weightless and never a cell (light spells burst into flashes)
+constexpr ElementProperties MakeLight() {
+  return {.mobile = false,
+          .solid = false,
+          .passable = true,
+          .rigidBody = false,
+          .rigidBodyCandidate = false,
+          .staticTerrain = false,
+          .defaultTemperature = 20.0f,
+          .defaultMass = 0.0f,
+          .defaultHardness = 0.0f,
+          .defaultLifetime = 0.0f,
+          .lifetimeDecay = 0.0f,
+          .defaultMoisture = 0.0f,
+          .thermal = {1.0f, 0.0f, 0.0f},
+          .density = 0.0f,
+          .restitution = 0.0f};
+}
+
 SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::AIR)] = MakeAir();
   elements[static_cast<std::size_t>(Element::WATER)] = MakeWater();
@@ -251,4 +270,5 @@ SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::WOOD)] = MakeWood();
   elements[static_cast<std::size_t>(Element::GRASS)] = MakeGrass();
   elements[static_cast<std::size_t>(Element::SMOKE)] = MakeSmoke();
+  elements[static_cast<std::size_t>(Element::LIGHT)] = MakeLight();
 }

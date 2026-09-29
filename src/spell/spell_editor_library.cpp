@@ -198,7 +198,8 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
                      : stats.kind == SpellKind::Compound
                          ? TextFormat("layered x%d", (int)stats.parts.size())
                      : stats.kind == SpellKind::Flight    ? "underfoot"
-                     : stats.kind == SpellKind::Gust      ? "wind"
+                     : stats.kind == SpellKind::Field
+                         ? (stats.pull > 0.0f ? "pull" : "push")
                                                           : SigilOf(spell.glyphs);
   int ticks = stats.valid ? TurnController::CastTicks(stats) : 0;
   dl->AddText(ImGui::GetFont(), 12.0f, {p0.x + 8, t0.y + thumb + 20},

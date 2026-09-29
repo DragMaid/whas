@@ -27,7 +27,9 @@ bool Stats::operator==(const Stats &o) const {
          temperatureDelta == o.temperatureDelta &&
          hardnessScale == o.hardnessScale && crush == o.crush &&
          restore == o.restore && collectRadius == o.collectRadius &&
-         collectMax == o.collectMax && parts == o.parts;
+         collectMax == o.collectMax && pull == o.pull &&
+         flashRadius == o.flashRadius && flashTime == o.flashTime &&
+         parts == o.parts;
 }
 
 Stats Quantize(const SpellStats &s) {
@@ -54,6 +56,9 @@ Stats Quantize(const SpellStats &s) {
   q.restore = Q(s.restore, STAT_SCALE);
   q.collectRadius = Q(s.collectRadius, STAT_SCALE);
   q.collectMax = s.collectMax;
+  q.pull = Q(s.pull, STAT_SCALE);
+  q.flashRadius = Q(s.flashRadius, STAT_SCALE);
+  q.flashTime = Q(s.flashTime, STAT_SCALE);
   for (const SpellStats &part : s.parts)
     q.parts.push_back(Quantize(part));
   return q;
@@ -83,6 +88,9 @@ SpellStats Dequantize(const Stats &q) {
   s.restore = D(q.restore, STAT_SCALE);
   s.collectRadius = D(q.collectRadius, STAT_SCALE);
   s.collectMax = q.collectMax;
+  s.pull = D(q.pull, STAT_SCALE);
+  s.flashRadius = D(q.flashRadius, STAT_SCALE);
+  s.flashTime = D(q.flashTime, STAT_SCALE);
   for (const Stats &part : q.parts)
     s.parts.push_back(Dequantize(part));
   // Only used for the editor's balance display; the direction comes from
@@ -135,6 +143,12 @@ void to_json(nlohmann::json &j, const Stats &s) {
     j["collectRadius"] = s.collectRadius;
   if (s.collectMax != 0)
     j["collectMax"] = s.collectMax;
+  if (s.pull != 0)
+    j["pull"] = s.pull;
+  if (s.flashRadius != 0)
+    j["flashRadius"] = s.flashRadius;
+  if (s.flashTime != 0)
+    j["flashTime"] = s.flashTime;
   if (!s.parts.empty()) {
     j["parts"] = nlohmann::json::array();
     for (const Stats &part : s.parts) {
@@ -168,6 +182,9 @@ void from_json(const nlohmann::json &j, Stats &s) {
   s.restore = j.value("restore", int32_t{0});
   s.collectRadius = j.value("collectRadius", int32_t{0});
   s.collectMax = j.value("collectMax", int32_t{0});
+  s.pull = j.value("pull", int32_t{0});
+  s.flashRadius = j.value("flashRadius", int32_t{0});
+  s.flashTime = j.value("flashTime", int32_t{0});
   s.parts.clear();
   if (auto it = j.find("parts"); it != j.end())
     for (const auto &pj : *it) {

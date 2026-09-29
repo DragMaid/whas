@@ -13,11 +13,11 @@ public static class SpellValidator
     const float ComponentScaleMin = 0.2f, ComponentScaleMax = 0.7f;
 
     static readonly HashSet<string> KnownSigils =
-        ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "dragon"];
+        ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "light", "dragon"];
 
     static readonly HashSet<string> KnownSigns =
         ["column", "convergence", "crushing", "repetition", "cooling", "strengthening",
-         "collection", "expansion", "orb"];
+         "collection", "expansion", "orb", "pulling"];
 
     public static string? Check(string name, IReadOnlyList<Glyph> glyphs) =>
         Check(name, glyphs, []);

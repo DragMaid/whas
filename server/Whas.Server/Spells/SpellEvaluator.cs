@@ -36,6 +36,15 @@ public static class SpellEvaluator
     const float LaunchPerSigil = 0.35f;
     const float MaxLaunchSpeed = 120.0f;
     const float GustForcePerSpeed = 0.6f;
+    const float LightSpeedScale = 2.5f;
+    const float LightParticleScale = 0.25f;
+    const float FlashBaseRadius = 8.0f;
+    const float FlashRadiusPerSigil = 10.0f;
+    const float FlashBaseTime = 1.5f;
+    const float FlashTimePerSigil = 1.5f;
+    const float MaxFlashRadius = 30.0f;
+    const float MinPull = 0.25f;
+    const float MaxPull = 2.5f;
     const float GustBaseDuration = 0.35f;
     const float GustDurationPerSigil = 0.3f;
     const float GustWidthScale = 1.5f;
@@ -64,7 +73,7 @@ public static class SpellEvaluator
     public static SpellKind SigilKind(string assetId) => assetId switch
     {
         "wind_underfoot" => SpellKind.Flight,
-        "wind" => SpellKind.Gust,
+        "wind" => SpellKind.Field,
         _ => SigilElement(assetId) != Element.Air ? SpellKind.Element
                                                   : SpellKind.None,
     };
@@ -77,6 +86,7 @@ public static class SpellEvaluator
         "ice" => Element.Ice,
         "sand" => Element.Sand,
         "rock" => Element.Rock,
+        "light" => Element.Light,
         _ => Element.Air,
     };
 
@@ -90,6 +100,7 @@ public static class SpellEvaluator
         Element.Fire => 0.2f,
         Element.Steam => 0.1f,
         Element.Cloud => 0.05f,
+        Element.Light => 0.0f,
         _ => 1.0f,
     };
 
@@ -117,7 +128,7 @@ public static class SpellEvaluator
     public static bool IsShapeSigil(string assetId) => TriggerFor(assetId, true) is not null;
 
     public static bool SignInvertible(string assetId) =>
-        assetId is "crushing" or "expansion";
+        assetId is "crushing" or "expansion" or "pulling";
 
     public static float ComponentEffectiveness(float scale) =>
         Math.Clamp(scale / ComponentFullScale, ComponentMinEffect, ComponentMaxEffect);
@@ -127,7 +138,7 @@ public static class SpellEvaluator
     struct Modifiers
     {
         public float Convergence, Crush, Repetition, Cooling, Strengthening,
-                     Collection, Expansion;
+                     Collection, Expansion, Pull;
         // Summed scales of each shape's trigger glyphs, by SpellShape
         public float[] Shapes;
 
@@ -140,6 +151,7 @@ public static class SpellEvaluator
             Strengthening = a.Strengthening + b.Strengthening,
             Collection = a.Collection + b.Collection,
             Expansion = a.Expansion + b.Expansion,
+            Pull = a.Pull + b.Pull,
             Shapes = a.Shapes.Zip(b.Shapes, (x, y) => x + y).ToArray(),
         };
     }
@@ -187,6 +199,7 @@ public static class SpellEvaluator
                 case "strengthening": c.Mods.Strengthening += glyph.Scale; break;
                 case "collection": c.Mods.Collection += glyph.Scale; break;
                 case "expansion": c.Mods.Expansion += sign; break;
+                case "pulling": c.Mods.Pull += sign; break;
                 default:
                     // Column: a thrust vector
                     float rad = glyph.Rotation * Deg2Rad;
@@ -239,6 +252,20 @@ public static class SpellEvaluator
         s.Valid = c.SigilCount == 1 && c.Kind != SpellKind.None && c.ShapeSigils <= 1;
         s.Kind = c.Kind;
         s.Element = c.Element;
+        // Pulling signs make a field of the sigil's element; the wind sigil
+        // only ever moves, wind underfoot can't be pulled
+        if (mods.Pull != 0.0f)
+        {
+            if ((s.Kind == SpellKind.Element && s.Element != Element.Light) ||
+                s.Kind == SpellKind.Field)
+                s.Kind = SpellKind.Field;
+            else
+                s.Valid = false;
+        }
+        else if (s.Kind == SpellKind.Field)
+        {
+            s.Valid = false;
+        }
         s.NetX = c.NetX;
         s.NetY = c.NetY;
         s.TotalMagnitude = c.Magnitude;
@@ -260,6 +287,15 @@ public static class SpellEvaluator
                             c.ThrustSigns * ParticlesPerSign;
                 if (s.Element == Element.Fire)
                     s.Temperature = FireBaseTemp + FireTempPerSigil * sigilScale;
+                if (s.Element == Element.Light)
+                {
+                    s.Speed *= LightSpeedScale;
+                    s.Range = s.Speed * FlightTime;
+                    count = Math.Max(1, (int)(count * LightParticleScale));
+                    s.FlashRadius = MathF.Min(MaxFlashRadius,
+                        FlashBaseRadius + FlashRadiusPerSigil * sigilScale);
+                    s.FlashTime = FlashBaseTime + FlashTimePerSigil * sigilScale;
+                }
 
                 if (mods.Convergence > 0.0f)
                 {
@@ -334,11 +370,15 @@ public static class SpellEvaluator
                 s.LaunchSpeed = MathF.Min(MaxLaunchSpeed,
                     s.Speed * (LaunchBase + LaunchPerSigil * sigilScale) * effect);
                 break;
-            case SpellKind.Gust:
-                s.Force = s.Speed * (0.5f + sigilScale) * GustForcePerSpeed * effect;
+            case SpellKind.Field:
+            {
+                float pull = Math.Clamp(MathF.Abs(mods.Pull), MinPull, MaxPull);
+                s.Pull = mods.Pull > 0.0f ? pull : -pull;
+                s.Force = s.Speed * (0.5f + sigilScale) * pull * GustForcePerSpeed * effect;
                 s.Duration = GustBaseDuration + GustDurationPerSigil * sigilScale;
                 s.Diameter = Expand(s.Diameter * GustWidthScale, mods.Expansion);
                 break;
+            }
         }
         return s;
     }
@@ -396,7 +436,8 @@ public static class SpellEvaluator
         Q(s.Force, StatScale), Q(s.Duration, StatScale),
         (byte)s.Shape, Q(s.TemperatureDelta, StatScale), Q(s.HardnessScale, StatScale),
         Q(s.Crush, StatScale), Q(s.Restore, StatScale), Q(s.CollectRadius, StatScale),
-        s.CollectMax,
+        s.CollectMax, Q(s.Pull, StatScale),
+        Q(s.FlashRadius, StatScale), Q(s.FlashTime, StatScale),
         s.Parts.Count == 0 ? null : s.Parts.Select(Quantize).ToList());
 
     public static QuantizedStats EvaluateQuantized(IReadOnlyList<Glyph> glyphs) =>

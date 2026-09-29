@@ -41,6 +41,9 @@ struct Stats {
   int32_t restore = 0;
   int32_t collectRadius = 0;
   int32_t collectMax = 0;  // plain count
+  int32_t pull = 0;
+  int32_t flashRadius = 0;
+  int32_t flashTime = 0;
   std::vector<Stats> parts; // layered spells
 
   bool operator==(const Stats &) const;

@@ -7,10 +7,10 @@ namespace Whas.Server.Spells;
 public enum Element : byte
 {
     Air = 0, Water = 1, Earth = 2, Fire = 3, Steam = 4, Cloud = 5, Ice = 6,
-    Sand = 7, Rock = 8, Wood = 9, Grass = 10, Smoke = 11,
+    Sand = 7, Rock = 8, Wood = 9, Grass = 10, Smoke = 11, Light = 12,
 }
 
-public enum SpellKind : byte { None = 0, Element = 1, Flight = 2, Gust = 3, Compound = 4 }
+public enum SpellKind : byte { None = 0, Element = 1, Flight = 2, Field = 3, Compound = 4 }
 
 public enum SpellShape : byte { Stream = 0, Orb = 1, Dragon = 2 }
 
@@ -66,6 +66,9 @@ public sealed class SpellStats
     public float Restore;
     public float CollectRadius;
     public int CollectMax;
+    public float Pull;
+    public float FlashRadius;
+    public float FlashTime;
     public List<SpellStats> Parts = [];
 }
 
@@ -93,6 +96,9 @@ public sealed record QuantizedStats(
     [property: JsonPropertyName("restore")] int Restore = 0,
     [property: JsonPropertyName("collectRadius")] int CollectRadius = 0,
     [property: JsonPropertyName("collectMax")] int CollectMax = 0,
+    [property: JsonPropertyName("pull")] int Pull = 0,
+    [property: JsonPropertyName("flashRadius")] int FlashRadius = 0,
+    [property: JsonPropertyName("flashTime")] int FlashTime = 0,
     [property: JsonPropertyName("parts"),
                JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     List<QuantizedStats>? Parts = null)
@@ -110,7 +116,8 @@ public sealed record QuantizedStats(
         Force == o.Force && Duration == o.Duration && Shape == o.Shape &&
         TemperatureDelta == o.TemperatureDelta && HardnessScale == o.HardnessScale &&
         Crush == o.Crush && Restore == o.Restore && CollectRadius == o.CollectRadius &&
-        CollectMax == o.CollectMax &&
+        CollectMax == o.CollectMax && Pull == o.Pull &&
+        FlashRadius == o.FlashRadius && FlashTime == o.FlashTime &&
         (Parts ?? []).SequenceEqual(o.Parts ?? []);
 
     public override int GetHashCode() =>

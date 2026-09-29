@@ -10,6 +10,15 @@ struct Hurtbox {
     Rectangle bounds; // cells
 };
 
+// A light mote bursting: everyone within `radius` cells is blinded for
+// `time` seconds (the game decides what that looks like)
+struct Flash {
+    Vector2 pos;
+    float radius;
+    float time;
+    int owner;
+};
+
 struct ParticleHit {
     int targetId;
     int ownerId;
@@ -41,6 +50,9 @@ struct Particle {
     float hardnessScale = 1.0f;    // landed cell's hardness multiplier
     float crush = 0.0f;   // > 0 grinds what it hits to sand, < 0 reforms sand
     float restore = 0.0f; // resets what it hits to its natural state
+    // Light: bursts into a flash instead of landing
+    float flashRadius = 0.0f;
+    float flashTime = 0.0f;
 };
 
 class ParticleSystem {
@@ -71,12 +83,25 @@ public:
     void SetHurtboxes(std::vector<Hurtbox> hurtboxes) { m_hurtboxes = std::move(hurtboxes); }
     // Hits recorded since the last call
     std::vector<ParticleHit> TakeHits() { return std::exchange(m_hits, {}); }
+    // Flashes from the last Update
+    std::vector<Flash> TakeFlashes() { return std::exchange(m_flashes, {}); }
 
 private:
     bool HitHurtbox(const Particle &p);
+    // A light mote ends in a flash
+    void Burst(Particle &p);
 
     std::vector<Particle> m_particles;
     std::vector<Hurtbox> m_hurtboxes;
     std::vector<ParticleHit> m_hits;
+    std::vector<Flash> m_flashes;
+    // Recent flashes for drawing only (not simulation state): where, how
+    // big, and how long ago in seconds
+    struct VisualFlash {
+        Vector2 pos;
+        float radius;
+        float age;
+    };
+    std::vector<VisualFlash> m_visualFlashes;
     int m_maxParticles;
 };

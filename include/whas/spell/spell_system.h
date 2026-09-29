@@ -15,7 +15,7 @@ enum class SpellKind : uint8_t {
   None,    // no usable sigil
   Element, // fires a stream of an element
   Flight,  // launches the caster along the spell direction (wind sigil)
-  Gust,    // a push field that sends everything in it flying (gust sigil)
+  Field,   // pulls or pushes what's in its path (pulling sign + a sigil)
   Compound, // a layered spell: fires every one of its parts at once
 };
 
@@ -44,8 +44,15 @@ struct SpellStats {
   float temperature = 0.0f; // heat of what lands (fire spells), 0 = default
 
   float launchSpeed = 0.0f; // Flight: caster velocity, cells/s
-  float force = 0.0f;       // Gust: push strength; acceleration = force/mass
-  float duration = 0.0f;    // Gust: seconds the field lasts
+  float force = 0.0f;       // Field: strength; acceleration = force/mass
+  float duration = 0.0f;    // Field: seconds it lasts
+  // Field: > 0 pulls toward the caster, < 0 pushes away. `element` is what
+  // it moves: AIR (the wind sigil) moves everything loose.
+  float pull = 0.0f;
+  // Light: each mote bursts into a flash this wide (cells) that blinds for
+  // this long (seconds)
+  float flashRadius = 0.0f;
+  float flashTime = 0.0f;
 
   // Modifier signs (element spells)
   SpellShape shape = SpellShape::Stream;
@@ -68,7 +75,7 @@ struct SpellEffect {
   Vector2 direction{1.0f, 0.0f};
   int emitted = 0;
   int owner = -1;             // hurtbox id of the caster
-  float timeRemaining = 0.0f; // Gust
+  float timeRemaining = 0.0f; // Field
   uint8_t shapePart = 0;      // which ShapeDef part is emitting
   int rows = 0;               // rows emitted so far (for the weave)
   int partRows = 0;           // rows emitted by the current part
@@ -99,11 +106,16 @@ Vector2 ResolveDirection(const SpellStats &stats, Vector2 aim);
 // of a layered one); zero when it has none
 Vector2 FlightVelocity(const SpellStats &stats, Vector2 aim);
 
-// Whether a point (cells) is inside a gust's field, and how strongly (0..1,
-// fading toward the far end)
-float GustStrengthAt(const SpellEffect &gust, Vector2 point);
+// Whether a point (cells) is inside a field, and how strongly (0..1, fading
+// toward the far end)
+float FieldStrengthAt(const SpellEffect &field, Vector2 point);
+// Whether a field moves this element
+bool FieldMoves(const SpellStats &field, Element element);
+// Which way a field shoves things at full strength (unit, along or against
+// its direction)
+Vector2 FieldPush(const SpellEffect &field);
 
-// Emit element streams, apply gust fields and drop finished effects
+// Emit element streams, apply fields and drop finished effects
 void TickEffects(std::vector<SpellEffect> &effects, ElementContext &ctx,
                  RigidBodySystem &bodies, float dt);
 

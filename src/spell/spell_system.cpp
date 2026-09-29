@@ -42,10 +42,13 @@ struct SpellTuning {
   float launchPerSigil = 0.35f;
   float maxLaunchSpeed = 120.0f;
 
-  // Gust: force = speed * (0.5 + sigil) * this. Four balanced signs with a
-  // full-size sigil give ~90: rock (mass 3) is shoved to ~20 cells/s over the
-  // gust, water (mass 1) to ~60, a character (mass 3) like the rock.
+  // Field (pulling sign): force = speed * (0.5 + sigil) * |pull| * this.
+  // Four balanced signs, a full-size sigil and one pulling sign give ~90:
+  // rock (mass 3) is shoved to ~20 cells/s over the field, water (mass 1)
+  // to ~60, a character (mass 3) like the rock.
   float gustForcePerSpeed = 0.6f;
+  float minPull = 0.25f; // summed pulling sign scale, clamped
+  float maxPull = 2.5f;
   float gustBaseDuration = 0.35f;
   float gustDurationPerSigil = 0.3f;
   float gustWidthScale = 1.5f; // field width relative to the beam diameter
@@ -69,6 +72,15 @@ struct SpellTuning {
   float collectCellsPerSign = 40.0f;
   int maxCollect = 150;
   float aboveHeadGap = 4.0f; // cells from the caster's centre to an orb
+  // Light: much faster than matter, few motes, each bursting into a flash
+  // that blinds anyone (caster included) within its radius
+  float lightSpeedScale = 2.5f;
+  float lightParticleScale = 0.25f;
+  float flashBaseRadius = 8.0f;
+  float flashRadiusPerSigil = 10.0f;
+  float flashBaseTime = 1.5f; // seconds of blindness
+  float flashTimePerSigil = 1.5f;
+  float maxFlashRadius = 30.0f;
   // Layered spells: an embedded spell of scale s is worth s / this; one
   // that fills the whole core is worth all of it
   float componentFullScale = 0.7f;
@@ -87,7 +99,7 @@ SpellKind SpellSystem::SigilKind(const std::string &assetId) {
   if (assetId == "wind_underfoot")
     return SpellKind::Flight;
   if (assetId == "wind")
-    return SpellKind::Gust;
+    return SpellKind::Field;
   if (SigilElement(assetId) != Element::AIR)
     return SpellKind::Element;
   return SpellKind::None;
@@ -106,6 +118,8 @@ Element SpellSystem::SigilElement(const std::string &assetId) {
     return Element::SAND;
   if (assetId == "rock")
     return Element::ROCK;
+  if (assetId == "light")
+    return Element::LIGHT;
   return Element::AIR;
 }
 
@@ -128,6 +142,8 @@ static float SpellDensity(Element element) {
     return 0.1f;
   case Element::CLOUD:
     return 0.05f;
+  case Element::LIGHT:
+    return 0.0f; // weightless: it breaks nothing
   default:
     return 1.0f;
   }
@@ -138,7 +154,8 @@ bool SpellSystem::IsShapeSigil(const std::string &assetId) {
 }
 
 bool SpellSystem::SignInvertible(const std::string &assetId) {
-  return assetId == "crushing" || assetId == "expansion";
+  return assetId == "crushing" || assetId == "expansion" ||
+         assetId == "pulling";
 }
 
 bool SpellStats::HasFlight() const {
@@ -165,6 +182,7 @@ struct Modifiers {
   float strengthening = 0.0f;
   float collection = 0.0f;
   float expansion = 0.0f;
+  float pull = 0.0f; // pulling signs, negative when inverted (pushing)
   // Summed scales of each shape's trigger glyphs
   std::array<float, static_cast<size_t>(SpellShape::Count)> shapes{};
 
@@ -172,7 +190,7 @@ struct Modifiers {
     Modifiers m{convergence + o.convergence, crush + o.crush,
                 repetition + o.repetition,   cooling + o.cooling,
                 strengthening + o.strengthening, collection + o.collection,
-                expansion + o.expansion,     {}};
+                expansion + o.expansion,     pull + o.pull, {}};
     for (size_t i = 0; i < shapes.size(); ++i)
       m.shapes[i] = shapes[i] + o.shapes[i];
     return m;
@@ -229,6 +247,8 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
       m.collection += glyph.scale;
     else if (id == "expansion")
       m.expansion += sign;
+    else if (id == "pulling")
+      m.pull += sign;
     else {
       // Column: sign glyphs point up in their SVG; rotate like
       // SpellGeometry does
@@ -288,6 +308,18 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
             c.shapeSigils <= 1;
   s.kind = c.kind;
   s.element = c.element;
+  // Pulling signs make a field out of the sigil's element: they move what's
+  // already there instead of making more. The wind sigil only ever moves
+  // (a field of everything); wind underfoot and light can't be pulled.
+  if (mods.pull != 0.0f) {
+    if ((s.kind == SpellKind::Element && s.element != Element::LIGHT) ||
+        s.kind == SpellKind::Field)
+      s.kind = SpellKind::Field;
+    else
+      s.valid = false;
+  } else if (s.kind == SpellKind::Field) {
+    s.valid = false;
+  }
   s.netLocal = c.net;
   s.totalMagnitude = c.magnitude;
   s.imbalance = thrust.imbalance;
@@ -311,6 +343,16 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
     if (s.element == Element::FIRE)
       s.temperature =
           kTuning.fireBaseTemp + kTuning.fireTempPerSigil * sigilScale;
+    if (s.element == Element::LIGHT) {
+      s.speed *= kTuning.lightSpeedScale;
+      s.range = s.speed * kTuning.flightTime;
+      count = std::max(1, static_cast<int>(count * kTuning.lightParticleScale));
+      s.flashRadius =
+          std::min(kTuning.maxFlashRadius,
+                   kTuning.flashBaseRadius +
+                       kTuning.flashRadiusPerSigil * sigilScale);
+      s.flashTime = kTuning.flashBaseTime + kTuning.flashTimePerSigil * sigilScale;
+    }
 
     if (mods.convergence > 0.0f) {
       s.density *= 1.0f + kTuning.convergenceDensity * mods.convergence;
@@ -389,13 +431,17 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
         s.speed * (kTuning.launchBase + kTuning.launchPerSigil * sigilScale) *
             effect);
     break;
-  case SpellKind::Gust:
-    s.force =
-        s.speed * (0.5f + sigilScale) * kTuning.gustForcePerSpeed * effect;
+  case SpellKind::Field: {
+    float pull = std::clamp(std::abs(mods.pull), kTuning.minPull,
+                            kTuning.maxPull);
+    s.pull = mods.pull > 0.0f ? pull : -pull;
+    s.force = s.speed * (0.5f + sigilScale) * pull *
+              kTuning.gustForcePerSpeed * effect;
     s.duration =
         kTuning.gustBaseDuration + kTuning.gustDurationPerSigil * sigilScale;
     s.diameter = Expand(s.diameter * kTuning.gustWidthScale, mods.expansion);
     break;
+  }
   default:
     break;
   }
@@ -459,15 +505,28 @@ Vector2 SpellSystem::FlightVelocity(const SpellStats &stats, Vector2 aim) {
   return v;
 }
 
-float SpellSystem::GustStrengthAt(const SpellEffect &gust, Vector2 point) {
-  Vector2 rel{point.x - gust.origin.x, point.y - gust.origin.y};
-  float along = Dot(rel, gust.direction);
-  if (along < 0.0f || along > gust.stats.range)
+float SpellSystem::FieldStrengthAt(const SpellEffect &field, Vector2 point) {
+  Vector2 rel{point.x - field.origin.x, point.y - field.origin.y};
+  float along = Dot(rel, field.direction);
+  if (along < 0.0f || along > field.stats.range)
     return 0.0f;
-  float across = std::abs(rel.x * gust.direction.y - rel.y * gust.direction.x);
-  if (across > gust.stats.diameter * 0.5f)
+  float across =
+      std::abs(rel.x * field.direction.y - rel.y * field.direction.x);
+  if (across > field.stats.diameter * 0.5f)
     return 0.0f;
-  return 1.0f - 0.5f * (along / gust.stats.range);
+  return 1.0f - 0.5f * (along / field.stats.range);
+}
+
+bool SpellSystem::FieldMoves(const SpellStats &field, Element element) {
+  if (element == Element::LIGHT)
+    return false; // nothing to take hold of
+  return field.element == Element::AIR || field.element == element;
+}
+
+Vector2 SpellSystem::FieldPush(const SpellEffect &field) {
+  // Pulling drags things back toward the caster
+  float sign = field.stats.pull < 0.0f ? 1.0f : -1.0f;
+  return {field.direction.x * sign, field.direction.y * sign};
 }
 
 namespace {
@@ -496,6 +555,8 @@ void SpawnSpellParticle(SpellEffect &effect, ElementContext &ctx, Vector2 pos,
     p->hardnessScale = s.hardnessScale;
     p->crush = s.crush;
     p->restore = s.restore;
+    p->flashRadius = s.flashRadius;
+    p->flashTime = s.flashTime;
   }
   effect.emitted++;
 }
@@ -640,17 +701,20 @@ void EmitElement(SpellEffect &effect, ElementContext &ctx, float dt) {
   }
 }
 
-// Push everything in the field: acceleration = force * strength / mass
-void ApplyGust(SpellEffect &gust, ElementContext &ctx, RigidBodySystem &bodies,
-               float dt) {
-  const SpellStats &s = gust.stats;
-  Vector2 d = gust.direction;
+// Move what the field holds: acceleration = force * strength / mass, toward
+// the caster when pulling, away when pushing. A wind field moves every loose
+// thing, an element's field only that element.
+void ApplyField(SpellEffect &field, ElementContext &ctx,
+                RigidBodySystem &bodies, float dt) {
+  const SpellStats &s = field.stats;
+  Vector2 d = SpellSystem::FieldPush(field);
 
   // Loose particles, including other spells' projectiles
   ctx.particles.ForEachActive([&](Particle &p) {
-    if (p.owner == gust.owner && p.isProjectile)
+    if ((p.owner == field.owner && p.isProjectile) ||
+        !SpellSystem::FieldMoves(s, p.element))
       return;
-    float strength = SpellSystem::GustStrengthAt(gust, p.pos);
+    float strength = SpellSystem::FieldStrengthAt(field, p.pos);
     if (strength <= 0.0f)
       return;
     float accel = s.force * strength / ElementMass(ctx.config, p.element);
@@ -667,19 +731,23 @@ void ApplyGust(SpellEffect &gust, ElementContext &ctx, RigidBodySystem &bodies,
   };
   std::unordered_map<int32_t, BodyPush> bodyPushes;
 
-  int x0 = (int)std::floor(std::min(gust.origin.x, gust.origin.x + d.x * s.range) - s.diameter);
-  int x1 = (int)std::ceil(std::max(gust.origin.x, gust.origin.x + d.x * s.range) + s.diameter);
-  int y0 = (int)std::floor(std::min(gust.origin.y, gust.origin.y + d.y * s.range) - s.diameter);
-  int y1 = (int)std::ceil(std::max(gust.origin.y, gust.origin.y + d.y * s.range) + s.diameter);
+  Vector2 o = field.origin;
+  Vector2 end{o.x + field.direction.x * s.range,
+              o.y + field.direction.y * s.range};
+  int x0 = (int)std::floor(std::min(o.x, end.x) - s.diameter);
+  int x1 = (int)std::ceil(std::max(o.x, end.x) + s.diameter);
+  int y0 = (int)std::floor(std::min(o.y, end.y) - s.diameter);
+  int y1 = (int)std::ceil(std::max(o.y, end.y) + s.diameter);
 
   for (int y = y0; y <= y1; ++y) {
     for (int x = x0; x <= x1; ++x) {
       if (!ctx.grid.InBounds(x, y))
         continue;
       Cell &c = ctx.grid.Get(x, y);
-      if (c.element == Element::AIR)
+      if (c.element == Element::AIR || !SpellSystem::FieldMoves(s, c.element))
         continue;
-      float strength = SpellSystem::GustStrengthAt(gust, {x + 0.5f, y + 0.5f});
+      float strength =
+          SpellSystem::FieldStrengthAt(field, {x + 0.5f, y + 0.5f});
       if (strength <= 0.0f)
         continue;
       float mass = ElementMass(ctx.config, c.element);
@@ -731,8 +799,8 @@ void SpellSystem::TickEffects(std::vector<SpellEffect> &effects,
     case SpellKind::Element:
       EmitElement(effect, ctx, dt);
       break;
-    case SpellKind::Gust:
-      ApplyGust(effect, ctx, bodies, dt);
+    case SpellKind::Field:
+      ApplyField(effect, ctx, bodies, dt);
       effect.timeRemaining -= dt;
       break;
     default:
@@ -745,7 +813,7 @@ void SpellSystem::TickEffects(std::vector<SpellEffect> &effects,
     case SpellKind::Element:
       return effect.emitted >= TotalParticles(effect) ||
              effect.shapePart >= SpellShapes::Get(effect.stats.shape).parts.size();
-    case SpellKind::Gust:
+    case SpellKind::Field:
       return effect.timeRemaining <= 0.0f;
     default:
       return true;
