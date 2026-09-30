@@ -2,6 +2,10 @@
 #include "whas/core/element.h"
 #include <cstdint>
 
+// Cell::flags bits
+constexpr uint8_t CELL_BURNING = 1 << 0; // flammable cell on fire, fuel in lifetime
+constexpr uint8_t CELL_CHARRED = 1 << 1; // scorched by fire (drawn darker)
+
 struct Cell {
   Element element = Element::AIR;
 
@@ -24,6 +28,7 @@ struct Cell {
   // Simulation Metadata
   uint32_t lastUpdateFrame = 0; // The frame index this cell was last updated
   bool isStatic = false;        // For rigid body optimization
+  uint8_t flags = 0;            // CELL_* bits
 
   // Element-specific properties (legacy/extended)
   float lifetime = 0.0f; // Seconds

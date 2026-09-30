@@ -13,6 +13,10 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
     ElementsImpl::UpdateIce,
     ElementsImpl::UpdateSand,
     nullptr, // Rock
+    ElementsImpl::UpdateWood,
+    ElementsImpl::UpdateGrass,
+    ElementsImpl::UpdateSmoke,
+    nullptr, // Light is never a cell
 };
 
 void ElementUpdateRegistry::Update(Element element, int x, int y,

@@ -1,3 +1,4 @@
+#include <cstring>
 #include "whas/physics/rigid_body_system.h"
 #include "raylib.h"
 #include "whas/constants.h"
@@ -30,7 +31,16 @@ inline std::pair<int, int> ProjectToWorld(float lx, float ly, b2Vec2 pos,
 } // namespace
 
 // Constructor
-RigidBodySystem::RigidBodySystem() {
+RigidBodySystem::RigidBodySystem() { CreateWorld(); }
+
+void RigidBodySystem::Reset() {
+  b2DestroyWorld(m_worldId); // takes every body and mesh with it
+  m_bodies.clear();
+  m_chunkMeshes.clear();
+  CreateWorld();
+}
+
+void RigidBodySystem::CreateWorld() {
   b2WorldDef worldDef = b2DefaultWorldDef();
   // TODO: move this to config
   worldDef.gravity = {0.0f, 9.8f};
@@ -141,12 +151,17 @@ void RigidBodySystem::ClearBodiesFromGrid(Grid &grid,
     b2Vec2 pos = b2Body_GetPosition(bd.bodyId);
     b2Rot rot = b2Body_GetRotation(bd.bodyId);
     const int32_t selfID = MakeBodyID(bd.bodyId);
+    int maskW = bd.maxX - bd.minX + 1;
 
     for (auto &p : bd.originalPixels) {
       auto [wx, wy] = ProjectToWorld(p.first, p.second, pos, rot);
       if (grid.InBounds(wx, wy)) {
         Cell &c = grid.Get(wx, wy);
         if (c.bodyID == selfID) {
+          // Keep what the world did to it (heat, cold) for the write-back
+          int lx = (int)std::round(p.first) - bd.minX;
+          int ly = (int)std::round(p.second) - bd.minY;
+          bd.localTemperatures[ly * maskW + lx] = c.temperature;
           c = ElementFactory::Create(Element::AIR, config);
         }
       }
@@ -377,10 +392,31 @@ void RigidBodySystem::SyncBackToGrid(Grid &grid, ElementContext &ctx) {
         }
         c.element = bodyElement;
         c.bodyID = selfID;
+        c.temperature = bd.localTemperatures[idx];
       }
     }
   }
 }
+
+namespace {
+
+// Whether any cell of a blob sits on solid ground that isn't the blob
+bool RestsOnSolid(const Grid &grid, const ElementContext &ctx,
+                  const std::vector<std::pair<int, int>> &pixels,
+                  Element element) {
+  for (auto [x, y] : pixels) {
+    if (!grid.InBounds(x, y + 1))
+      return true; // the floor of the world
+    const Cell &below = grid.Get(x, y + 1);
+    if (below.element == element && below.bodyID == -1)
+      continue; // the blob itself
+    if (ctx.config.elements[static_cast<size_t>(below.element)].solid)
+      return true;
+  }
+  return false;
+}
+
+} // namespace
 
 void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
                                            ParticleSystem &particles) {
@@ -467,7 +503,13 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
       }
 
       // Fresh pixels or large orphaned blobs: small blobs crumble to particles,
-      // large blobs become a new rigid body.
+      // large blobs become a new rigid body. A small fresh blob resting on
+      // something solid stays put and grows (a spell landing a few cells a
+      // frame); crumbled, it would only land and crumble again.
+      if (pixels.size() < 10 && isFresh &&
+          RestsOnSolid(grid, ctx, pixels, startElement)) {
+        continue;
+      }
       if (pixels.size() < 10) {
         for (auto &p : pixels) {
           Cell &c = grid.Get(p.first, p.second);
@@ -527,6 +569,7 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
       int dh = data.maxY - data.minY + 1;
       data.pixelMask.assign(dw * dh, false);
       data.localElements.assign(dw * dh, Element::AIR);
+      data.localTemperatures.assign(dw * dh, 0.0f);
 
       for (auto &p : pixels) {
         int lx = (int)std::round(p.first - centerX);
@@ -534,6 +577,7 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
         int kidx = (ly - data.minY) * dw + (lx - data.minX);
         data.pixelMask[kidx] = true;
         data.localElements[kidx] = startElement;
+        data.localTemperatures[kidx] = grid.Get(p.first, p.second).temperature;
         data.elements.push_back(startElement);
         data.originalPixels.push_back({(float)lx, (float)ly});
         grid.Get(p.first, p.second).bodyID = MakeBodyID(bodyId);
@@ -633,4 +677,31 @@ void RigidBodySystem::DrawDebug() {
       }
     }
   }
+}
+
+uint64_t RigidBodySystem::StateHash() const {
+  uint64_t h = 0xcbf29ce484222325ull;
+  auto add = [&h](float v) {
+    uint32_t bits;
+    std::memcpy(&bits, &v, sizeof(bits));
+    for (int i = 0; i < 4; ++i) {
+      h ^= (bits >> (i * 8)) & 0xFF;
+      h *= 0x100000001b3ull;
+    }
+  };
+  for (const BodyData &body : m_bodies) {
+    if (!b2Body_IsValid(body.bodyId))
+      continue;
+    b2Vec2 p = b2Body_GetPosition(body.bodyId);
+    b2Rot r = b2Body_GetRotation(body.bodyId);
+    b2Vec2 v = b2Body_GetLinearVelocity(body.bodyId);
+    add(p.x);
+    add(p.y);
+    add(r.c);
+    add(r.s);
+    add(v.x);
+    add(v.y);
+    add(b2Body_GetAngularVelocity(body.bodyId));
+  }
+  return h;
 }

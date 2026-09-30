@@ -2,3 +2,10 @@ build
 .vscode
 .aider*
 data/spells/
+data/decks/
+data/match_decks.json
+server/**/bin/
+server/**/obj/
+server/**/TestResults/
+data/*.lock
+data/guest*.json

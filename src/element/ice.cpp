@@ -10,7 +10,7 @@ void UpdateIce(int x, int y, ElementContext &ctx) {
   Cell src = ctx.grid.Get(x, y);
 // Melting logic
 if (src.temperature > iConfig.meltPoint) {
-  if (std::rand() % iConfig.meltChance == 0) {
+  if (ctx.rng.Below(iConfig.meltChance) == 0) {
     Cell water = ElementFactory::Create(Element::WATER, ctx.config);
     water.temperature = src.temperature;
     MovementSystem::SetNext(x, y, water, ctx);

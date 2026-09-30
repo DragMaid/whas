@@ -17,6 +17,19 @@ bool IsDarkStroke(unsigned int color) {
   return (r + g + b) < 600;
 }
 
+float Distance(Vector2 a, Vector2 b) { return std::hypot(b.x - a.x, b.y - a.y); }
+
+// How far a point is from the line through a and b
+float OffLine(Vector2 p, Vector2 a, Vector2 b) {
+  float len = Distance(a, b);
+  if (len < 1e-4f)
+    return Distance(p, a);
+  return std::abs((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / len;
+}
+
+// nanosvg gives every path as cubic Béziers (lines and circles too). A
+// straight one becomes one segment; a curve gets more segments the longer
+// it is, so small circles (a head, a dot) keep their shape.
 void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
   if (!path || path->npts < 4)
     return;
@@ -28,7 +41,15 @@ void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
     Vector2 p2{p[4], p[5]};
     Vector2 p3{p[6], p[7]};
 
-    int segments = 10;
+    if (OffLine(p1, p0, p3) < 0.05f && OffLine(p2, p0, p3) < 0.05f) {
+      if (Distance(p0, p3) > 1e-3f)
+        out.push_back({p0, p3});
+      continue;
+    }
+
+    // The control polygon is never shorter than the curve
+    float length = Distance(p0, p1) + Distance(p1, p2) + Distance(p2, p3);
+    int segments = std::clamp(static_cast<int>(std::ceil(length / 1.5f)), 4, 24);
     Vector2 prev = p0;
     for (int j = 1; j <= segments; ++j) {
       float t = static_cast<float>(j) / segments;
@@ -42,11 +63,21 @@ void FlattenPath(const NSVGpath *path, std::vector<LineSeg> &out) {
       current.x = mt3 * p0.x + 3.0f * mt2 * t * p1.x + 3.0f * mt * t2 * p2.x + t3 * p3.x;
       current.y = mt3 * p0.y + 3.0f * mt2 * t * p1.y + 3.0f * mt * t2 * p2.y + t3 * p3.y;
 
-      if (std::hypot(current.x - prev.x, current.y - prev.y) > 0.5f) {
+      // Tiny steps are merged into the next one, never dropped (dropping
+      // them used to leave gaps, and erase small circles entirely)
+      if (Distance(prev, current) > 0.2f || j == segments) {
         out.push_back({prev, current});
+        prev = current;
       }
-      prev = current;
     }
+  }
+  // A closed path ends where it started
+  if (path->closed) {
+    Vector2 first{path->pts[0], path->pts[1]};
+    Vector2 last{path->pts[(path->npts - 1) * 2],
+                 path->pts[(path->npts - 1) * 2 + 1]};
+    if (Distance(first, last) > 1e-3f)
+      out.push_back({last, first});
   }
 }
 
@@ -75,17 +106,44 @@ void SvgLibrary::LoadFromDirectories(const std::string &signsDir,
     std::filesystem::path p(dir);
     if (!std::filesystem::exists(p))
       return;
+    std::vector<std::filesystem::path> inverted;
     for (const auto &entry : std::filesystem::directory_iterator(p)) {
       if (!entry.is_regular_file())
         continue;
       if (entry.path().extension() != ".svg")
         continue;
+      // "<id>.inverted.svg" is another drawing of <id>, not its own glyph
+      if (entry.path().stem().extension() == ".inverted") {
+        inverted.push_back(entry.path());
+        continue;
+      }
       LoadSvgFile(entry.path().string(), kind);
+    }
+    for (const auto &path : inverted) {
+      std::string id = path.stem().stem().string();
+      for (auto &asset : m_assets) {
+        if (asset.id != id)
+          continue;
+        SvgAsset shape;
+        if (ParseShape(path.string(), shape))
+          asset.invertedSegments = std::move(shape.segments);
+      }
     }
   };
 
   scan(signsDir, GlyphKind::Sign);
   scan(sigilsDir, GlyphKind::Sigil);
+
+  // Without a drawing of its own, an inverted glyph is turned 180 degrees
+  for (auto &asset : m_assets) {
+    if (!asset.invertedSegments.empty())
+      continue;
+    Vector2 c = asset.localCenter;
+    for (const LineSeg &seg : asset.segments)
+      asset.invertedSegments.push_back(
+          {{2 * c.x - seg.a.x, 2 * c.y - seg.a.y},
+           {2 * c.x - seg.b.x, 2 * c.y - seg.b.y}});
+  }
 
   std::sort(m_assets.begin(), m_assets.end(),
             [](const SvgAsset &a, const SvgAsset &b) { return a.id < b.id; });
@@ -110,6 +168,17 @@ std::vector<const SvgAsset *> SvgLibrary::GetByKind(GlyphKind kind) const {
 }
 
 bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
+  SvgAsset asset;
+  asset.id = std::filesystem::path(path).stem().string();
+  asset.kind = kind;
+  asset.path = path;
+  if (!ParseShape(path, asset))
+    return false;
+  m_assets.push_back(std::move(asset));
+  return true;
+}
+
+bool SvgLibrary::ParseShape(const std::string &path, SvgAsset &asset) {
   std::ifstream file(path);
   if (!file)
     return false;
@@ -121,11 +190,6 @@ bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
   std::vector<char> mutableContent(content.begin(), content.end());
   mutableContent.push_back('\0');
   NSVGimage *image = nsvgParse(mutableContent.data(), "px", 96.0f);
-
-  SvgAsset asset;
-  asset.id = std::filesystem::path(path).stem().string();
-  asset.kind = kind;
-  asset.path = path;
 
   if (image) {
     asset.viewWidth = image->width > 0 ? image->width : 64.0f;
@@ -177,7 +241,5 @@ bool SvgLibrary::LoadSvgFile(const std::string &path, GlyphKind kind) {
   asset.viewWidth *= scale;
   asset.viewHeight *= scale;
   asset.localCenter = {asset.viewWidth * 0.5f, asset.viewHeight * 0.5f};
-
-  m_assets.push_back(std::move(asset));
   return true;
 }

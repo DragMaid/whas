@@ -27,8 +27,40 @@ void UpdateFire(int x, int y, ElementContext &ctx) {
     return;
   }
 
+  // Heat what the flame touches: flammables catch, ice melts, water boils.
+  // Water fights back and puts the flame out.
+  static constexpr int DX4[] = {0, 0, -1, 1};
+  static constexpr int DY4[] = {-1, 1, 0, 0};
+  for (int i = 0; i < 4; ++i) {
+    int nx = x + DX4[i], ny = y + DY4[i];
+    if (!ctx.grid.InBounds(nx, ny))
+      continue;
+    Cell &n = ctx.grid.Get(nx, ny);
+    const auto &nProps = ctx.config.elements[static_cast<size_t>(n.element)];
+    if (n.element == Element::WATER) {
+      n.temperature += fConfig.contactHeat;
+      Cell steam = ElementFactory::Create(Element::STEAM, ctx.config);
+      MovementSystem::SetNext(x, y, steam, ctx);
+      return;
+    }
+    if (nProps.flammability > 0.0f || n.element == Element::ICE)
+      n.temperature += fConfig.contactHeat;
+    else if ((n.element == Element::EARTH || n.element == Element::ROCK ||
+              n.element == Element::SAND) &&
+             ctx.rng.Unit() < fConfig.charChance)
+      n.flags |= CELL_CHARRED;
+  }
+
+  if (ctx.rng.Unit() < fConfig.smokeChance * 0.25f) {
+    int uy = y - 1;
+    if (ctx.grid.InBounds(x, uy) &&
+        ctx.grid.Get(x, uy).element == Element::AIR)
+      MovementSystem::SetNext(
+          x, uy, ElementFactory::Create(Element::SMOKE, ctx.config), ctx);
+  }
+
   // Spontaneous Sparking
-  if (std::rand() % fConfig.sparkChance == 0) {
+  if (ctx.rng.Below(fConfig.sparkChance) == 0) {
     int uy = y - 1;
     if (ctx.grid.InBounds(x, uy)) {
       Cell spark = ElementFactory::Create(Element::FIRE, ctx.config);

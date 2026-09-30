@@ -123,7 +123,7 @@ constexpr ElementProperties MakeIce() {
           .rigidBodyCandidate = true,
           .staticTerrain = false,
           .bodyMovable = true,
-          .defaultTemperature = -100.0f,
+          .defaultTemperature = -10.0f,
           .defaultMass = 0.9f,
           .defaultHardness = 100.0f,
           .defaultLifetime = 0.0f,
@@ -173,6 +173,90 @@ constexpr ElementProperties MakeRock() {
           .restitution = 0.3f};
 }
 
+// Wood: static terrain that burns slowly and leaves smoke
+constexpr ElementProperties MakeWood() {
+  return {.mobile = false,
+          .solid = true,
+          .passable = false,
+          .rigidBody = false,
+          .rigidBodyCandidate = false,
+          .staticTerrain = true,
+          .defaultTemperature = 20.0f,
+          .defaultMass = 0.7f,
+          .defaultHardness = 80.0f,
+          .defaultLifetime = 0.0f,
+          .lifetimeDecay = 0.0f,
+          .defaultMoisture = 0.0f,
+          .thermal = {1.7f, 0.15f, 0.02f},
+          .density = 700.0f,
+          .restitution = 0.2f,
+          .flammability = 0.08f,
+          .ignitionTemp = 250.0f,
+          .burnFuel = 4.0f,
+          .burnTemp = 700.0f};
+}
+
+// Grass: a thin surface layer, walked through, burns fast
+constexpr ElementProperties MakeGrass() {
+  return {.mobile = false,
+          .solid = true, // nothing sinks through it...
+          .passable = true, // ...but characters and projectiles pass
+          .rigidBody = false,
+          .rigidBodyCandidate = false,
+          .staticTerrain = false,
+          .defaultTemperature = 20.0f,
+          .defaultMass = 0.1f,
+          .defaultHardness = 5.0f,
+          .defaultLifetime = 0.0f,
+          .lifetimeDecay = 0.0f,
+          .defaultMoisture = 0.0f,
+          .thermal = {1.0f, 0.3f, 0.02f},
+          .density = 50.0f,
+          .restitution = 0.0f,
+          .flammability = 0.5f,
+          .ignitionTemp = 150.0f,
+          .burnFuel = 0.6f,
+          .burnTemp = 600.0f};
+}
+
+// Smoke: rising gas left by burning, fades out
+constexpr ElementProperties MakeSmoke() {
+  return {.mobile = true,
+          .solid = false,
+          .passable = true,
+          .rigidBody = false,
+          .rigidBodyCandidate = false,
+          .staticTerrain = false,
+          .defaultTemperature = 60.0f,
+          .defaultMass = 0.05f,
+          .defaultHardness = 0.0f,
+          .defaultLifetime = 3.0f,
+          .lifetimeDecay = 0.016f,
+          .defaultMoisture = 0.0f,
+          .thermal = {1.0f, 0.05f, 0.2f},
+          .density = 0.4f,
+          .restitution = 0.0f};
+}
+
+// Light: weightless and never a cell (light spells burst into flashes)
+constexpr ElementProperties MakeLight() {
+  return {.mobile = false,
+          .solid = false,
+          .passable = true,
+          .rigidBody = false,
+          .rigidBodyCandidate = false,
+          .staticTerrain = false,
+          .defaultTemperature = 20.0f,
+          .defaultMass = 0.0f,
+          .defaultHardness = 0.0f,
+          .defaultLifetime = 0.0f,
+          .lifetimeDecay = 0.0f,
+          .defaultMoisture = 0.0f,
+          .thermal = {1.0f, 0.0f, 0.0f},
+          .density = 0.0f,
+          .restitution = 0.0f};
+}
+
 SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::AIR)] = MakeAir();
   elements[static_cast<std::size_t>(Element::WATER)] = MakeWater();
@@ -183,4 +267,8 @@ SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::ICE)] = MakeIce();
   elements[static_cast<std::size_t>(Element::SAND)] = MakeSand();
   elements[static_cast<std::size_t>(Element::ROCK)] = MakeRock();
+  elements[static_cast<std::size_t>(Element::WOOD)] = MakeWood();
+  elements[static_cast<std::size_t>(Element::GRASS)] = MakeGrass();
+  elements[static_cast<std::size_t>(Element::SMOKE)] = MakeSmoke();
+  elements[static_cast<std::size_t>(Element::LIGHT)] = MakeLight();
 }

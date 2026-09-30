@@ -1,5 +1,6 @@
 #pragma once
 #include <raylib.h>
+#include <utility>
 
 class Simulation;
 
@@ -31,12 +32,38 @@ struct Character {
   float hp = 100.0f;
   float maxHp = 100.0f;
 
+  // Burning: each stretch of contact with fire adds a stack, each stack deals
+  // damage every tick. Water clears them; they cool off between turns.
+  static constexpr int MAX_BURN_STACKS = 5;
+  static constexpr int TICKS_PER_STACK = 12; // contact needed for one stack
+  static constexpr float BURN_DPS = 2.5f;    // per stack
+  int burnStacks = 0;
+  int burnExposure = 0; // ticks in fire towards the next stack
+
+  // Seconds of blindness from light bursts nearby. Deterministic, but only
+  // the game's screen reads it (it doesn't change what happens), so it's
+  // left out of the match hash; the game takes it with TakeFlash.
+  float flash = 0.0f;
+
+  // Where the player's cursor is (cells), from the plan: sights set spells
+  // follow it
+  Vector2 cursor{0.0f, 0.0f};
+  bool hasCursor = false;
+  float TakeFlash() { return std::exchange(flash, 0.0f); }
+
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.
   void Step(const Simulation &sim, CharacterInput input, float dt);
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);
+
+  // One tick of burning against the current grid: gain or clear stacks and
+  // take the damage. Deterministic, part of lockstep state.
+  void UpdateBurn(const Simulation &sim, float dt);
+  // Called at the end of every turn
+  void CoolBurn() { burnStacks = burnStacks > 2 ? burnStacks - 2 : 0; }
+  bool Burning() const { return burnStacks > 0; }
 
   Rectangle Bounds() const { return {pos.x, pos.y, WIDTH, HEIGHT}; }
   Vector2 Center() const {

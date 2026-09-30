@@ -19,14 +19,13 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
 
   // Wind Jitter & Horizontal Drift
   float randomJitter =
-      (static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX)) * 2.0f -
-      1.0f;
+      ctx.rng.Unit() * 2.0f - 1.0f;
   src.vx += randomJitter * cConfig.windJitter;
   src.vx =
       std::clamp(src.vx, -cConfig.maxDrift, cConfig.maxDrift);
 
   // Ambient Rain Generation
-  if (std::rand() % cConfig.rainChance == 0) {
+  if (ctx.rng.Below(cConfig.rainChance) == 0) {
     int ry = y + 1;
     if (ctx.grid.InBounds(x, ry)) {
       Cell rain = ElementFactory::Create(Element::WATER, ctx.config);

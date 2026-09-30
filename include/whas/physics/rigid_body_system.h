@@ -22,6 +22,9 @@ struct BodyData {
   int minX, maxX, minY, maxY;
   std::vector<uint8_t> pixelMask;
   std::vector<Element> localElements;
+  // Each pixel's temperature, carried while the body moves (the grid cells
+  // are cleared and rewritten every frame)
+  std::vector<float> localTemperatures;
 
   bool shouldBreak = false;
 };
@@ -39,6 +42,14 @@ public:
 
   void DrawDebug();
 
+  // Drop every body and start an empty world (loading a snapshot). The grid
+  // must not reference bodies any more; terrain meshes rebuild on the next
+  // update and loose chunks are extracted again from the cells.
+  void Reset();
+
+  // Hash of every dynamic body's transform and velocity (lockstep checks)
+  uint64_t StateHash() const;
+
   // Push the body that owns a grid cell (cell.bodyID), impulse and point in
   // cell units. Unknown ids are ignored.
   void ApplyImpulse(int32_t cellBodyID, Vector2 impulse, Vector2 point);
@@ -48,6 +59,7 @@ public:
                             class ParticleSystem &particles);
 
 private:
+  void CreateWorld();
   void UpdateWorldMeshes(Grid &grid, ElementContext &ctx);
   void ProcessDisplacement(Grid &grid, ElementContext &ctx,
                            class ParticleSystem &particles);

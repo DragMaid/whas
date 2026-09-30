@@ -16,6 +16,8 @@ public:
 
 private:
   bool LoadSvgFile(const std::string &path, GlyphKind kind);
+  // Segments, view size and center of one SVG file
+  static bool ParseShape(const std::string &path, SvgAsset &asset);
 
   std::vector<SvgAsset> m_assets;
 };

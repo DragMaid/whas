@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">
-  <path style="stroke:#000000; fill:none;" d="M12 48L52 48L44 20L20 20L12 48"/>
-  <path style="stroke:#000000; fill:none;" d="M16 34L48 34M32 20L32 48"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+  <path style="stroke:#000000; fill:none;" d="M24 20 L78 20"/>
+  <path style="stroke:#000000; fill:none;" d="M50 20 L50 75"/>
+  <path style="stroke:#000000; fill:none;" d="M42 38 L26 54 L50 75 L74 54 L58 38"/>
+  <path style="stroke:#000000; fill:none;" d="M26 88 L76 88"/>
+  <path style="stroke:#000000; fill:none;" d="M13.5 50.0 L13.0 51.5 L11.8 52.4 L10.2 52.4 L9.0 51.5 L8.5 50.0 L9.0 48.5 L10.2 47.6 L11.8 47.6 L13.0 48.5 L13.5 50.0"/>
+  <path style="stroke:#000000; fill:none;" d="M91.5 50.0 L91.0 51.5 L89.8 52.4 L88.2 52.4 L87.0 51.5 L86.5 50.0 L87.0 48.5 L88.2 47.6 L89.8 47.6 L91.0 48.5 L91.5 50.0"/>
 </svg>

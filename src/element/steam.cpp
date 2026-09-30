@@ -30,12 +30,13 @@ static bool HandleCloudFormation(int x, int y, Cell &src, const SteamConfig &sCo
   return false;
 }
 
-static void UpdateVelocity(Cell &src, const SteamConfig &sConfig) {
+static void UpdateVelocity(Cell &src, const SteamConfig &sConfig,
+                           DetRng &rng) {
   // Buoyancy: hotter steam rises faster
   src.vy = sConfig.buoyancyBase - (src.temperature - sConfig.condensationTemp) * sConfig.buoyancyTempScale;
   
   // Drift: random horizontal movement
-  src.vx += (static_cast<float>(std::rand() % 100) / 100.0f - 0.5f) * sConfig.driftStrength;
+  src.vx += (static_cast<float>(rng.Below(100)) / 100.0f - 0.5f) * sConfig.driftStrength;
   src.vx = std::clamp(src.vx, -sConfig.maxDrift, sConfig.maxDrift);
 }
 
@@ -98,7 +99,7 @@ void UpdateSteam(int x, int y, ElementContext &ctx) {
   // if (HandleCondensation(x, y, src, sConfig, ctx)) return;
   if (HandleCloudFormation(x, y, src, sConfig, ctx)) return;
 
-  UpdateVelocity(src, sConfig);
+  UpdateVelocity(src, sConfig, ctx.rng);
 
   bool moved = TryBuoyancyMove(x, y, src, ctx);
   if (!moved) {

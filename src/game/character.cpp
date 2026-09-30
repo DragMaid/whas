@@ -56,6 +56,19 @@ bool Collides(const Simulation &sim, Vector2 pos) {
 } // namespace
 
 void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
+  // Buried (a spell dropped sand or earth on us, or made it under our feet):
+  // pop up onto the top of the pile instead of being stuck inside it
+  if (Collides(sim, pos)) {
+    for (float y = std::floor(pos.y) - 1.0f; y >= -HEIGHT; y -= 1.0f) {
+      if (!Collides(sim, {pos.x, y})) {
+        pos.y = y;
+        vel.y = std::min(vel.y, 0.0f);
+        grounded = true;
+        break;
+      }
+    }
+  }
+
   Vector2 center = Center();
   bool inLiquid = IsLiquid(sim, static_cast<int>(center.x),
                            static_cast<int>(center.y));
@@ -122,4 +135,38 @@ void Character::Launch(Vector2 velocity) {
   vel.y += velocity.y;
   if (velocity.y < 0.0f)
     grounded = false;
+}
+
+void Character::UpdateBurn(const Simulation &sim, float dt) {
+  if (!Alive())
+    return;
+  bool inFire = false;
+  bool inWater = false;
+  int x0 = std::max(0, static_cast<int>(std::floor(pos.x)));
+  int x1 = std::min(GRID_W - 1, static_cast<int>(std::floor(pos.x + WIDTH)));
+  int y0 = std::max(0, static_cast<int>(std::floor(pos.y)));
+  int y1 = std::min(GRID_H - 1, static_cast<int>(std::floor(pos.y + HEIGHT)));
+  for (int y = y0; y <= y1; ++y) {
+    for (int x = x0; x <= x1; ++x) {
+      const Cell &c = sim.GetCell(x, y);
+      if (c.element == Element::FIRE || (c.flags & CELL_BURNING))
+        inFire = true;
+      else if (c.element == Element::WATER)
+        inWater = true;
+    }
+  }
+
+  if (inWater) {
+    burnStacks = 0;
+    burnExposure = 0;
+    return;
+  }
+  if (inFire && ++burnExposure >= TICKS_PER_STACK) {
+    burnExposure = 0;
+    burnStacks = std::min(burnStacks + 1, MAX_BURN_STACKS);
+  } else if (inFire && burnStacks == 0) {
+    burnStacks = 1; // catching fire is immediate, building it up takes time
+  }
+  if (burnStacks > 0)
+    hp = std::max(0.0f, hp - burnStacks * BURN_DPS * dt);
 }

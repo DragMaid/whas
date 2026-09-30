@@ -18,6 +18,7 @@ public:
   bool InBounds(int x, int y) const;
 
   std::vector<Cell>& GetBuffer() { return m_cells; }
+  const std::vector<Cell>& GetBuffer() const { return m_cells; }
   std::vector<float>& GetPressureBuffer() { return m_pressure; }
 
 private:

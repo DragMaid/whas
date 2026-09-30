@@ -10,4 +10,7 @@ namespace ElementsImpl
     void UpdateCloud(int x, int y, ElementContext& ctx);
     void UpdateIce  (int x, int y, ElementContext& ctx);
     void UpdateSand (int x, int y, ElementContext& ctx);
+    void UpdateWood (int x, int y, ElementContext& ctx);
+    void UpdateGrass(int x, int y, ElementContext& ctx);
+    void UpdateSmoke(int x, int y, ElementContext& ctx);
 }

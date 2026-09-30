@@ -47,8 +47,9 @@ void UpdateSand(int x, int y, ElementContext &ctx) {
 
   if (!moved) {
     // Try move diagonal down (sliding)
-    std::vector<int> dirs = {-1, 1};
-    std::shuffle(dirs.begin(), dirs.end(), ctx.rng);
+    // Not std::shuffle: its algorithm differs between standard libraries
+    int first = (ctx.rng() & 1) ? 1 : -1;
+    int dirs[2] = {first, -first};
 
     for (int dx : dirs) {
       if (MovementSystem::TryMove(x, y, x + dx, y + 1, sand, ctx)) {
