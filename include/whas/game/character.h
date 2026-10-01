@@ -16,8 +16,8 @@ struct CharacterInput {
 // A walking body that lives on top of the grid (never written into it).
 // Positions and sizes are in cells; pos is the top-left corner.
 struct Character {
-  static constexpr float WIDTH = 3.0f;
-  static constexpr float HEIGHT = 6.0f;
+  static constexpr float WIDTH = 8.0f;
+  static constexpr float HEIGHT = 12.0f;
   static constexpr float MASS = 3.0f;     // for gust pushes
   static constexpr float GRAVITY = 90.0f; // cells/s^2 at world gravity 1
 

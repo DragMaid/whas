@@ -8,7 +8,7 @@ namespace {
 constexpr int FRAME_SIZE = 32;
 // Whole frames per sprite pixel keep the art crisp; one frame is 8 cells
 // tall, taller than the 6-cell body, so the hat rises above it
-constexpr float SPRITE_SCALE = 2.0f;
+constexpr float SPRITE_SCALE = 1.5f;
 constexpr float IDLE_FPS = 6.0f;
 // Below this the body is taken to be at the top of its arc, not rising
 constexpr float RISE_SPEED = 1.0f; // cells/s
@@ -19,6 +19,8 @@ struct Sprites {
   Texture2D fall{};
   bool loaded = false;
 };
+
+bool g_showHitbox = false;
 
 Sprites &GetSprites() {
   static Sprites s;
@@ -81,6 +83,10 @@ void DrawCharacterBody(const Character &c, Color color, bool drawHp) {
     EndBlendMode();
   }
 
+  // The cells the body actually collides with, separate from the sprite
+  if (g_showHitbox)
+    DrawRectangleLinesEx(r, 1.0f, Color{255, 60, 200, color.a});
+
   if (!drawHp)
     return;
   float w = 28.0f;
@@ -93,6 +99,8 @@ void DrawCharacterBody(const Character &c, Color color, bool drawHp) {
   DrawTriangle({mx - 3.0f, top.y - 6.0f}, {mx, top.y - 2.0f},
                {mx + 3.0f, top.y - 6.0f}, color);
 }
+
+void SetCharacterHitboxVisible(bool visible) { g_showHitbox = visible; }
 
 void UnloadCharacterSprites() {
   Sprites &s = GetSprites();

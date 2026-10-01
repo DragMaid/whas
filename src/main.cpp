@@ -154,6 +154,7 @@ int main(int argc, char **argv) {
     audio.Update();
     soundscape.Update(sim, audio, GetFrameTime());
 
+    SetCharacterHitboxVisible(uiState.debugOverlay);
     BeginDrawing();
     ClearBackground(Color{8, 8, 11, 255}); // the bars beside the world
     BeginMode2D(View::Camera());
