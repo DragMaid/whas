@@ -6,6 +6,7 @@
 #include "whas/spell/spell_geometry.h"
 #include "whas/ui/spell_thumbnails.h"
 #include "whas/ui/widgets.h"
+#include "whas/spell/spell_rules.h"
 #include "whas/ui/theme.h"
 #include <algorithm>
 #include <cmath>
@@ -1326,8 +1327,14 @@ void SpellEditor::DrawOverlay() {
     ImGui::TextColored(Theme::Vec(Tone::Moss), "%s",
                        m_statusMessage.c_str());
   }
+  DrawGlyphCounter();
 
   ImGui::Separator();
+  if (SpellRules::CountGlyphs(m_currentSpell).OverLimit())
+    ImGui::TextColored(Theme::Vec(Tone::Oxblood),
+                       "Over the limit: more than %d signs in one circle. This "
+                       "spell can only be played solo or in chaos rooms.",
+                       SIGN_LIMIT);
 
   float rightW = std::max(280.0f * View::UiScale(),
                           ImGui::GetContentRegionAvail().x * 0.24f);
@@ -1370,6 +1377,38 @@ void SpellEditor::DrawOverlay() {
   CommitEdits();
   ImGui::End();
   ImGui::PopStyleColor();
+}
+
+// "Signs 12/32  Sigils 2" at the right of the top row; the sign count is
+// the fullest circle's, since the limit is per circle
+void SpellEditor::DrawGlyphCounter() const {
+  SpellRules::Count count = SpellRules::CountGlyphs(m_currentSpell);
+  bool over = count.OverLimit();
+  char text[64];
+  std::snprintf(text, sizeof text, "Signs %d/%d    Sigils %d", count.mostSigns,
+                SIGN_LIMIT, count.sigils);
+  float w = ImGui::CalcTextSize(text).x;
+  ImGui::SameLine(std::max(ImGui::GetCursorPosX(),
+                           ImGui::GetWindowContentRegionMax().x - w -
+                               ImGui::GetStyle().ItemSpacing.x));
+  ImGui::AlignTextToFramePadding();
+  ImGui::TextColored(Theme::Vec(over ? Tone::Oxblood
+                                : count.mostSigns > SIGN_LIMIT * 3 / 4
+                                    ? Tone::Brass
+                                    : Tone::Muted),
+                     "%s", text);
+  if (ImGui::IsItemHovered()) {
+    ImGui::BeginTooltip();
+    ImGui::Text("Ordinary matches allow %d signs per circle.", SIGN_LIMIT);
+    ImGui::TextDisabled("Sigils follow the usual rules. Chaos rooms and solo "
+                        "play have no limit.");
+    if (count.circles.size() > 1)
+      for (size_t i = 0; i < count.circles.size(); ++i)
+        ImGui::Text("%s: %d signs, %d sigils",
+                    i == 0 ? "Outer ring" : TextFormat("Part %d", (int)i),
+                    count.circles[i].signs, count.circles[i].sigils);
+    ImGui::EndTooltip();
+  }
 }
 
 void SpellEditor::Draw() {

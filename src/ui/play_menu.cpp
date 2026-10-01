@@ -5,6 +5,7 @@
 #include "whas/constants.h"
 #include "whas/ui/ui.h"
 #include "whas/ui/audio_settings.h"
+#include "whas/spell/spell_rules.h"
 #include "whas/ui/theme.h"
 #include "whas/ui/widgets.h"
 #include <cfloat>
@@ -53,8 +54,10 @@ std::string PlayMenu::ApiBase() const {
 void PlayMenu::SyncLibrary() {
   LockstepClient::Library lib;
   SpellLibrary &spells = m_ui.Library();
+  // Spells over the sign limit stay home: ordinary matches can't use them
   for (const Spell &s : spells.All())
-    lib.spells.push_back({spells.RefOf(s), s});
+    if (SpellRules::WithinLimits(s))
+      lib.spells.push_back({spells.RefOf(s), s});
   lib.decks = m_ui.Decks().Decks();
   lib.match = m_ui.Decks().Match();
   m_client.SetLibrary(std::move(lib));
@@ -301,6 +304,19 @@ void PlayMenu::DrawOnline() {
   ImGui::SameLine();
   if (Widgets::SmallButton("change"))
     m_ui.OpenSpellLibrary();
+  for (int r = 0; r < MATCH_ROUNDS; ++r) {
+    const Deck *d = m_ui.Decks().Find(rounds.deckIds[r]);
+    if (!d)
+      continue;
+    int over = 0;
+    for (const std::string &ref : d->slots)
+      if (const Spell *s = m_ui.Library().Find(ref); s && !SpellRules::WithinLimits(*s))
+        ++over;
+    if (over > 0)
+      ImGui::TextColored(Theme::Vec(Tone::Oxblood),
+                         "Round %d: %d spell%s over the sign limit will be left out",
+                         r + 1, over, over == 1 ? "" : "s");
+  }
 
   if (auto running = m_client.RunningMatch()) {
     ImGui::TextColored(Theme::Vec(Tone::BrassBright),

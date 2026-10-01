@@ -4,6 +4,7 @@
 #include "whas/spell/spell_quant.h"
 #include "whas/ui/spell_thumbnails.h"
 #include "whas/ui/widgets.h"
+#include "whas/spell/spell_rules.h"
 #include "whas/ui/theme.h"
 #include <algorithm>
 #include <cctype>
@@ -64,6 +65,12 @@ bool ContainsNoCase(const std::string &hay, const char *needle) {
 
 ImU32 ToU32(Color c, unsigned char a = 255) {
   return IM_COL32(c.r, c.g, c.b, a);
+}
+
+// Marks a spell over the sign limit (it only plays solo or in chaos rooms)
+void DrawChaosBadge(ImDrawList *dl, ImVec2 c) {
+  Theme::Diamond(dl, c, Px(6), Theme::U32(Tone::Oxblood));
+  Theme::Diamond(dl, c, Px(2.5f), Theme::U32(Tone::Ink));
 }
 
 } // namespace
@@ -182,6 +189,10 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
     ImGui::Text("%s", spell.name.c_str());
     ImGui::Separator();
     DrawStats(stats);
+    if (!SpellRules::WithinLimits(spell))
+      ImGui::TextColored(Theme::Vec(Tone::Oxblood),
+                         "More than %d signs in a circle: solo and chaos rooms only",
+                         SIGN_LIMIT);
     ImGui::EndTooltip();
   }
 
@@ -211,6 +222,8 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
   dl->AddText(ImGui::GetFont(), Px(12), {p0.x + 8, t0.y + thumb + Px(20)},
               stats.valid ? ToU32(tint, 200) : Theme::U32(Tone::Oxblood),
               TextFormat("%s  %.2fs", kind, ticks * TurnController::TICK_DT));
+  if (!SpellRules::WithinLimits(spell))
+    DrawChaosBadge(dl, {p1.x - Px(8), p0.y + Px(8)});
   ImGui::PopID();
 }
 
@@ -313,8 +326,13 @@ void SpellEditor::DrawDeckSlots(const Deck &deck) {
                   "missing");
     dl->AddText({p0.x + 4, p0.y + 2}, Theme::U32(Tone::Parchment),
                 TextFormat("%d", i + 1));
+    if (spell && !SpellRules::WithinLimits(*spell))
+      DrawChaosBadge(dl, {p1.x - Px(7), p0.y + Px(7)});
     if (hovered && spell)
-      ImGui::SetTooltip("%s\nRight-click to clear", spell->name.c_str());
+      ImGui::SetTooltip("%s%s\nRight-click to clear", spell->name.c_str(),
+                        SpellRules::WithinLimits(*spell)
+                            ? ""
+                            : "\nOver the sign limit: solo and chaos rooms only");
     else if (hovered)
       ImGui::SetTooltip("Drop a spell here");
     ImGui::PopID();
