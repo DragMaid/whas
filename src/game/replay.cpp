@@ -1,5 +1,6 @@
 #include "whas/game/replay.h"
 #include "whas/engine/simulation.h"
+#include <algorithm>
 
 using json = nlohmann::json;
 
@@ -12,7 +13,11 @@ bool ReplayPlayer::Load(const json &replay, std::string &error) {
       return false;
 
     // Both players' six cards for each round
-    std::array<std::vector<RoundCards>, 2> cards;
+    std::array<std::vector<RoundCards>, 2> &cards = m_cards;
+    cards = {};
+    m_localSlot = -1;
+    if (replay.contains("local"))
+      m_localSlot = std::clamp(replay["local"].value("slot", -1), -1, 1);
     for (const json &p : replay.at("players")) {
       int slot = p.at("slot").get<int>();
       if (slot < 0 || slot > 1)

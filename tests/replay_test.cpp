@@ -1,6 +1,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/replay.h"
 #include "whas/game/replay_store.h"
+#include "whas/spell/spell_library.h"
 #include <filesystem>
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
@@ -68,4 +69,21 @@ TEST_CASE("finished matches are kept on this machine", "[replay]") {
   REQUIRE(ReplayStore::Remove(entries[0].path));
   REQUIRE(ReplayStore::List().empty());
   ReplayStore::SetDirectory("data/replays");
+}
+
+TEST_CASE("copied spells are recognised by their drawing", "[replay]") {
+  ReplayPlayer player;
+  std::string error;
+  REQUIRE(player.Load(LoadReplay(), error));
+  const auto &cards = player.Cards();
+  REQUIRE_FALSE(cards[0].empty());
+  REQUIRE(cards[0][0][0]);
+  const Spell &spell = cards[0][0][0]->spell;
+  Spell renamed = spell;
+  renamed.name = "Something else";
+  REQUIRE(SpellLibrary::SameDrawing(spell, renamed));
+  Spell moved = spell;
+  REQUIRE_FALSE(moved.glyphs.empty());
+  moved.glyphs[0].position.x += 5;
+  REQUIRE_FALSE(SpellLibrary::SameDrawing(spell, moved));
 }

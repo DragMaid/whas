@@ -27,6 +27,15 @@ public:
   bool Duplicate(const std::string &ref, std::string &newRef,
                  std::string &error);
 
+  // A spell from someone else (an opponent's deck). One you already have
+  // with the same drawing is reused; otherwise it's saved under its own
+  // name, or "<name> (theirs)" when that name is taken. ref is the result.
+  bool Import(const Spell &spell, std::string &ref, std::string &error);
+  // The library's spell drawn exactly like this one, if any
+  const Spell *FindSameDrawing(const Spell &spell) const;
+  // Same glyphs and components, whatever the names
+  static bool SameDrawing(const Spell &a, const Spell &b);
+
   // Bumped on every change so views can refresh
   uint32_t Version() const { return m_version; }
 

@@ -113,6 +113,10 @@ public:
   bool OpponentCommitted() const { return m_opponentCommitted; }
   bool OpponentConnected() const { return m_opponentConnected; }
   const RoundCards &Cards(int slot) const { return m_cards[slot]; }
+  // Every round's cards so far, per slot
+  const std::array<std::vector<RoundCards>, 2> &AllCards() const {
+    return m_roundCards;
+  }
   const std::array<TurnPlan, 2> &Plans() const { return m_plans; }
   const std::array<int, 2> &RoundsWon() const { return m_roundsWon; }
   int LastRoundWinner() const { return m_lastRoundWinner; }

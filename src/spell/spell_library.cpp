@@ -1,4 +1,6 @@
 #include "whas/spell/spell_library.h"
+#include "whas/spell/spell_json.h"
+#include <nlohmann/json.hpp>
 
 void SpellLibrary::Load() {
   m_store.EnsureDirectoryExists();
@@ -79,5 +81,40 @@ bool SpellLibrary::Duplicate(const std::string &ref, std::string &newRef,
       break;
   }
   newRef = RefOf(copy);
+  return Save(copy, error);
+}
+
+bool SpellLibrary::SameDrawing(const Spell &a, const Spell &b) {
+  nlohmann::json ja, jb;
+  SpellJson::Write(ja, a);
+  SpellJson::Write(jb, b);
+  return ja == jb;
+}
+
+const Spell *SpellLibrary::FindSameDrawing(const Spell &spell) const {
+  for (const Spell &s : m_spells)
+    if (SameDrawing(s, spell))
+      return &s;
+  return nullptr;
+}
+
+bool SpellLibrary::Import(const Spell &spell, std::string &ref,
+                          std::string &error) {
+  if (const Spell *same = FindSameDrawing(spell)) {
+    ref = RefOf(*same);
+    return true;
+  }
+  Spell copy = spell;
+  std::string base = spell.name.empty() ? "Copied spell" : spell.name;
+  for (int n = 0;; ++n) {
+    copy.name = n == 0   ? base
+                : n == 1 ? base + " (theirs)"
+                         : base + " (theirs " + std::to_string(n) + ")";
+    if (copy.name.size() > SPELL_NAME_MAX_LEN)
+      copy.name = copy.name.substr(copy.name.size() - SPELL_NAME_MAX_LEN);
+    if (!RefOf(copy).empty() && !m_store.Exists(RefOf(copy)))
+      break;
+  }
+  ref = RefOf(copy);
   return Save(copy, error);
 }
