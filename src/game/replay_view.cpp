@@ -4,6 +4,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/character_draw.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/widgets.h"
 
 namespace {
 constexpr Color SLOT_COLORS[2] = {{230, 230, 240, 255}, {220, 80, 80, 255}};
@@ -32,9 +33,13 @@ void ReplayView::Update(Simulation &sim, UIState &state) {
     m_playing = !m_playing;
   if (m_playing && !m_player.Finished())
     m_player.Step(sim, m_speed);
+  m_trail.Update(m_player.State().characters.data(),
+                 static_cast<int>(m_player.State().characters.size()),
+                 GetFrameTime());
 }
 
 void ReplayView::Draw() const {
+  m_trail.Draw();
   for (int i = 0; i < 2; ++i) {
     const Character &c = m_player.State().characters[i];
     DrawCharacterBody(c, c.Alive() ? SLOT_COLORS[i] : GRAY, true);
@@ -53,18 +58,18 @@ void ReplayView::DrawControls(Simulation &sim) {
                 m_player.Turn() + 1, m_player.CurrentTurn() + 1,
                 m_player.TurnCount());
 
-  if (ImGui::Button(m_playing ? "Pause" : "Play", {70, 0}))
+  if (Widgets::Button(m_playing ? "Pause" : "Play", {70, 0}))
     m_playing = !m_playing;
   ImGui::SameLine();
-  if (ImGui::Button("Next turn")) {
+  if (Widgets::Button("Next turn")) {
     int left = TurnController::TURN_TICKS - m_player.Tick();
     m_player.Step(sim, left);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Restart"))
+  if (Widgets::Button("Restart"))
     m_player.Start(sim);
   ImGui::SameLine();
-  if (ImGui::Button("Close"))
+  if (Widgets::Button("Close"))
     m_active = false;
 
   ImGui::Text("Speed");

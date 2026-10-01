@@ -128,6 +128,8 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   }
 
   grounded = Collides(sim, {pos.x, pos.y + 0.05f});
+  if (grounded)
+    flying = false;
 }
 
 void Character::Launch(Vector2 velocity) {

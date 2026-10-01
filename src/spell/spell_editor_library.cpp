@@ -3,6 +3,7 @@
 #include "whas/spell/spell_editor.h"
 #include "whas/spell/spell_quant.h"
 #include "whas/ui/spell_thumbnails.h"
+#include "whas/ui/widgets.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -93,7 +94,7 @@ void SpellEditor::DrawSpellGrid(float width) {
     bool on = m_filter == i;
     ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.30f, 0.45f, 0.85f, 1)
                                               : ImVec4(0.16f, 0.16f, 0.22f, 1));
-    if (ImGui::SmallButton(kFilters[i].label))
+    if (Widgets::SmallButton(kFilters[i].label))
       m_filter = i;
     ImGui::PopStyleColor();
   }
@@ -127,8 +128,10 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
   ImVec2 p1{p0.x + size.x, p0.y + size.y};
   ImGui::InvisibleButton("##card", size);
   bool hovered = ImGui::IsItemHovered();
-  if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+  if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    Widgets::Click();
     OpenSpell(spell);
+  }
 
   if (ImGui::BeginDragDropSource()) {
     ImGui::SetDragDropPayload(SPELL_PAYLOAD, ref.c_str(), ref.size() + 1);
@@ -214,17 +217,17 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
 void SpellEditor::DrawDeckPanel() {
   ImGui::Text("Decks");
   ImGui::SameLine(DeckPanelW() - Px(250));
-  if (ImGui::SmallButton("New")) {
+  if (Widgets::SmallButton("New")) {
     m_selectedDeck = m_decks->Create("New deck").id;
   }
   ImGui::SameLine();
-  if (ImGui::SmallButton("Duplicate")) {
+  if (Widgets::SmallButton("Duplicate")) {
     std::string id = m_decks->Duplicate(m_selectedDeck);
     if (!id.empty())
       m_selectedDeck = id;
   }
   ImGui::SameLine();
-  if (ImGui::SmallButton("Rename")) {
+  if (Widgets::SmallButton("Rename")) {
     if (const Deck *d = m_decks->Find(m_selectedDeck)) {
       m_popupDeck = d->id;
       std::strncpy(m_renameBuffer, d->name.c_str(), SPELL_NAME_MAX_LEN);
@@ -234,7 +237,7 @@ void SpellEditor::DrawDeckPanel() {
   }
   ImGui::SameLine();
   ImGui::BeginDisabled(m_decks->Decks().size() <= 1);
-  if (ImGui::SmallButton("Delete")) {
+  if (Widgets::SmallButton("Delete")) {
     m_popupDeck = m_selectedDeck;
     m_openPopup = "Delete deck?";
   }
@@ -255,7 +258,7 @@ void SpellEditor::DrawDeckPanel() {
     DrawDeckSlots(*deck);
     bool active = deck->id == m_decks->ActiveId();
     ImGui::BeginDisabled(active);
-    if (ImGui::Button(active ? "In use in the sandbox" : "Use in the sandbox"))
+    if (Widgets::Button(active ? "In use in the sandbox" : "Use in the sandbox"))
       m_decks->SetActive(deck->id);
     ImGui::EndDisabled();
   }
@@ -280,8 +283,10 @@ void SpellEditor::DrawDeckSlots(const Deck &deck) {
       ImGui::EndDragDropTarget();
     }
     const Spell *spell = m_spells->Find(deck.slots[i]);
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+      Widgets::Click();
       m_decks->SetSlot(deck.id, i, "");
+    }
     // Slots can be reordered by dragging one onto another
     if (spell && ImGui::BeginDragDropSource()) {
       ImGui::SetDragDropPayload(SPELL_PAYLOAD, deck.slots[i].c_str(),
@@ -332,7 +337,7 @@ void SpellEditor::DrawRoundDecks() {
       ImGui::EndCombo();
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("Copy from..."))
+    if (Widgets::SmallButton("Copy from..."))
       ImGui::OpenPopup("copyfrom");
     if (ImGui::BeginPopup("copyfrom")) {
       for (int o = 0; o < MATCH_ROUNDS; ++o) {
@@ -346,7 +351,7 @@ void SpellEditor::DrawRoundDecks() {
       ImGui::EndPopup();
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("Edit copy")) {
+    if (Widgets::SmallButton("Edit copy")) {
       // Branch this round off into its own deck and select it for editing
       std::string id = m_decks->Duplicate(match.deckIds[r]);
       if (!id.empty()) {
@@ -392,7 +397,7 @@ void SpellEditor::DrawLibraryPopups() {
     bool enter = ImGui::InputText("##name", m_renameBuffer,
                                   SPELL_NAME_MAX_LEN + 1,
                                   ImGuiInputTextFlags_EnterReturnsTrue);
-    if (ImGui::Button("Rename") || enter) {
+    if (Widgets::Button("Rename") || enter) {
       std::string newRef, err;
       if (m_spells->Rename(m_popupRef, m_renameBuffer, newRef, err)) {
         m_decks->ReplaceRef(m_popupRef, newRef);
@@ -403,7 +408,7 @@ void SpellEditor::DrawLibraryPopups() {
       }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     if (!m_statusMessage.empty())
       ImGui::TextDisabled("%s", m_statusMessage.c_str());
@@ -415,7 +420,7 @@ void SpellEditor::DrawLibraryPopups() {
     const Spell *spell = m_spells->Find(m_popupRef);
     ImGui::Text("Delete \"%s\"? It is also removed from every deck.",
                 spell ? spell->name.c_str() : m_popupRef.c_str());
-    if (ImGui::Button("Delete")) {
+    if (Widgets::Button("Delete")) {
       std::string err;
       if (m_spells->Remove(m_popupRef, err))
         m_decks->RemoveRef(m_popupRef);
@@ -423,7 +428,7 @@ void SpellEditor::DrawLibraryPopups() {
       close();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     ImGui::EndPopup();
   }
@@ -434,12 +439,12 @@ void SpellEditor::DrawLibraryPopups() {
     bool enter = ImGui::InputText("##deckname", m_renameBuffer,
                                   SPELL_NAME_MAX_LEN + 1,
                                   ImGuiInputTextFlags_EnterReturnsTrue);
-    if ((ImGui::Button("Rename") || enter) && m_renameBuffer[0]) {
+    if ((Widgets::Button("Rename") || enter) && m_renameBuffer[0]) {
       m_decks->Rename(m_popupDeck, m_renameBuffer);
       close();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     ImGui::EndPopup();
   }
@@ -449,13 +454,13 @@ void SpellEditor::DrawLibraryPopups() {
     const Deck *deck = m_decks->Find(m_popupDeck);
     ImGui::Text("Delete the deck \"%s\"? Its spells are kept.",
                 deck ? deck->name.c_str() : "?");
-    if (ImGui::Button("Delete")) {
+    if (Widgets::Button("Delete")) {
       m_decks->Remove(m_popupDeck);
       m_selectedDeck = m_decks->ActiveId();
       close();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     ImGui::EndPopup();
   }

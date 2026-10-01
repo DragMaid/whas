@@ -1,4 +1,5 @@
 #include "whas/game/turn_controller.h"
+#include "whas/audio/audio_manager.h"
 #include "whas/engine/simulation.h"
 #include <algorithm>
 #include <climits>
@@ -192,8 +193,10 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
         break;
       // Cast from where the caster stands, then any flight carries them off
       sim.CastSpell(cast.stats, character.Center(), cast.aim, character.id);
-      if (cast.stats.HasFlight())
-        character.Launch(SpellSystem::FlightVelocity(cast.stats, cast.aim));
+      if (cast.stats.HasFlight()) {
+        character.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
+        AudioManager::EmitFlightLaunch(character.Center().x);
+      }
     }
   }
   // The fallen don't walk, but they still fall

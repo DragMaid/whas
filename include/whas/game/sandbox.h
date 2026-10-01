@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/character.h"
+#include "whas/game/flight_trail.h"
 #include "whas/game/turn_controller.h"
 #include <vector>
 
@@ -30,6 +31,7 @@ private:
   int QueuedTicks() const;
 
   Character m_avatar;
+  FlightTrail m_trail;
   bool m_hasAvatar = false;
   Vector2 m_home{0, 0}; // where Reset puts the avatar
   bool m_dragging = false;

@@ -3,6 +3,8 @@
 #include "imgui.h"
 #include "whas/constants.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/audio_settings.h"
+#include "whas/ui/widgets.h"
 #include <chrono>
 #include <cstring>
 
@@ -82,14 +84,14 @@ void PlayMenu::Draw() {
     return;
   }
 
-  if (ImGui::Button("Sandbox", {130, 0})) {
+  if (Widgets::Button("Sandbox", {130, 0})) {
     m_sandbox = true;
     m_open = false;
   }
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Paint the world and test spells from your avatar");
   ImGui::SameLine();
-  if (ImGui::Button("Practice match", {130, 0})) {
+  if (Widgets::Button("Practice match", {130, 0})) {
     m_practice = true;
     m_open = false;
   }
@@ -97,13 +99,16 @@ void PlayMenu::Draw() {
     ImGui::SetTooltip("Best of 3 against a dummy that stands still,\n"
                       "using your match decks for each round");
   ImGui::SameLine();
-  if (ImGui::Button("Spells & decks", {130, 0})) {
+  if (Widgets::Button("Spells & decks", {130, 0})) {
     m_ui.OpenSpellLibrary();
     m_open = false;
   }
 
   ImGui::SeparatorText("Online");
   DrawOnline();
+
+  if (ImGui::CollapsingHeader("Sound"))
+    DrawAudioSettings();
 
   if (!m_status.empty())
     ImGui::TextColored({1, 0.7f, 0.4f, 1}, "%s", m_status.c_str());
@@ -121,9 +126,9 @@ void PlayMenu::DrawOnline() {
   ImGui::EndDisabled();
   ImGui::SameLine();
   if (offline) {
-    if (ImGui::Button("Connect"))
+    if (Widgets::Button("Connect"))
       m_client.Connect(m_url);
-  } else if (ImGui::Button("Disconnect")) {
+  } else if (Widgets::Button("Disconnect")) {
     m_client.Disconnect();
   }
   ImGui::TextDisabled("Status: %s", PhaseName(phase));
@@ -133,7 +138,7 @@ void PlayMenu::DrawOnline() {
   }
 
   if (phase == P::Queued) {
-    if (ImGui::Button("Stop looking"))
+    if (Widgets::Button("Stop looking"))
       m_client.CancelWaiting();
     return;
   }
@@ -142,9 +147,9 @@ void PlayMenu::DrawOnline() {
     ImGui::SameLine();
     ImGui::TextColored({1, 0.85f, 0.4f, 1}, "%s", m_client.LobbyCode().c_str());
     ImGui::SameLine();
-    if (ImGui::SmallButton("Copy"))
+    if (Widgets::SmallButton("Copy"))
       ImGui::SetClipboardText(m_client.LobbyCode().c_str());
-    if (ImGui::Button("Close lobby"))
+    if (Widgets::Button("Close lobby"))
       m_client.CancelWaiting();
     return;
   }
@@ -160,23 +165,23 @@ void PlayMenu::DrawOnline() {
                         r + 1 < MATCH_ROUNDS ? "," : "");
   }
   ImGui::SameLine();
-  if (ImGui::SmallButton("change"))
+  if (Widgets::SmallButton("change"))
     m_ui.OpenSpellLibrary();
 
   if (auto running = m_client.RunningMatch()) {
     ImGui::TextColored({1, 0.8f, 0.3f, 1}, "You have a match in progress (#%lld)",
                        (long long)*running);
-    if (ImGui::Button("Rejoin match", {200, 0}))
+    if (Widgets::Button("Rejoin match", {200, 0}))
       m_client.Rejoin();
     return;
   }
 
-  if (ImGui::Button("Quick match", {130, 0})) {
+  if (Widgets::Button("Quick match", {130, 0})) {
     SyncLibrary();
     m_client.QuickMatch();
   }
   ImGui::SameLine();
-  if (ImGui::Button("Create lobby", {130, 0})) {
+  if (Widgets::Button("Create lobby", {130, 0})) {
     SyncLibrary();
     m_client.CreateLobby();
   }
@@ -185,7 +190,7 @@ void PlayMenu::DrawOnline() {
                            ImGuiInputTextFlags_CharsUppercase);
   ImGui::SameLine();
   ImGui::BeginDisabled(std::strlen(m_code) != 6);
-  if (ImGui::Button("Join lobby")) {
+  if (Widgets::Button("Join lobby")) {
     SyncLibrary();
     m_client.JoinLobby(m_code);
   }
@@ -196,7 +201,7 @@ void PlayMenu::DrawOnline() {
 }
 
 void PlayMenu::DrawHistory() {
-  if (ImGui::Button(m_history ? "Refresh" : "Load my matches") &&
+  if (Widgets::Button(m_history ? "Refresh" : "Load my matches") &&
       !m_historyRequest.valid())
     m_historyRequest = NetClient::GetJsonAsync(ApiBase() + "/players/me/matches",
                                                m_client.Token());
@@ -255,7 +260,7 @@ void PlayMenu::DrawHistory() {
       }
       ImGui::TableNextColumn();
       ImGui::PushID((int)id);
-      if (status != "Running" && ImGui::SmallButton("Replay") &&
+      if (status != "Running" && Widgets::SmallButton("Replay") &&
           !m_replayRequest.valid())
         m_replayRequest = NetClient::GetJsonAsync(
             ApiBase() + "/matches/" + std::to_string(id) + "/replay",

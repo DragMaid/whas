@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/replay.h"
+#include "whas/game/flight_trail.h"
 #include <string>
 
 class Simulation;
@@ -22,6 +23,7 @@ public:
 
 private:
   ReplayPlayer m_player;
+  FlightTrail m_trail;
   bool m_active = false;
   bool m_playing = true;
   int m_speed = 1;

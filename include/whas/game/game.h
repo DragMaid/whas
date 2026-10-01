@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/character.h"
+#include "whas/game/flight_trail.h"
 #include "whas/game/match.h"
 #include "whas/game/turn_controller.h"
 #include <array>
@@ -94,6 +95,7 @@ private:
   std::array<int, Match::PLAYERS> m_roundsWon{};
   std::array<Vector2, Match::PLAYERS> m_spawns{};
   TurnController m_turn;
+  FlightTrail m_trail;
   RoundState m_state = RoundState::Playing;
   // Between turns: the world is frozen until Space stops time to plan
   bool m_waiting = true;

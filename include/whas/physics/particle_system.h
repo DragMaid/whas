@@ -26,6 +26,16 @@ struct ParticleHit {
     Element element; // what hit: water puts out burning characters
 };
 
+// Something that happened in the world worth hearing: a spell leaving its
+// caster, a spell's element striking, a solid breaking, fire meeting water.
+// Sound only: not simulation state, never hashed or saved.
+struct ParticleNoise {
+  enum Kind : uint8_t { Cast, Impact, Break, Fizzle };
+  Kind kind;
+  Element element; // the spell's element, or what broke
+  Vector2 pos;     // cells
+};
+
 // A particle spawn queued by a worker thread (see ElementContext)
 struct PendingSpawn {
     Vector2 pos;
@@ -124,6 +134,15 @@ public:
     std::vector<ParticleHit> TakeHits() { return std::exchange(m_hits, {}); }
     // Flashes from the last Update
     std::vector<Flash> TakeFlashes() { return std::exchange(m_flashes, {}); }
+    // Noises since the last call. Capped, so nobody listening costs nothing.
+    void Note(const ParticleNoise &noise) {
+        if (m_noises.size() < 1024)
+            m_noises.push_back(noise);
+    }
+    std::vector<ParticleNoise> TakeNoises() { return std::exchange(m_noises, {}); }
+    // Light bursts ever, and where the latest was; for sound, never hashed
+    uint32_t BurstCount() const { return m_burstCount; }
+    Vector2 LastBurstPos() const { return m_lastBurstPos; }
 
     // A path for a steered cast fired from `origin` along `dir`; its id goes
     // on the cast's particles (see Follow)
@@ -172,5 +191,8 @@ private:
         float age;
     };
     std::vector<VisualFlash> m_visualFlashes;
+    uint32_t m_burstCount = 0;
+    std::vector<ParticleNoise> m_noises;
+    Vector2 m_lastBurstPos{0.0f, 0.0f};
     int m_maxParticles;
 };

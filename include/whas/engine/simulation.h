@@ -55,6 +55,8 @@ public:
   void Restart(uint64_t seed);
 
   const Cell &GetCell(int x, int y) const { return m_grid.Get(x, y); }
+  // Ticks since the last Restart; tells observers whether the world moved
+  uint32_t GetFrame() const { return m_frameCounter; }
 
   int GetActiveChunks() const { return m_chunks.GetActiveChunksCount(); }
   int GetParticleCount() const { return m_particleCount; }
@@ -66,6 +68,7 @@ public:
   const SimulationConfig &GetConfig() const { return m_config; }
   RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
   ParticleSystem &GetParticleSystem() { return m_particles; }
+  const ParticleSystem &GetParticleSystem() const { return m_particles; }
   const std::vector<SpellEffect> &GetActiveSpellEffects() const {
     return m_activeSpellEffects;
   }
