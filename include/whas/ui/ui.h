@@ -41,6 +41,8 @@ struct UIState {
 
   // Online matches play by the default rules: tuning sliders are hidden
   bool configLocked = false;
+  // The map editor has the screen: no action bar
+  bool hideActionBar = false;
 
   // Requests from the bar, handled by main
   bool menuRequested = false;

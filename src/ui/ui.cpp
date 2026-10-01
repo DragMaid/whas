@@ -157,7 +157,7 @@ void UI::Draw(UIState &state, Simulation &sim) {
     DrawPropertyEditor(sim.GetConfig());
   }
 
-  if (!m_spellEditor.IsOpen()) {
+  if (!m_spellEditor.IsOpen() && !state.hideActionBar) {
     DrawActionBar(state);
     if (state.debugOverlay)
       DrawInspector(sim);

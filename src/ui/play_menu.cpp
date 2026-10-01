@@ -91,10 +91,8 @@ void PlayMenu::Draw() {
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Paint the world and test spells from your avatar");
   ImGui::SameLine();
-  if (Widgets::Button("Practice match", {130, 0})) {
-    m_practice = true;
-    m_open = false;
-  }
+  if (Widgets::Button("Practice match", {130, 0}))
+    m_soloSetup = !m_soloSetup;
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Best of 3 against a dummy that stands still,\n"
                       "using your match decks for each round");
@@ -103,6 +101,13 @@ void PlayMenu::Draw() {
     m_ui.OpenSpellLibrary();
     m_open = false;
   }
+  ImGui::SameLine();
+  if (Widgets::Button("Maps", {130, 0})) {
+    m_maps.Open();
+    m_open = false;
+  }
+  if (m_soloSetup)
+    DrawSoloSetup();
 
   ImGui::SeparatorText("Online");
   DrawOnline();
@@ -181,10 +186,10 @@ void PlayMenu::DrawOnline() {
     m_client.QuickMatch();
   }
   ImGui::SameLine();
-  if (Widgets::Button("Create lobby", {130, 0})) {
-    SyncLibrary();
-    m_client.CreateLobby();
-  }
+  if (Widgets::Button("Create lobby", {130, 0}))
+    m_roomSetup = !m_roomSetup;
+  if (m_roomSetup)
+    DrawRoomSetup();
   ImGui::SetNextItemWidth(90);
   ImGui::InputTextWithHint("##code", "CODE", m_code, sizeof m_code,
                            ImGuiInputTextFlags_CharsUppercase);
@@ -198,6 +203,26 @@ void PlayMenu::DrawOnline() {
 
   ImGui::SeparatorText("History");
   DrawHistory();
+}
+
+void PlayMenu::DrawSoloSetup() {
+  ImGui::SeparatorText("Solo match");
+  m_maps.DrawPoolPicker(m_soloPool);
+  if (Widgets::Button("Start", {130, 0})) {
+    m_practice = m_maps.BuildOptions(m_soloPool);
+    m_soloSetup = false;
+    m_open = false;
+  }
+}
+
+void PlayMenu::DrawRoomSetup() {
+  ImGui::SeparatorText("New room");
+  m_maps.DrawPoolPicker(m_roomPool);
+  if (Widgets::Button("Open room", {130, 0})) {
+    SyncLibrary();
+    m_client.CreateLobby(m_maps.BuildOptions(m_roomPool));
+    m_roomSetup = false;
+  }
 }
 
 void PlayMenu::DrawHistory() {
