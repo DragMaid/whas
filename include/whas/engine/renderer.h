@@ -8,10 +8,10 @@ public:
   Renderer() = default;
   void DrawWorld(const Simulation &sim);
   void DrawDebugOverlay(const Simulation &sim);
-
-private:
+  // How a cell looks in the world (map thumbnails use it too)
   Color CellColor(const Cell &c) const;
 
+private:
   // The grid is drawn as one texture (a pixel per cell, scaled up) rather
   // than a rectangle per cell. Left to the GL context to free at shutdown.
   std::vector<Color> m_pixels;

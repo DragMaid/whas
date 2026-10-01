@@ -122,6 +122,8 @@ set(SOURCES
     src/ui/spell_thumbnails.cpp
     src/ui/action_bar.cpp
     src/ui/play_menu.cpp
+    src/ui/map_thumbnails.cpp
+    src/ui/map_gallery.cpp
     src/ui/audio_settings.cpp
 
     src/spell/spell_geometry.cpp
