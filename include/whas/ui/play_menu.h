@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/net/lockstep_client.h"
+#include "imgui.h"
 #include "whas/ui/map_gallery.h"
 #include <future>
 #include <nlohmann/json.hpp>
@@ -8,9 +9,10 @@
 
 class UI;
 
-// The "Play" window: practice against the dummy, connect to a server and
-// find a match (quick match or lobby code), rejoin a dropped match, browse
-// past matches and open their replays.
+// The main menu: a sidebar down the left edge with a page beside it. Solo
+// duels against the dummy, online duels (quick match, rooms with a map
+// pool, rejoining), replays and settings; the sandbox, the spell library and
+// the maps open straight from the sidebar.
 class PlayMenu {
 public:
   PlayMenu(LockstepClient &client, UI &ui, MapGallery &maps)
@@ -32,6 +34,9 @@ public:
   std::optional<nlohmann::json> TakeReplay() { return std::exchange(m_replay, {}); }
 
 private:
+  enum class Page { None, Solo, Online, Replays, Settings };
+  void DrawSidebar(float width, float height);
+  void DrawPage(ImVec2 pos, float width);
   void DrawOnline();
   void DrawSoloSetup();
   void DrawRoomSetup();
@@ -44,7 +49,7 @@ private:
   MapGallery &m_maps;
   bool m_open = true;
   std::optional<MatchOptions> m_practice;
-  bool m_soloSetup = false;
+  Page m_page = Page::Solo;
   bool m_roomSetup = false;
   MapGallery::Pool m_soloPool{MapGallery::RANDOM};
   MapGallery::Pool m_roomPool{MapGallery::RANDOM};
