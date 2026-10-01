@@ -124,6 +124,8 @@ bool TryImpact(Particle &p, Grid &grid, ElementContext &ctx, int tx, int ty) {
     p.vel.y *= kImpact.solidSlowdown;
   }
 
+  if (!granular)
+    ctx.particles.Note({ParticleNoise::Break, target.element, center});
   Element debris = granular ? target.element : RubbleOf(target.element);
   float temperature = target.temperature;
   target = ElementFactory::Create(Element::AIR, ctx.config);
@@ -141,6 +143,8 @@ void Deposit(Particle &p, Grid &grid, ElementContext &ctx) {
   p.active = false;
   if (p.element == Element::AIR)
     return;
+  if (p.castId >= 0)
+    ctx.particles.Note({ParticleNoise::Impact, p.element, p.pos});
 
   int px = static_cast<int>(std::floor(p.pos.x));
   int py = static_cast<int>(std::floor(p.pos.y));
@@ -219,6 +223,7 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
       if (p.crush > 0.0f &&
           (c.element == Element::ROCK || c.element == Element::EARTH) &&
           RandomUnit(ctx) < p.crush * kModifier.crushChancePerSign) {
+        ctx.particles.Note({ParticleNoise::Break, c.element, {x + 0.5f, y + 0.5f}});
         ReplaceCell(grid, ctx, x, y, Element::SAND);
       } else if (p.crush < 0.0f && c.element == Element::SAND &&
                  RandomUnit(ctx) < -p.crush * kModifier.reformChancePerSign) {
@@ -355,6 +360,7 @@ bool MeetCell(Particle &p, Grid &grid, ElementContext &ctx, int x, int y) {
   Body other = BodyOf(cell.element);
   if (self == Body::Liquid &&
       (other == Body::Flame || (cell.flags & CELL_BURNING))) {
+    ctx.particles.Note({ParticleNoise::Fizzle, p.element, p.pos});
     Douse(grid, ctx, x, y);
     if (RandomUnit(ctx) < kClash.douseSpendChance) {
       Quench(p); // this drop went up in steam
@@ -367,6 +373,7 @@ bool MeetCell(Particle &p, Grid &grid, ElementContext &ctx, int x, int y) {
       return false;
     }
   } else if (self == Body::Flame && other == Body::Liquid) {
+    ctx.particles.Note({ParticleNoise::Fizzle, p.element, p.pos});
     if (RandomUnit(ctx) < kClash.boilChance)
       MakeSteam(grid, ctx, x, y);
     Quench(p);
@@ -742,6 +749,8 @@ void ParticleSystem::Burst(Particle &p) {
     return;
   m_flashes.push_back({p.pos, p.flashRadius, p.flashTime, p.owner});
   m_visualFlashes.push_back({p.pos, p.flashRadius, 0.0f});
+  ++m_burstCount;
+  m_lastBurstPos = p.pos;
 }
 
 bool ParticleSystem::HitHurtbox(const Particle &p) {
@@ -749,6 +758,7 @@ bool ParticleSystem::HitHurtbox(const Particle &p) {
     if (box.id == p.owner || !CheckCollisionPointRec(p.pos, box.bounds))
       continue;
     m_hits.push_back({box.id, p.owner, p.power, p.element});
+    Note({ParticleNoise::Impact, p.element, p.pos});
     return true;
   }
   return false;
@@ -856,6 +866,7 @@ void ParticleSystem::Clear() {
     p.active = false;
   m_hits.clear();
   m_flashes.clear();
+  m_noises.clear();
   m_visualFlashes.clear();
   m_cursors.clear();
   m_guides.clear();

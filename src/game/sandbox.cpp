@@ -1,6 +1,7 @@
 #include "whas/engine/view.h"
 #include "whas/game/sandbox.h"
 #include "imgui.h"
+#include "whas/audio/audio_manager.h"
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
@@ -99,8 +100,10 @@ Vector2 Sandbox::AimAtMouse() const {
 
 void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
   sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
-  if (cast.stats.HasFlight())
-    m_avatar.Launch(SpellSystem::FlightVelocity(cast.stats, cast.aim));
+  if (cast.stats.HasFlight()) {
+    m_avatar.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
+    AudioManager::EmitFlightLaunch(m_avatar.Center().x);
+  }
 }
 
 void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
@@ -139,6 +142,7 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
     // Time we couldn't keep up with is dropped, not owed
     m_accumulator = std::min(m_accumulator, TurnController::TICK_DT);
   }
+  m_trail.Update(&m_avatar, m_hasAvatar ? 1 : 0, GetFrameTime());
 
   state.clock = m_stopped ? ClockLook::Stopped : ClockLook::Running;
   state.clockProgress =
@@ -198,9 +202,11 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   if (!spell || !SpellSystem::Evaluate(*spell).valid)
     return;
   PlannedCast cast = PlannedCast::Local(*spell, AimAtMouse());
-  if (m_stopped)
+  if (m_stopped) {
     m_queued.push_back(std::move(cast));
-  else
+    if (AudioManager *audio = AudioManager::Instance())
+      audio->PlayUi(UiSound::SpellPlan);
+  } else
     Fire(sim, cast);
 }
 
@@ -233,6 +239,7 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                    const UIState &state) const {
   if (!m_hasAvatar)
     return;
+  m_trail.Draw();
   DrawCharacterBody(m_avatar, AVATAR_COLOR, true);
 
   float gravity = sim.GetConfig().world.gravity;

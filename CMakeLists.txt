@@ -101,6 +101,18 @@ set(SOURCES
     src/element/burning.cpp
     src/element/smoke.cpp
 
+    src/audio/audio_manager.cpp
+    src/audio/audio_observer.cpp
+    src/audio/synths/sand_synth.cpp
+    src/audio/synths/wind_synth.cpp
+    src/audio/synths/fire_synth.cpp
+    src/audio/synths/earth_synth.cpp
+    src/audio/synths/water_synth.cpp
+    src/audio/synths/light_synth.cpp
+    src/audio/synths/spell_synth.cpp
+    src/audio/synths/break_synth.cpp
+    src/audio/synths/flight_synth.cpp
+
     src/engine/simulation.cpp
     src/engine/renderer.cpp
     src/engine/view.cpp
@@ -109,6 +121,7 @@ set(SOURCES
     src/ui/spell_thumbnails.cpp
     src/ui/action_bar.cpp
     src/ui/play_menu.cpp
+    src/ui/audio_settings.cpp
 
     src/spell/spell_geometry.cpp
     src/spell/svg_library.cpp
@@ -129,6 +142,7 @@ set(SOURCES
     src/game/arena_gen.cpp
     src/game/character_draw.cpp
     src/game/sandbox.cpp
+    src/game/flight_trail.cpp
     src/game/replay.cpp
     src/game/replay_view.cpp
 
@@ -213,6 +227,7 @@ if(WHAS_BUILD_TESTS)
         tests/net_test.cpp
         tests/replay_test.cpp
         tests/bench_test.cpp
+        tests/audio_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
     target_compile_definitions(whas_tests PRIVATE WHAS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

@@ -5,6 +5,7 @@
 #include "rlImGui.h"
 #include "whas/constants.h"
 #include "whas/game/character.h"
+#include "whas/ui/audio_settings.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -282,6 +283,9 @@ void UI::DrawPropertyEditor(SimulationConfig &config) {
       ImGui::TreePop();
     }
   }
+
+  if (ImGui::CollapsingHeader("Audio"))
+    DrawAudioSettings(true);
 
   ImGui::End();
 }

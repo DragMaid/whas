@@ -4,6 +4,7 @@
 #include "whas/game/turn_controller.h"
 #include "whas/spell/spell_quant.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/widgets.h"
 #include <algorithm>
 #include <cmath>
 
@@ -86,7 +87,7 @@ void UI::DrawActionBar(UIState &state) {
       ImGui::SetCursorScreenPos({x, y});
       ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.30f, 0.45f, 0.85f, 1)
                                                 : ImVec4(0.16f, 0.16f, 0.22f, 1));
-      if (ImGui::Button(label, {TOGGLE_W, bh}))
+      if (Widgets::Button(label, {TOGGLE_W, bh}))
         state.tool = tool;
       ImGui::PopStyleColor();
       if (ImGui::IsItemHovered())
@@ -121,8 +122,10 @@ void UI::DrawTimeButton(UIState &state, ImVec2 pos, float size) {
   bool clickable = state.clock == ClockLook::Running ||
                    state.clock == ClockLook::Stopped ||
                    state.clock == ClockLook::Waiting;
-  if (ImGui::InvisibleButton("##time", {size, size}) && clickable)
+  if (ImGui::InvisibleButton("##time", {size, size}) && clickable) {
+    Widgets::Click();
     state.timeToggleRequested = true;
+  }
   bool hovered = ImGui::IsItemHovered();
 
   ImVec2 c{pos.x + size * 0.5f, pos.y + size * 0.5f};
@@ -195,7 +198,7 @@ void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
 
     ImGui::SetCursorScreenPos(p0);
     ImGui::PushID(i);
-    if (ImGui::InvisibleButton("##slot", {slotW, size.y})) {
+    if (Widgets::InvisibleButton("##slot", {slotW, size.y})) {
       SelectSlot(i);
       if (!m_gameMode)
         state.tool = SandboxTool::Cast;
@@ -313,7 +316,7 @@ void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
     bool selected = state.selectedMaterial == m.element;
     ImGui::SetCursorScreenPos(p0);
     ImGui::PushID(i);
-    if (ImGui::InvisibleButton("##mat", {w, p1.y - p0.y}))
+    if (Widgets::InvisibleButton("##mat", {w, p1.y - p0.y}))
       state.selectedMaterial = m.element;
     bool hovered = ImGui::IsItemHovered();
     ImGui::PopID();
@@ -340,7 +343,7 @@ void UI::DrawDeckPicker(UIState &state, ImVec2 pos, ImVec2 size) {
   constexpr float playW = 58.0f;
   ImGui::SetCursorScreenPos(pos);
   ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.32f, 0.12f, 1));
-  if (ImGui::Button("Play", {playW, 0}))
+  if (Widgets::Button("Play", {playW, 0}))
     state.menuRequested = true;
   ImGui::PopStyleColor();
   if (ImGui::IsItemHovered())
@@ -371,13 +374,13 @@ void UI::DrawDeckPicker(UIState &state, ImVec2 pos, ImVec2 size) {
   float by = pos.y + size.y - ImGui::GetFrameHeight();
   float half = (size.x - PAD) * 0.5f;
   ImGui::SetCursorScreenPos({pos.x, by});
-  if (ImGui::Button("Spells & decks", {m_gameMode ? size.x : half, 0}))
+  if (Widgets::Button("Spells & decks", {m_gameMode ? size.x : half, 0}))
     m_spellEditor.OpenLibrary();
   if (ImGui::IsItemHovered())
     ImGui::SetTooltip("Spell editor, library and decks  (E)");
   if (!m_gameMode) {
     ImGui::SameLine(0, PAD);
-    if (ImGui::Button("Reset avatar", {half, 0}))
+    if (Widgets::Button("Reset avatar", {half, 0}))
       state.resetAvatarRequested = true;
     if (ImGui::IsItemHovered())
       ImGui::SetTooltip("Full health, back where you last placed it.\n"

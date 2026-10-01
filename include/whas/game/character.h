@@ -56,12 +56,21 @@ struct Character {
   bool hasCursor = false;
   float TakeFlash() { return std::exchange(flash, 0.0f); }
 
+  // Riding wind underfoot, from take-off until landing. Only the trail and
+  // the sound read it, so like flash it stays out of the match hash.
+  bool flying = false;
+
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.
   void Step(const Simulation &sim, CharacterInput input, float dt);
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);
+  // A flight spell: launch and fly until landing
+  void LaunchFlight(Vector2 velocity) {
+    Launch(velocity);
+    flying = true;
+  }
 
   // One tick of burning against the current grid: gain or clear stacks and
   // take the damage. Deterministic, part of lockstep state.

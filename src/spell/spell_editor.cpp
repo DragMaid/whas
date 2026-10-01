@@ -4,6 +4,7 @@
 #include "whas/spell/glyph_docs.h"
 #include "whas/spell/spell_geometry.h"
 #include "whas/ui/spell_thumbnails.h"
+#include "whas/ui/widgets.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -1017,10 +1018,10 @@ void SpellEditor::DrawComponentPanel() {
   ImGui::TextDisabled("Strength: %.0f%%",
                       SpellSystem::ComponentEffectiveness(component.scale) *
                           100.0f);
-  if (ImGui::Button("Remove (Del)"))
+  if (Widgets::Button("Remove (Del)"))
     RemoveSelected();
   ImGui::SameLine();
-  if (ImGui::Button("Deselect (Esc)"))
+  if (Widgets::Button("Deselect (Esc)"))
     ClearSelection();
 }
 
@@ -1040,7 +1041,7 @@ void SpellEditor::DrawEditPanel() {
                         SpellSystem::ComponentEffectiveness(
                             m_ghostComponentScale) *
                             100.0f);
-    if (ImGui::Button("Put back (Esc)"))
+    if (Widgets::Button("Put back (Esc)"))
       ClearSelection();
     return;
   }
@@ -1074,7 +1075,7 @@ void SpellEditor::DrawEditPanel() {
     if (SpellSystem::SignInvertible(asset->id))
       ImGui::Checkbox("Inverted (F)", &m_ghostInverted);
 
-    if (ImGui::Button("Put back (Esc)"))
+    if (Widgets::Button("Put back (Esc)"))
       ClearSelection();
     return;
   }
@@ -1112,10 +1113,10 @@ void SpellEditor::DrawEditPanel() {
   if (SpellSystem::SignInvertible(asset->id))
     ImGui::Checkbox("Inverted (F)", &glyph.inverted);
 
-  if (ImGui::Button("Remove (Del)"))
+  if (Widgets::Button("Remove (Del)"))
     RemoveSelected();
   ImGui::SameLine();
-  if (ImGui::Button("Deselect (Esc)"))
+  if (Widgets::Button("Deselect (Esc)"))
     ClearSelection();
 }
 
@@ -1252,7 +1253,7 @@ void SpellEditor::DrawOverlay() {
                  m_selectedComponent >= 0;
   if (escape && holding && m_tab == Tab::Edit) {
     ClearSelection();
-  } else if (ImGui::Button("Close (Esc)") || escape) {
+  } else if (Widgets::Button("Close (Esc)") || escape) {
     m_open = false;
     ClearSelection();
   }
@@ -1286,10 +1287,10 @@ void SpellEditor::DrawOverlay() {
   ImGui::SetNextItemWidth(240);
   ImGui::InputText("Name", m_nameBuffer, SPELL_NAME_MAX_LEN + 1);
   ImGui::SameLine();
-  if (ImGui::Button("Save spell"))
+  if (Widgets::Button("Save spell"))
     SaveCurrent();
   ImGui::SameLine();
-  if (ImGui::Button("New")) {
+  if (Widgets::Button("New")) {
     m_currentSpell = {};
     m_nameBuffer[0] = '\0';
     ClearSelection();
@@ -1298,19 +1299,19 @@ void SpellEditor::DrawOverlay() {
   }
   ImGui::SameLine();
   ImGui::BeginDisabled(m_undo.empty());
-  if (ImGui::Button("Undo"))
+  if (Widgets::Button("Undo"))
     Undo();
   ImGui::EndDisabled();
   ImGui::SetItemTooltip("Ctrl+Z");
   ImGui::SameLine();
   ImGui::BeginDisabled(m_redo.empty());
-  if (ImGui::Button("Redo"))
+  if (Widgets::Button("Redo"))
     Redo();
   ImGui::EndDisabled();
   ImGui::SetItemTooltip("Ctrl+Y / Ctrl+Shift+Z");
   ImGui::SameLine();
   ImGui::BeginDisabled(!m_spells || !m_spells->Find(m_spells->RefOf(m_nameBuffer)));
-  if (ImGui::Button("Test in sandbox"))
+  if (Widgets::Button("Test in sandbox"))
     m_testRef = m_spells->RefOf(m_nameBuffer);
   ImGui::EndDisabled();
   if (!m_statusMessage.empty()) {

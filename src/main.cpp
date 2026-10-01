@@ -1,4 +1,6 @@
 #include "raylib.h"
+#include "whas/audio/audio_manager.h"
+#include "whas/audio/audio_observer.h"
 #include "whas/constants.h"
 #include "whas/engine/renderer.h"
 #include "whas/engine/simulation.h"
@@ -64,6 +66,7 @@ int main(int argc, char **argv) {
   SetWindowMinSize(WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2);
   SetExitKey(KEY_NULL); // Escape closes the spell editor, not the game
   SetTargetFPS(FPS);
+  InitAudioDevice();
 
   Simulation sim;
   Renderer renderer;
@@ -72,6 +75,11 @@ int main(int argc, char **argv) {
   Game game;
   Sandbox sandbox;
   ReplayView replay;
+  // Listens to the world; it only reads the simulation, so lockstep peers
+  // with and without sound stay in sync
+  AudioManager audio;
+  audio.Init();
+  AudioObserver soundscape;
 
   // --identity lets two copies on one machine play as different guests
   LockstepClient client;
@@ -143,6 +151,8 @@ int main(int argc, char **argv) {
       client.Update(sim, game.NetState());
       sandbox.Update(sim, ui, uiState);
     }
+    audio.Update();
+    soundscape.Update(sim, audio, GetFrameTime());
 
     BeginDrawing();
     ClearBackground(Color{8, 8, 11, 255}); // the bars beside the world
@@ -169,6 +179,8 @@ int main(int argc, char **argv) {
 
   client.Leave();
   UnloadCharacterSprites();
+  audio.Shutdown();
+  CloseAudioDevice();
   CloseWindow();
   return 0;
 }

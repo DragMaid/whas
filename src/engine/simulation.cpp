@@ -280,6 +280,8 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   if (stats.collectMax > 0)
     effect.bonusParticles = Collect(stats, origin);
   m_activeSpellEffects.push_back(effect);
+  if (effect.stats.kind == SpellKind::Element)
+    m_particles.Note({ParticleNoise::Cast, effect.stats.element, origin});
 }
 
 namespace {

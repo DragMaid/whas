@@ -1,4 +1,5 @@
 #include "whas/game/game.h"
+#include "whas/audio/audio_manager.h"
 #include "whas/game/character_draw.h"
 #include "imgui.h"
 #include "whas/constants.h"
@@ -318,6 +319,7 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
   state.resetAvatarRequested = false;
 
   Update(sim, ui);
+  m_trail.Update(m_match.characters.data(), Match::PLAYERS, GetFrameTime());
 
   switch (GetClockState()) {
   case ClockState::Waiting:
@@ -420,6 +422,8 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
                          : Vector2{(float)ghost.facing, 0.0f};
       switch (m_turn.QueueCast(MakeCast(*spell, aim))) {
       case TurnController::CastResult::Queued:
+        if (AudioManager *audio = AudioManager::Instance())
+          audio->PlayUi(UiSound::SpellPlan);
         break;
       case TurnController::CastResult::NoTime:
         Notify("Not enough time left in this turn to cast that", 2.0f);
@@ -491,6 +495,7 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
   bool planning = m_state == RoundState::Playing && !m_waiting &&
                   m_turn.GetPhase() == TurnController::Phase::Planning;
 
+  m_trail.Draw();
   for (int i = 0; i < (int)m_slots.size(); ++i) {
     const Slot &slot = m_slots[i];
     const Character &c = m_match.characters[i];
