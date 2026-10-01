@@ -141,6 +141,7 @@ set(SOURCES
     src/game/turn_controller.cpp
     src/game/match.cpp
     src/game/arena_gen.cpp
+    src/game/map.cpp
     src/game/character_draw.cpp
     src/game/sandbox.cpp
     src/game/flight_trail.cpp
@@ -229,6 +230,7 @@ if(WHAS_BUILD_TESTS)
         tests/replay_test.cpp
         tests/bench_test.cpp
         tests/audio_test.cpp
+        tests/map_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
     target_compile_definitions(whas_tests PRIVATE WHAS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

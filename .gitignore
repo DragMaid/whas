@@ -9,3 +9,5 @@ server/**/obj/
 server/**/TestResults/
 data/*.lock
 data/guest*.json
+data/maps/
+data/replays/
