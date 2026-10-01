@@ -154,6 +154,16 @@ public sealed class MatchActor
             reason = "server error";
         }
 
+        // Stored first, so a client fetching the replay on matchEnd gets the
+        // finished match
+        try
+        {
+            await PersistEndAsync(winner, status, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            _log.LogError(e, "match {Match} result not saved", MatchId);
+        }
         Broadcast("matchEnd", new { winner, reason, status = status.ToString(), roundsWon = _roundsWon });
         foreach (var s in _sessions)
             if (s is not null && s.Match == this)
@@ -161,7 +171,6 @@ public sealed class MatchActor
                 s.Match = null;
                 s.Slot = -1;
             }
-        await PersistEndAsync(winner, status, CancellationToken.None);
     }
 
     // ---- Events ------------------------------------------------------------
