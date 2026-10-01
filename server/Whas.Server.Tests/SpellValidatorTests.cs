@@ -13,6 +13,15 @@ public class SpellValidatorTests
         new("part", x, 0, scale, 0, glyphs);
 
     [Fact]
+    public void CountsSignsAgainstTheLimitPerCircle()
+    {
+        List<Glyph> full = [Sigil("water"), .. Enumerable.Repeat(Sign("column"), SpellValidator.MaxSigns)];
+        Assert.Null(SpellValidator.Check("full", full));
+        List<Glyph> over = [.. full, Sign("column")];
+        Assert.Contains("signs", SpellValidator.Check("over", over));
+    }
+
+    [Fact]
     public void AcceptsTheNewSignsAndTheDragon()
     {
         List<Glyph> glyphs =

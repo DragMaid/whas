@@ -4,7 +4,10 @@ namespace Whas.Server.Spells;
 // glyphs needs the SVG shapes and is only checked by the client editor.)
 public static class SpellValidator
 {
-    public const int MaxGlyphs = 32;
+    // Signs in one circle (spell_types.h SIGN_LIMIT); sigils have their own rules
+    public const int MaxSigns = 32;
+    // Glyphs in one circle, whatever kind: just a bound on message size
+    public const int MaxGlyphs = 256;
     public const int MaxNameLength = 32;
     const float OuterRadius = 250.0f;
     const float MinScale = 0.1f, MaxScale = 3.0f;
@@ -35,8 +38,10 @@ public static class SpellValidator
             return $"a layered spell holds 1-{SpellEvaluator.MaxComponents} spells";
         if (glyphs.Count > MaxGlyphs)
             return $"a ring has at most {MaxGlyphs} glyphs";
-        if (CheckGlyphs(glyphs, out int sigils, out _, out _) is { } bad)
+        if (CheckGlyphs(glyphs, out int sigils, out _, out int ringSigns) is { } bad)
             return bad;
+        if (ringSigns > MaxSigns)
+            return $"a circle has at most {MaxSigns} signs";
         if (sigils > 0)
             return "the outer ring holds signs only";
         foreach (var c in components)
@@ -68,6 +73,8 @@ public static class SpellValidator
             return $"a spell has 1-{MaxGlyphs} glyphs";
         if (CheckGlyphs(glyphs, out int sigils, out int shapes, out int signs) is { } bad)
             return bad;
+        if (signs > MaxSigns)
+            return $"a circle has at most {MaxSigns} signs";
         if (sigils < 1 || sigils > 4)
             return "a spell needs one sigil to fire (plus guidance and its target)";
         if (shapes > 1)
