@@ -3,6 +3,7 @@
 #include "whas/engine/renderer.h"
 #include "whas/engine/simulation.h"
 #include "whas/engine/view.h"
+#include "whas/game/character_draw.h"
 #include "whas/game/game.h"
 #include "whas/game/replay.h"
 #include "whas/game/replay_view.h"
@@ -167,6 +168,7 @@ int main(int argc, char **argv) {
   }
 
   client.Leave();
+  UnloadCharacterSprites();
   CloseWindow();
   return 0;
 }

@@ -82,6 +82,9 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   if (std::abs(pushX) < 0.1f)
     pushX = 0.0f;
   vel.x = dir * kTuning.walkSpeed * speedScale + pushX;
+  // The sprite turns with any sideways motion, launches and pushes included
+  if (vel.x != 0.0f)
+    look = vel.x > 0.0f ? 1 : -1;
 
   if (input.jump && grounded)
     vel.y = -kTuning.jumpSpeed * speedScale;

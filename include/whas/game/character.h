@@ -45,6 +45,11 @@ struct Character {
   // left out of the match hash; the game takes it with TakeFlash.
   float flash = 0.0f;
 
+  // Which way the sprite faces: the last way the body moved sideways. Only
+  // drawing reads it, so like flash it stays out of the match hash (facing,
+  // which aims casts, only follows walking input).
+  int look = 1;
+
   // Where the player's cursor is (cells), from the plan: sights set spells
   // follow it
   Vector2 cursor{0.0f, 0.0f};

@@ -2,5 +2,8 @@
 #include "whas/game/character.h"
 #include <raylib.h>
 
-// Body, facing eye, flames while burning and (optionally) the health bar
+// Animated sprite (idle / fly / fall, mirrored to face its way), flames while burning and (optionally) the health bar
 void DrawCharacterBody(const Character &c, Color color, bool drawHp);
+
+// Free the sprite sheets; call before CloseWindow
+void UnloadCharacterSprites();

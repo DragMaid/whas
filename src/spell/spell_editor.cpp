@@ -1,5 +1,4 @@
 #include "whas/spell/spell_editor.h"
-#include "whas/constants.h"
 #include "whas/engine/view.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"

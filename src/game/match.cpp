@@ -34,6 +34,7 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round) {
     c.id = i + 1; // hurtbox ids; 0 is never used
     c.pos = arena.spawns[i];
     c.facing = c.pos.x < GRID_W * 0.5f ? 1 : -1;
+    c.look = c.facing;
     c.maxHp = c.hp = MAX_HP;
     c.Step(sim, {}, 0.0f); // resolve grounded before the first plan
   }
