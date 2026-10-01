@@ -19,6 +19,7 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+#include <utility>
 
 // whasg --replay match.json [--verify]: re-simulate a stored match without a
 // window and check every turn against the hashes the players reported
@@ -102,9 +103,21 @@ int main(int argc, char **argv) {
       replay.DrawControls(sim);
   });
 
-  // --open maps|map-editor starts on that screen
+  // --open sandbox|duel|spells|spell-editor|maps|map-editor starts on that screen
+  bool startDuel = false;
   if (const char *screen = Arg(argc, argv, "--open")) {
-    if (std::strcmp(screen, "maps") == 0) {
+    if (std::strcmp(screen, "sandbox") == 0) {
+      menu.Close();
+    } else if (std::strcmp(screen, "spell-editor") == 0) {
+      menu.Close();
+      ui.OpenSpellEditor();
+    } else if (std::strcmp(screen, "spells") == 0) {
+      menu.Close();
+      ui.OpenSpellLibrary();
+    } else if (std::strcmp(screen, "duel") == 0) {
+      menu.Close();
+      startDuel = true;
+    } else if (std::strcmp(screen, "maps") == 0) {
       menu.Close();
       maps.Open();
     } else if (std::strcmp(screen, "map-editor") == 0) {
@@ -139,6 +152,8 @@ int main(int argc, char **argv) {
     }
     // A solo match: from the menu's setup, the gallery or the map editor
     std::optional<MatchOptions> practice = menu.TakePracticeRequest();
+    if (std::exchange(startDuel, false))
+      practice = MatchOptions{};
     if (std::optional<MapDef> map = maps.TakePlay(); map) {
       practice = MatchOptions{};
       practice->pool.push_back({std::move(map)});
@@ -168,7 +183,7 @@ int main(int argc, char **argv) {
     if (wasEditing && !editing && !game.IsActive())
       maps.Open();
     wasEditing = editing;
-    uiState.hideActionBar = editing;
+    uiState.hideActionBar = editing || menu.IsOpen();
     if (auto stored = menu.TakeReplay(); stored && !game.IsOnline()) {
       if (game.IsActive())
         game.SetActive(false, sim, ui);
