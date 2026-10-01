@@ -10,6 +10,7 @@ namespace {
 constexpr const char *kUiSoundFiles[] = {
     "assets/audios/button.mp3",
     "assets/audios/spell-plan.mp3",
+    "assets/audios/draw.mp3",
 };
 static_assert(std::size(kUiSoundFiles) == static_cast<size_t>(UiSound::COUNT));
 constexpr int kUiVoices = 4;

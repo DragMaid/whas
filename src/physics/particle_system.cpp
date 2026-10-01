@@ -128,8 +128,9 @@ bool TryImpact(Particle &p, Grid &grid, ElementContext &ctx, int tx, int ty) {
     ctx.particles.Note({ParticleNoise::Break, target.element, center});
   Element debris = granular ? target.element : RubbleOf(target.element);
   float temperature = target.temperature;
+  bool wasStatic = IsStaticCell(target, props);
   target = ElementFactory::Create(Element::AIR, ctx.config);
-  ctx.chunks.WakeChunkAt(tx, ty, ctx.frameIndex, props.staticTerrain);
+  ctx.chunks.WakeChunkAt(tx, ty, ctx.frameIndex, wasStatic);
   if (Particle *d = ctx.particles.Spawn(center, debrisVel, debris))
     d->temperature = temperature;
   return true;
@@ -195,7 +196,7 @@ void ReplaceCell(Grid &grid, ElementContext &ctx, int x, int y,
                  Element element) {
   Cell &c = grid.Get(x, y);
   bool wasStatic =
-      ctx.config.elements[static_cast<size_t>(c.element)].staticTerrain;
+      IsStaticCell(c, ctx.config.elements[static_cast<size_t>(c.element)]);
   float temperature = c.temperature;
   c = ElementFactory::Create(element, ctx.config);
   c.temperature = temperature;

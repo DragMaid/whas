@@ -208,7 +208,7 @@ void RigidBodySystem::UpdateWorldMeshes(Grid &grid, ElementContext &ctx) {
             // marked as static terrain, or if it's eligible for rigid-body
             // extraction but those bodies are not movable (therefore
             // effectively static).
-            if (cellProps.staticTerrain ||
+            if (IsStaticCell(c, cellProps) ||
                 (cellProps.rigidBodyCandidate && !cellProps.bodyMovable)) {
               mask[ly * CHUNK_SIZE + lx] = true;
               hasSolid = true;
@@ -437,7 +437,7 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
 
       // Only consider elements explicitly marked as rigid-body candidates
       // for extraction into Box2D bodies.
-      if (!props.rigidBodyCandidate)
+      if (!props.rigidBodyCandidate || (cell.flags & CELL_ANCHORED))
         continue;
 
       // bodyID == -1 → never-been-a-body rigid pixel (freshly painted)

@@ -47,6 +47,8 @@ public:
 
   void Paint(int cx, int cy, Element element, int brushRadius);
   void Erase(int cx, int cy, int brushRadius);
+  // Hold a rigid cell (rock, ice) in place as terrain; see CELL_ANCHORED
+  void Anchor(int x, int y);
   // Empty the world: every cell, particle and in-flight spell
   void Reset();
   // A brand-new world regardless of history: frame counter, chunks, rigid

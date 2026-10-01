@@ -334,8 +334,7 @@ Arena Generate(Simulation &sim, uint64_t seed, Biome biome) {
         e = Element::ROCK;
       Set(sim, x, y, e);
     }
-    // Rock is a rigid body: the bed runs on down behind the toolbar to the
-    // bottom of the grid, so it has nothing to fall into
+    // The bed runs on down behind the toolbar to the bottom of the grid
     for (int y = FLOOR_BOTTOM + 1; y < GRID_H; ++y)
       sim.Paint(x, y, Element::ROCK, 0);
   }
@@ -366,6 +365,13 @@ Arena Generate(Simulation &sim, uint64_t seed, Biome biome) {
   default:
     break;
   }
+
+  // Terrain rock stays put like the earth around it, instead of bodies that
+  // settle and wobble (and thump) all round long
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (sim.GetCell(x, y).element == Element::ROCK)
+        sim.Anchor(x, y);
 
   Arena arena;
   arena.biome = biome;

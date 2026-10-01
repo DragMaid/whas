@@ -1,4 +1,5 @@
 #include "whas/spell/spell_editor.h"
+#include "whas/audio/audio_manager.h"
 #include "whas/engine/view.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"
@@ -807,7 +808,10 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
 
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
     if (m_isPlacing) {
-      TryPlaceAt(spellMouse);
+      // A sign, sigil or component drawn onto the circle
+      if (TryPlaceAt(spellMouse))
+        if (AudioManager *audio = AudioManager::Instance())
+          audio->PlayUi(UiSound::Draw);
     } else if (!TrySelectAt(spellMouse)) {
       ClearSelection();
     }

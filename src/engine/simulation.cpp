@@ -323,7 +323,7 @@ int Simulation::Collect(const SpellStats &stats, Vector2 origin) {
       if (!Collectable(stats.element, c))
         continue;
       bool wasStatic =
-          m_config.elements[static_cast<size_t>(c.element)].staticTerrain;
+          IsStaticCell(c, m_config.elements[static_cast<size_t>(c.element)]);
       c = ElementFactory::Create(Element::AIR, m_config);
       m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
       taken++;
@@ -348,6 +348,16 @@ void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
   }
 }
 
+void Simulation::Anchor(int x, int y) {
+  if (!m_grid.InBounds(x, y))
+    return;
+  Cell &c = m_grid.Get(x, y);
+  if (!m_config.elements[static_cast<size_t>(c.element)].rigidBodyCandidate)
+    return;
+  c.flags |= CELL_ANCHORED;
+  m_chunks.WakeChunkAt(x, y, m_frameCounter, true);
+}
+
 void Simulation::Erase(int cx, int cy, int brushRadius) {
   for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
     for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
@@ -358,7 +368,7 @@ void Simulation::Erase(int cx, int cy, int brushRadius) {
         continue;
       const Cell &c = m_grid.Get(x, y);
       const auto &props = m_config.elements[static_cast<size_t>(c.element)];
-      bool wasStatic = props.staticTerrain;
+      bool wasStatic = IsStaticCell(c, props);
       m_grid.Get(x, y) = ElementFactory::Create(Element::AIR, m_config);
       m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
     }

@@ -9,7 +9,7 @@
 #include <vector>
 
 // Recorded sounds for the interface; the files are listed in audio_manager.cpp
-enum class UiSound : uint8_t { Button, SpellPlan, COUNT };
+enum class UiSound : uint8_t { Button, SpellPlan, Draw, COUNT };
 
 // Volumes the player can change (main thread; pushed to the mixer in Update)
 struct AudioSettings {
