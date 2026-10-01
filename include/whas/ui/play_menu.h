@@ -1,4 +1,5 @@
 #pragma once
+#include "whas/game/replay_store.h"
 #include "whas/net/lockstep_client.h"
 #include "imgui.h"
 #include "whas/ui/map_gallery.h"
@@ -40,7 +41,8 @@ private:
   void DrawOnline();
   void DrawSoloSetup();
   void DrawRoomSetup();
-  void DrawHistory();
+  void DrawReplays();
+  void KeepReplays();
   void SyncLibrary();
   std::string ApiBase() const;
 
@@ -57,9 +59,14 @@ private:
   char m_url[128] = "ws://localhost:8080/ws";
   char m_code[8]{};
 
-  std::future<std::optional<nlohmann::json>> m_historyRequest;
-  std::optional<nlohmann::json> m_history;
-  std::future<std::optional<nlohmann::json>> m_replayRequest;
-  std::optional<nlohmann::json> m_replay;
+  std::optional<nlohmann::json> m_replay; // to watch
+  // Saving the last finished match's replay
+  std::future<std::optional<nlohmann::json>> m_replayDownload;
+  int64_t m_savedMatch = 0;
+  int m_saveSlot = 0;
+  int m_saveWinner = -1;
+  std::vector<ReplayStore::Entry> m_replays;
+  bool m_replaysLoaded = false;
+  std::string m_confirmDelete;
   std::string m_status;
 };

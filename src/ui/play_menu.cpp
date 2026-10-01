@@ -1,5 +1,6 @@
 #include "whas/engine/view.h"
 #include "whas/ui/play_menu.h"
+#include "whas/game/replay_store.h"
 #include "imgui.h"
 #include "whas/constants.h"
 #include "whas/ui/ui.h"
@@ -8,6 +9,7 @@
 #include "whas/ui/widgets.h"
 #include <cfloat>
 #include <chrono>
+#include <ctime>
 #include <cstring>
 
 using Theme::Tone;
@@ -58,19 +60,31 @@ void PlayMenu::SyncLibrary() {
   m_client.SetLibrary(std::move(lib));
 }
 
+void PlayMenu::KeepReplays() {
+  // Every finished online match is downloaded once and kept on this machine
+  int64_t id = m_client.MatchId();
+  if (m_client.GetPhase() == LockstepClient::Phase::MatchOver && id != 0 &&
+      id != m_savedMatch && !m_replayDownload.valid()) {
+    m_savedMatch = id;
+    m_saveSlot = m_client.Slot();
+    m_saveWinner = m_client.MatchWinner();
+    m_replayDownload = NetClient::GetJsonAsync(
+        ApiBase() + "/matches/" + std::to_string(id) + "/replay", m_client.Token());
+  }
+  if (!Ready(m_replayDownload))
+    return;
+  std::optional<nlohmann::json> replay = m_replayDownload.get();
+  std::string error;
+  if (replay && ReplayStore::Save(std::move(*replay), m_saveSlot, m_saveWinner, error)) {
+    m_status = "Replay saved";
+    m_replaysLoaded = false;
+  } else {
+    m_status = "Couldn't download the replay" + (error.empty() ? "" : ": " + error);
+  }
+}
+
 void PlayMenu::Draw() {
-  if (Ready(m_historyRequest)) {
-    m_history = m_historyRequest.get();
-    if (!m_history)
-      m_status = "Couldn't load match history";
-  }
-  if (Ready(m_replayRequest)) {
-    m_replay = m_replayRequest.get();
-    if (!m_replay)
-      m_status = "Couldn't load that replay";
-    else
-      m_open = false;
-  }
+  KeepReplays();
   // Server replies and errors ("that's your own lobby"...) while not in a
   // match; in a match the game shows them
   if (!m_client.InMatch())
@@ -218,7 +232,7 @@ void PlayMenu::DrawPage(ImVec2 pos, float width) {
     break;
   case Page::Replays:
     Widgets::Title("Replays");
-    DrawHistory();
+    DrawReplays();
     break;
   case Page::Settings:
     Widgets::Title("Settings");
@@ -344,77 +358,85 @@ void PlayMenu::DrawRoomSetup() {
   }
 }
 
-void PlayMenu::DrawHistory() {
-  if (m_client.GetPhase() == LockstepClient::Phase::Offline) {
-    ImGui::TextDisabled("Connect to a server (Online Duel) to see your matches.");
+void PlayMenu::DrawReplays() {
+  if (!m_replaysLoaded) {
+    m_replays = ReplayStore::List();
+    m_replaysLoaded = true;
+  }
+  ImGui::TextWrapped("Every online match you finish is saved here, on this "
+                     "machine only.");
+  if (m_replays.empty()) {
+    ImGui::Spacing();
+    ImGui::TextDisabled("No replays yet.");
     return;
   }
-  if (Widgets::Button(m_history ? "Refresh" : "Load my matches") &&
-      !m_historyRequest.valid())
-    m_historyRequest = NetClient::GetJsonAsync(ApiBase() + "/players/me/matches",
-                                               m_client.Token());
-  if (m_historyRequest.valid()) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("loading...");
-  }
-  if (!m_history || !m_history->is_array())
-    return;
-  if (m_history->empty()) {
-    ImGui::TextDisabled("No matches yet");
-    return;
-  }
-
   int wins = 0, losses = 0;
-  for (const auto &m : *m_history) {
-    if (m.value("status", "") == "Running")
-      continue;
-    (m.value("won", false) ? wins : losses) += !m.value("draw", false);
+  for (const ReplayStore::Entry &e : m_replays) {
+    wins += e.result > 0;
+    losses += e.result < 0;
   }
-  ImGui::Text("Last %d matches: %d won, %d lost", (int)m_history->size(), wins,
-              losses);
+  ImGui::TextDisabled("%d saved  -  %d won, %d lost", (int)m_replays.size(), wins,
+                      losses);
+  ImGui::Spacing();
 
-  if (ImGui::BeginTable("history", 4,
-                        ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY,
-                        {0, 180})) {
-    ImGui::TableSetupColumn("Match");
-    ImGui::TableSetupColumn("Result");
-    ImGui::TableSetupColumn("Rounds");
-    ImGui::TableSetupColumn("");
-    ImGui::TableHeadersRow();
-    for (const auto &m : *m_history) {
-      int64_t id = m.value("matchId", int64_t{0});
-      ImGui::TableNextRow();
-      ImGui::TableNextColumn();
-      ImGui::Text("#%lld %s", (long long)id, m.value("mode", "").c_str());
-      ImGui::TableNextColumn();
-      std::string status = m.value("status", "");
-      if (status == "Running")
-        ImGui::TextDisabled("running");
-      else if (status == "Voided")
-        ImGui::TextDisabled("void");
-      else if (m.value("draw", false))
-        ImGui::Text("draw");
-      else if (m.value("won", false))
-        ImGui::TextColored(Theme::Vec(Tone::Moss), "won%s",
-                           status == "Forfeit" ? " (forfeit)" : "");
+  float height = std::min(420.0f * View::UiScale(),
+                          (m_replays.size() + 1) * ImGui::GetFrameHeightWithSpacing() + 8);
+  if (!ImGui::BeginTable("replays", 5,
+                         ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+                             ImGuiTableFlags_BordersInnerH,
+                         {0, height}))
+    return;
+  ImGui::TableSetupScrollFreeze(0, 1);
+  ImGui::TableSetupColumn("Played");
+  ImGui::TableSetupColumn("Against");
+  ImGui::TableSetupColumn("Result");
+  ImGui::TableSetupColumn("Maps");
+  ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 150.0f * View::UiScale());
+  ImGui::TableHeadersRow();
+  std::string removed;
+  for (const ReplayStore::Entry &e : m_replays) {
+    ImGui::PushID(e.path.c_str());
+    ImGui::TableNextRow();
+    ImGui::TableNextColumn();
+    ImGui::AlignTextToFramePadding();
+    std::time_t when = static_cast<std::time_t>(e.savedAt);
+    char date[32] = "-";
+    if (e.savedAt > 0)
+      std::strftime(date, sizeof date, "%d %b %H:%M", std::localtime(&when));
+    ImGui::TextUnformatted(date);
+    ImGui::TableNextColumn();
+    ImGui::Text("guest #%lld", (long long)e.opponentId);
+    ImGui::TableNextColumn();
+    Tone tone = e.result > 0 ? Tone::Moss : e.result < 0 ? Tone::Oxblood : Tone::Muted;
+    ImGui::TextColored(Theme::Vec(tone), "%s  %d-%d",
+                       e.result > 0 ? "won" : e.result < 0 ? "lost" : "draw",
+                       e.roundsWon[e.slot], e.roundsWon[1 - e.slot]);
+    ImGui::TableNextColumn();
+    std::string maps;
+    for (const std::string &m : e.maps)
+      maps += (maps.empty() ? "" : ", ") + m;
+    ImGui::TextDisabled("%s", maps.empty() ? "Random arenas" : maps.c_str());
+    ImGui::TableNextColumn();
+    if (Widgets::SmallButton("Watch")) {
+      m_replay = ReplayStore::Load(e.path);
+      if (m_replay)
+        m_open = false;
       else
-        ImGui::TextColored(Theme::Vec(Tone::Oxblood), "lost%s",
-                           status == "Forfeit" ? " (forfeit)" : "");
-      ImGui::TableNextColumn();
-      if (m.contains("roundsWon") && m["roundsWon"].size() == 2) {
-        int slot = m.value("slot", 0);
-        ImGui::Text("%d - %d", m["roundsWon"][slot].get<int>(),
-                    m["roundsWon"][1 - slot].get<int>());
-      }
-      ImGui::TableNextColumn();
-      ImGui::PushID((int)id);
-      if (status != "Running" && Widgets::SmallButton("Replay") &&
-          !m_replayRequest.valid())
-        m_replayRequest = NetClient::GetJsonAsync(
-            ApiBase() + "/matches/" + std::to_string(id) + "/replay",
-            m_client.Token());
-      ImGui::PopID();
+        m_status = "Couldn't read that replay";
     }
-    ImGui::EndTable();
+    ImGui::SameLine();
+    if (m_confirmDelete == e.path) {
+      if (Widgets::SmallButton("Sure?"))
+        removed = e.path;
+    } else if (Widgets::SmallButton("Delete")) {
+      m_confirmDelete = e.path;
+    }
+    ImGui::PopID();
+  }
+  ImGui::EndTable();
+  if (!removed.empty()) {
+    ReplayStore::Remove(removed);
+    m_confirmDelete.clear();
+    m_replaysLoaded = false;
   }
 }
