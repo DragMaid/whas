@@ -297,14 +297,9 @@ void MapEditor::DrawBrush() {
   int n = 0;
   for (Element e : kBrushElements) {
     ImGui::PushID(static_cast<int>(e));
-    bool on = m_brushElement == e;
-    if (on)
-      ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
     const char *label = e == Element::AIR ? "Erase" : ElementName(e);
-    if (Widgets::Button(label, {96.0f * View::UiScale(), 0}))
+    if (Widgets::Button(label, {96.0f * View::UiScale(), 0}, m_brushElement == e))
       m_brushElement = e;
-    if (on)
-      ImGui::PopStyleColor();
     ImGui::PopID();
     if (++n % 3 != 0)
       ImGui::SameLine();

@@ -6,6 +6,7 @@
 #include "whas/constants.h"
 #include "whas/game/character.h"
 #include "whas/ui/audio_settings.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -45,7 +46,10 @@ constexpr float kParticleGravity = 20.0f;
 } // namespace
 
 UI::UI() {
+  rlImGuiSetLoadFontsCallback(Theme::LoadImGuiFonts);
   rlImGuiSetup(true);
+  Theme::Apply(ImGui::GetStyle());
+  Theme::LoadRaylibFonts();
   m_baseStyle = ImGui::GetStyle();
   m_library.Load();
   std::vector<std::string> starter;
@@ -59,6 +63,7 @@ UI::UI() {
 
 UI::~UI() {
   m_thumbnails.reset(); // textures before the GL context goes
+  Theme::UnloadRaylibFonts();
   rlImGuiShutdown();
 }
 

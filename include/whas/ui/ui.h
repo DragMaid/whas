@@ -66,6 +66,7 @@ public:
   bool IsBlockingWorldInput() const;
 
   void OpenSpellLibrary() { m_spellEditor.OpenLibrary(); }
+  void OpenSpellEditor() { m_spellEditor.Open(); }
 
   // Game mode hands the mouse to the character instead of the sandbox tools
   void SetGameMode(bool enabled);

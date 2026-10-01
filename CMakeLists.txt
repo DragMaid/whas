@@ -119,6 +119,8 @@ set(SOURCES
     src/engine/view.cpp
 
     src/ui/ui.cpp
+    src/ui/theme.cpp
+    src/ui/widgets.cpp
     src/ui/spell_thumbnails.cpp
     src/ui/action_bar.cpp
     src/ui/play_menu.cpp

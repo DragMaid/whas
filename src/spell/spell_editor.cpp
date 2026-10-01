@@ -6,6 +6,7 @@
 #include "whas/spell/spell_geometry.h"
 #include "whas/ui/spell_thumbnails.h"
 #include "whas/ui/widgets.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -27,6 +28,8 @@ bool SpellEditor::TakeTestRequest(std::string &ref) {
   m_testRef.clear();
   return true;
 }
+
+using Theme::Tone;
 
 namespace {
 
@@ -87,7 +90,7 @@ const char *KindLabel(const SpellStats &stats) {
 
 void DrawProblem(const char *problem) {
   ImGui::PushTextWrapPos(0.0f);
-  ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%s", problem);
+  ImGui::TextColored(Theme::Vec(Tone::Oxblood), "%s", problem);
   ImGui::PopTextWrapPos();
 }
 
@@ -108,7 +111,7 @@ void DrawLayeredStats(const SpellStats &stats, const char *problem) {
                      stats.offsetRad * RAD2DEG);
   int ticks = TurnController::CastTicks(stats);
   if (ticks > TurnController::TURN_TICKS)
-    ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+    ImGui::TextColored(Theme::Vec(Tone::Oxblood),
                        "Cast: %.2fs, longer than a turn",
                        ticks * TurnController::TICK_DT);
   else
@@ -182,7 +185,7 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
     // collection draws in more (when there's that much nearby)
     int need = SpellShapes::MaterialNeeded(shape, stats.diameter);
     if (need > stats.particleCount + stats.collectMax)
-      ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.3f, 1.0f),
+      ImGui::TextColored(Theme::Vec(Tone::Brass),
                          "Needs %d %s, has %d%s: it'll be cut short.\n"
                          "Add collection signs (or a bigger sigil).",
                          need, ElementName(stats.element), stats.particleCount,
@@ -291,7 +294,7 @@ void GlyphTooltip(const SvgAsset &asset) {
   GlyphDocs::Info info = GlyphDocs::Get(asset.id);
   ImGui::BeginTooltip();
   ImGui::PushTextWrapPos(ImGui::GetFontSize() * 24.0f);
-  ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.5f, 1.0f), "%s",
+  ImGui::TextColored(Theme::Vec(Tone::Brass), "%s",
                      info.name ? info.name : asset.id.c_str());
   ImGui::SameLine();
   ImGui::TextDisabled(asset.kind == GlyphKind::Sigil ? "sigil" : "sign");
@@ -334,13 +337,13 @@ void SpellEditor::DrawAssetThumbnail(const SvgAsset &asset, bool selected) {
   ImDrawList *dl = ImGui::GetWindowDrawList();
   ImVec2 p0 = ImGui::GetItemRectMin();
   ImVec2 p1 = ImGui::GetItemRectMax();
-  dl->AddRectFilled(p0, p1, IM_COL32(255, 255, 255, 255), 4.0f);
+  dl->AddRectFilled(p0, p1, IM_COL32(236, 226, 200, 255), 4.0f);
   if (selected || onCanvas)
-    dl->AddRect(p0, p1, selected ? IM_COL32(255, 190, 70, 255)
-                                 : IM_COL32(80, 200, 80, 255),
+    dl->AddRect(p0, p1, selected ? Theme::U32(Tone::Brass)
+                                 : Theme::U32(Tone::Verdigris),
                 4.0f, 0, 3.0f);
   else
-    dl->AddRect(p0, p1, IM_COL32(80, 80, 80, 255), 4.0f);
+    dl->AddRect(p0, p1, Theme::U32(Tone::Line), 4.0f);
 
   float pad = 8.0f * ui;
   float availW = size.x - pad * 2;
@@ -355,7 +358,7 @@ void SpellEditor::DrawAssetThumbnail(const SvgAsset &asset, bool selected) {
                                               scale, 0.0f);
     dl->AddLine({thumbCenter.x + a.x, thumbCenter.y + a.y},
                 {thumbCenter.x + b.x, thumbCenter.y + b.y},
-                IM_COL32(0, 0, 0, 255), 1.5f * ui);
+                IM_COL32(34, 24, 16, 255), 1.5f * ui);
   }
 
   const char *name = GlyphDocs::Get(asset.id).name;
@@ -470,8 +473,8 @@ void SpellEditor::DrawHints(ImDrawList *dl, ImVec2 canvasOrigin,
   ImVec2 size = ImGui::CalcTextSize(text.c_str());
   ImVec2 p{canvasOrigin.x + 8, canvasOrigin.y + canvasSize.y - size.y - 8};
   dl->AddRectFilled({p.x - 4, p.y - 2}, {p.x + size.x + 4, p.y + size.y + 2},
-                    IM_COL32(20, 20, 28, 200), 4.0f);
-  dl->AddText(p, IM_COL32(200, 205, 225, 255), text.c_str());
+                    Theme::U32(Tone::Ink, 0.8f), 4.0f);
+  dl->AddText(p, Theme::U32(Tone::Parchment), text.c_str());
 }
 
 void SpellEditor::RemoveSelected() {
@@ -661,7 +664,7 @@ void SpellEditor::DrawComponent(ImDrawList *dl,
   float r = SpellGeometry::ComponentRadius(component.scale);
   r *= m_zoom;
   AddArrow(dl, {c.x + dir.x * r, c.y + dir.y * r}, dir, 14.0f * m_zoom,
-           IM_COL32(90, 90, 200, 200), 2.0f);
+           Theme::U32(Tone::Verdigris, 0.8f), 2.0f);
 }
 
 namespace {
@@ -723,17 +726,17 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
   ImVec2 circleCenter = {canvasOrigin.x + canvasCenter.x,
                          canvasOrigin.y + canvasCenter.y};
 
-  dl->AddRectFilled(canvasOrigin, canvasEnd, IM_COL32(40, 40, 50, 255));
+  dl->AddRectFilled(canvasOrigin, canvasEnd, Theme::U32(Tone::Ink));
 
   dl->AddCircleFilled(circleCenter, (SPELL_OUTER_RADIUS + 6.0f) * m_zoom,
-                      IM_COL32(255, 255, 255, 255));
+                      IM_COL32(236, 226, 200, 255));
   // The spell's own rings; the embedded spells draw theirs below, in their
   // selection colours. In a layered spell the core holds the embedded
   // spells and the band around it the ring signs.
   auto rings = SpellGeometry::Rings(m_currentSpell);
   size_t ownRings = rings.size() - 2 * m_currentSpell.components.size();
   for (size_t i = 0; i < ownRings; ++i)
-    AddRing(dl, rings[i], circleCenter, m_zoom, IM_COL32(0, 0, 0, 255),
+    AddRing(dl, rings[i], circleCenter, m_zoom, IM_COL32(34, 24, 16, 255),
             3.0f * rings[i].weight);
 
   for (size_t i = 0; i < m_currentSpell.components.size(); ++i) {
@@ -741,9 +744,9 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     bool valid = SpellGeometry::IsComponentPlacementValid(
         component, m_currentSpell, i);
     bool selected = static_cast<int>(i) == m_selectedComponent;
-    ImU32 color = !valid    ? IM_COL32(220, 40, 40, 255)
-                  : selected ? IM_COL32(80, 200, 80, 255)
-                             : IM_COL32(0, 0, 0, 255);
+    ImU32 color = !valid    ? Theme::U32(Tone::Oxblood)
+                  : selected ? Theme::U32(Tone::Verdigris)
+                             : IM_COL32(34, 24, 16, 255);
     DrawComponent(dl, component, canvasOrigin, canvasCenter, color);
   }
 
@@ -757,9 +760,9 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     bool valid = IsPlacementValid(glyph, i);
     ImU32 color;
     if (static_cast<int>(i) == m_selectedGlyphIndex) {
-      color = valid ? IM_COL32(80, 200, 80, 255) : IM_COL32(220, 40, 40, 255);
+      color = valid ? Theme::U32(Tone::Verdigris) : Theme::U32(Tone::Oxblood);
     } else {
-      color = valid ? IM_COL32(0, 0, 0, 255) : IM_COL32(220, 40, 40, 255);
+      color = valid ? IM_COL32(34, 24, 16, 255) : Theme::U32(Tone::Oxblood);
     }
     DrawGlyphLines(dl, *asset, glyph, canvasOrigin, canvasCenter, color, 2.0f);
   }
@@ -781,7 +784,7 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
       bool valid = CanAddComponent() && SpellGeometry::IsComponentPlacementValid(
                                             *ghost, m_currentSpell);
       DrawComponent(dl, *ghost, canvasOrigin, canvasCenter,
-                    valid ? IM_COL32(0, 0, 0, 150) : IM_COL32(220, 40, 40, 180));
+                    valid ? IM_COL32(34, 24, 16, 150) : Theme::U32(Tone::Oxblood, 0.7f));
       if (valid) {
         m_previewSpell = m_currentSpell;
         m_previewSpell->components.push_back(*ghost);
@@ -796,7 +799,7 @@ void SpellEditor::DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize) {
     if (asset && ghost && canvasHovered) {
       bool valid = IsPlacementValid(*ghost, std::nullopt);
       ImU32 ghostColor =
-          valid ? IM_COL32(0, 0, 0, 180) : IM_COL32(220, 40, 40, 200);
+          valid ? IM_COL32(34, 24, 16, 180) : Theme::U32(Tone::Oxblood, 0.8f);
       DrawGlyphLines(dl, *asset, *ghost, canvasOrigin, canvasCenter,
                      ghostColor, 2.0f);
       if (valid) {
@@ -853,7 +856,7 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
   dl->AddTriangleFilled({aimMark.x, aimMark.y - 8.0f},
                         {aimMark.x - 6.0f, aimMark.y + 4.0f},
                         {aimMark.x + 6.0f, aimMark.y + 4.0f},
-                        IM_COL32(90, 90, 200, 200));
+                        Theme::U32(Tone::Verdigris, 0.8f));
 
   // Only column signs push; the other signs have no direction
   for (const auto &glyph : m_currentSpell.glyphs) {
@@ -863,7 +866,7 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
     ImVec2 dir{std::sin(rad), -std::cos(rad)};
     ImVec2 from = SpellToCanvasSpace(canvasOrigin, canvasCenter, glyph.position);
     AddArrow(dl, from, dir, 30.0f * glyph.scale * m_zoom,
-             IM_COL32(70, 110, 220, 200),
+             Theme::U32(Tone::Verdigris, 0.8f),
              2.0f);
   }
 
@@ -978,7 +981,7 @@ void SpellEditor::DrawSpellPalette() {
     ImVec2 p0 = ImGui::GetItemRectMin();
     ImVec2 p1 = ImGui::GetItemRectMax();
     ImDrawList *dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(p0, p1, IM_COL32(26, 26, 36, 255));
+    dl->AddRectFilled(p0, p1, Theme::U32(Tone::Soot));
     if (m_thumbnails)
       m_thumbnails->Draw(dl, spell, {p0.x + 4, p0.y + 4},
                          {p1.x - 4, p1.y - 4});
@@ -1167,9 +1170,9 @@ namespace {
 void DrawStatChanges(const Spell &beforeSpell, const Spell &afterSpell) {
   SpellStats a = SpellSystem::Evaluate(beforeSpell);
   SpellStats b = SpellSystem::Evaluate(afterSpell);
-  const ImVec4 good{0.45f, 0.9f, 0.45f, 1.0f};
-  const ImVec4 bad{1.0f, 0.45f, 0.4f, 1.0f};
-  const ImVec4 neutral{0.6f, 0.75f, 1.0f, 1.0f};
+  const ImVec4 good = Theme::Vec(Tone::Moss);
+  const ImVec4 bad = Theme::Vec(Tone::Oxblood);
+  const ImVec4 neutral = Theme::Vec(Tone::Verdigris);
   if (a.valid != b.valid)
     ImGui::TextColored(b.valid ? good : bad, "%s",
                        b.valid ? "Now a working spell"
@@ -1240,7 +1243,7 @@ void SpellEditor::DrawOverlay() {
   ImGui::SetNextWindowPos({0, 0});
   ImGui::SetNextWindowSize(
       {(float)GetScreenWidth(), (float)GetScreenHeight()});
-  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.08f, 0.96f));
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, Theme::Vec(Tone::Ink, 0.97f));
   ImGui::Begin("SpellEditorOverlay", nullptr,
                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
@@ -1320,7 +1323,7 @@ void SpellEditor::DrawOverlay() {
   ImGui::EndDisabled();
   if (!m_statusMessage.empty()) {
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.6f, 1.0f, 0.6f, 1.0f), "%s",
+    ImGui::TextColored(Theme::Vec(Tone::Moss), "%s",
                        m_statusMessage.c_str());
   }
 
