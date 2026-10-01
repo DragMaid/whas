@@ -79,7 +79,8 @@ public:
 
   void SetLibrary(Library library) { m_library = std::move(library); }
   void QuickMatch();
-  void CreateLobby();
+  // The room plays by these options (map pool, modes)
+  void CreateLobby(const MatchOptions &options = {});
   void JoinLobby(const std::string &code);
   void Rejoin();
   void CancelWaiting();
@@ -101,6 +102,7 @@ public:
   int Turn() const { return m_turn; }
   int ExecutedTicks() const { return m_execTick; }
   uint64_t Seed() const { return m_seed; }
+  const MatchOptions &Options() const { return m_options; }
   int64_t MatchId() const { return m_matchId; }
   int64_t PlayerId() const { return m_playerId; }
   const std::string &Token() const { return m_token; }
@@ -133,6 +135,7 @@ private:
                   Match::State &state);
   bool DecodePlan(const std::string &text, int slot, TurnPlan &plan);
   void ReportHash(Simulation &sim, Match::State &state);
+  void ReadOptions(const nlohmann::json &msg);
   void CatchUp(const nlohmann::json &msg, Simulation &sim, Match::State &state);
   void Notice(std::string text);
   void LoadIdentity();
@@ -166,6 +169,8 @@ private:
   std::string m_lobbyCode;
   int64_t m_matchId = 0;
   uint64_t m_seed = 0;
+  MatchOptions m_options;      // of the running match
+  MatchOptions m_lobbyOptions; // sent with createLobby
   int m_slot = -1;
   int m_round = 0;
   int m_turn = 0;

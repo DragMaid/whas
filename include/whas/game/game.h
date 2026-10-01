@@ -22,8 +22,11 @@ public:
   bool IsActive() const { return m_active; }
   void SetActive(bool active, Simulation &sim, UI &ui);
 
-  // Start a fresh match (new arena from the seed, round 1)
-  void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0);
+  // Start a fresh match (round 1 on the options' first map, or a new arena
+  // from the seed)
+  void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0,
+                  MatchOptions options = {});
+  const MatchOptions &Options() const { return m_options; }
 
   // Online: the client runs the turn flow (the server's clock, both plans,
   // hashes); the game lets the local player plan in between and shows it
@@ -91,6 +94,7 @@ private:
   bool m_arenaReady = false;
   int m_local = 0;
   Match::State m_match;
+  MatchOptions m_options; // offline; online uses the client's
   std::array<Slot, Match::PLAYERS> m_slots{};
   std::array<int, Match::PLAYERS> m_roundsWon{};
   std::array<Vector2, Match::PLAYERS> m_spawns{};

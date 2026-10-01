@@ -48,6 +48,7 @@ private:
 
   int64_t m_matchId = 0;
   uint64_t m_seed = 0;
+  MatchOptions m_options;
   std::string m_buildId;
   std::vector<TurnRecord> m_turns;
   Match::State m_state;

@@ -2,6 +2,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
 #include "whas/game/map.h"
+#include "whas/game/match.h"
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
@@ -88,4 +89,34 @@ TEST_CASE("generator knobs at their defaults change nothing", "[arena]") {
   params.waterRise = 6;
   ArenaGen::Generate(c, 321, params);
   REQUIRE(c.StateHash() != a.StateHash());
+}
+
+TEST_CASE("rounds rotate through the map pool", "[map]") {
+  MatchOptions options;
+  MapSpec custom;
+  custom.custom = GeneratedMap(42);
+  custom.custom->spawns = {Vector2{60, 20}, Vector2{250, 20}};
+  options.pool = {custom, MapSpec{}};
+
+  Simulation sim;
+  Match::State r0 = Match::BeginRound(sim, 9, 0, &options);
+  REQUIRE(r0.characters[0].pos.x == 60);
+  REQUIRE(r0.characters[1].pos.x == 250);
+
+  // Round 2 is a generated arena, exactly like a match without options
+  Simulation plain;
+  Match::State r1 = Match::BeginRound(sim, 9, 1, &options);
+  Match::State p1 = Match::BeginRound(plain, 9, 1);
+  REQUIRE(Match::Hash(sim, r1) == Match::Hash(plain, p1));
+
+  // Round 3 wraps back to the custom map
+  REQUIRE(options.MapFor(2) == &options.pool[0]);
+
+  // Options survive the wire
+  MatchOptions back;
+  std::string error;
+  REQUIRE(OptionsFromJson(OptionsToJson(options), back, error));
+  REQUIRE(back.pool.size() == 2);
+  REQUIRE(back.pool[0].custom);
+  REQUIRE_FALSE(back.pool[1].custom);
 }

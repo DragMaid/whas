@@ -175,7 +175,10 @@ void LockstepClient::SayHello() {
 }
 
 void LockstepClient::QuickMatch() { StartSync("queue"); }
-void LockstepClient::CreateLobby() { StartSync("lobby"); }
+void LockstepClient::CreateLobby(const MatchOptions &options) {
+  m_lobbyOptions = options;
+  StartSync("lobby");
+}
 
 void LockstepClient::JoinLobby(const std::string &code) {
   m_joinCode = code;
@@ -247,7 +250,8 @@ void LockstepClient::ContinueSync() {
   if (then == "queue")
     m_net.Send({{"type", "queue"}});
   else if (then == "lobby")
-    m_net.Send({{"type", "createLobby"}});
+    m_net.Send({{"type", "createLobby"},
+                {"options", OptionsToJson(m_lobbyOptions)}});
   else if (then == "join")
     m_net.Send({{"type", "joinLobby"}, {"code", m_joinCode}});
   m_phase = Phase::Ready; // until queued / lobbyCreated / matchFound
@@ -306,8 +310,7 @@ void LockstepClient::BeginRound(int round, const json &decks, Simulation &sim,
     m_cards[s] = m_roundCards[s][round];
   }
   m_round = round;
-  sim.GetConfig() = SimulationConfig{}; // online plays by the default rules
-  state = Match::BeginRound(sim, m_seed, round);
+  state = Match::BeginRound(sim, m_seed, round, &m_options);
   m_phase = Phase::Waiting;
 }
 
@@ -356,6 +359,15 @@ void LockstepClient::ReportHash(Simulation &sim, Match::State &state) {
   m_phase = Phase::Reporting;
 }
 
+void LockstepClient::ReadOptions(const json &msg) {
+  std::string error;
+  if (!OptionsFromJson(msg.value("options", json()), m_options, error)) {
+    // The server checked them; play on generated arenas rather than stall
+    Notice("Couldn't read the room's maps: " + error);
+    m_options = {};
+  }
+}
+
 // Back after a reconnect: rebuild every round from the seed and all plans
 void LockstepClient::CatchUp(const json &msg, Simulation &sim,
                              Match::State &state) {
@@ -373,10 +385,10 @@ void LockstepClient::CatchUp(const json &msg, Simulation &sim,
   const json &current = msg.at("current");
   int currentRound = current.at("round").get<int>();
 
-  sim.GetConfig() = SimulationConfig{};
+  ReadOptions(msg);
   for (int r = 0; r <= currentRound && r < (int)m_roundCards[0].size(); ++r) {
     m_round = r;
-    state = Match::BeginRound(sim, m_seed, r);
+    state = Match::BeginRound(sim, m_seed, r, &m_options);
     for (const json &t : msg.at("turns")) {
       if (t.at("round").get<int>() != r)
         continue;
@@ -483,6 +495,7 @@ void LockstepClient::Handle(const json &msg, Simulation &sim,
     m_matchId = msg.at("matchId").get<int64_t>();
     m_seed = std::stoull(msg.at("seed").get<std::string>());
     m_slot = msg.at("slot").get<int>();
+    ReadOptions(msg);
     m_roundCards = {};
     m_roundsWon = {};
     m_lastRoundWinner = -1;

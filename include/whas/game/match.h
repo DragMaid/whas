@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/character.h"
+#include "whas/game/map.h"
 #include "whas/game/turn_controller.h"
 #include <array>
 #include <cstdint>
@@ -31,9 +32,12 @@ struct State {
   std::array<int, PLAYERS> order{0, 1};
 };
 
-// Clear the world, build the round's arena from the seed and spawn both
-// players. Returns the state both clients start the round from.
-State BeginRound(Simulation &sim, uint64_t matchSeed, int round);
+// Clear the world, build the round's arena and spawn both players. Returns
+// the state both clients start the round from. With options the round is
+// played on its map from the pool, by that map's settings (the defaults for
+// a generated arena); without, the world keeps its settings.
+State BeginRound(Simulation &sim, uint64_t matchSeed, int round,
+                 const MatchOptions *options = nullptr);
 
 // One tick of a turn: each plan's casts and movement (in tie order), the
 // world step, then hits, gusts and burning

@@ -20,10 +20,20 @@ uint64_t RoundSeed(uint64_t matchSeed, int round) {
                                      static_cast<uint64_t>(round + 1));
 }
 
-State BeginRound(Simulation &sim, uint64_t matchSeed, int round) {
+State BeginRound(Simulation &sim, uint64_t matchSeed, int round,
+                 const MatchOptions *options) {
   uint64_t seed = RoundSeed(matchSeed, round);
-  sim.Restart(seed);
-  ArenaGen::Arena arena = ArenaGen::Generate(sim, seed);
+  const MapSpec *spec = options ? options->MapFor(round) : nullptr;
+  std::array<Vector2, PLAYERS> spawns;
+  if (spec && spec->custom) {
+    Maps::Build(sim, *spec->custom, seed);
+    spawns = spec->custom->spawns;
+  } else {
+    if (options)
+      sim.GetConfig() = SimulationConfig{};
+    sim.Restart(seed);
+    spawns = ArenaGen::Generate(sim, seed).spawns;
+  }
 
   State state;
   state.seed = matchSeed;
@@ -32,7 +42,7 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round) {
   for (int i = 0; i < PLAYERS; ++i) {
     Character &c = state.characters[i];
     c.id = i + 1; // hurtbox ids; 0 is never used
-    c.pos = arena.spawns[i];
+    c.pos = spawns[i];
     c.facing = c.pos.x < GRID_W * 0.5f ? 1 : -1;
     c.look = c.facing;
     c.maxHp = c.hp = MAX_HP;

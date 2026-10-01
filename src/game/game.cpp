@@ -53,7 +53,9 @@ void Game::SetActive(bool active, Simulation &sim, UI &ui) {
   EnterWaiting();
 }
 
-void Game::StartMatch(Simulation &sim, uint64_t seed, int localSlot) {
+void Game::StartMatch(Simulation &sim, uint64_t seed, int localSlot,
+                      MatchOptions options) {
+  m_options = std::move(options);
   m_local = localSlot;
   m_slots[Local()].color = LOCAL_COLOR;
   m_slots[Opponent()].color = OPPONENT_COLOR;
@@ -191,7 +193,7 @@ void Game::UpdateOnline(Simulation &sim, UI &ui) {
 }
 
 void Game::BeginRound(Simulation &sim, int round) {
-  m_match = Match::BeginRound(sim, m_match.seed, round);
+  m_match = Match::BeginRound(sim, m_match.seed, round, &m_options);
   for (int i = 0; i < Match::PLAYERS; ++i)
     m_spawns[i] = m_match.characters[i].pos;
   m_turnNumber = 1;
@@ -359,7 +361,7 @@ void Game::Update(Simulation &sim, UI &ui) {
   }
   if (m_state == RoundState::MatchOver) {
     if (IsKeyPressed(KEY_ENTER))
-      StartMatch(sim, OfflineSeed(), m_local);
+      StartMatch(sim, OfflineSeed(), m_local, m_options);
     return;
   }
   if (m_state == RoundState::RoundOver) {

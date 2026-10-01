@@ -8,6 +8,8 @@ bool ReplayPlayer::Load(const json &replay, std::string &error) {
     m_matchId = replay.value("matchId", int64_t{0});
     m_seed = std::stoull(replay.at("seed").get<std::string>());
     m_buildId = replay.value("buildId", "");
+    if (!OptionsFromJson(replay.value("options", json()), m_options, error))
+      return false;
 
     // Both players' six cards for each round
     std::array<std::vector<RoundCards>, 2> cards;
@@ -59,14 +61,14 @@ int ReplayPlayer::Turn() const {
 }
 
 void ReplayPlayer::Start(Simulation &sim) {
-  sim.GetConfig() = SimulationConfig{};
   m_index = 0;
   m_tick = 0;
   m_checked = 0;
   m_mismatches = 0;
   m_report.clear();
   m_state = Match::BeginRound(sim, m_seed,
-                              m_turns.empty() ? 0 : m_turns.front().round);
+                              m_turns.empty() ? 0 : m_turns.front().round,
+                              &m_options);
 }
 
 bool ReplayPlayer::Step(Simulation &sim, int ticks) {
@@ -100,7 +102,8 @@ void ReplayPlayer::FinishTurn(Simulation &sim) {
   ++m_index;
   // The next round starts from a fresh arena
   if (!Finished() && m_turns[m_index].round != t.round)
-    m_state = Match::BeginRound(sim, m_seed, m_turns[m_index].round);
+    m_state = Match::BeginRound(sim, m_seed, m_turns[m_index].round,
+                                &m_options);
 }
 
 int ReplayPlayer::VerifyAll(Simulation &sim, std::vector<std::string> *report) {
