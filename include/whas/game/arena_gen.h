@@ -30,9 +30,22 @@ struct Arena {
   Biome biome = Biome::Meadow;
 };
 
+// Knobs on top of a biome; the defaults give exactly the biome's own map
+struct Params {
+  Biome biome = Biome::Meadow;
+  int hills = 100;      // % of the biome's height variation
+  int waterRise = 0;    // cells the water stands higher (or lower) than usual
+  int vegetation = 100; // % of the trees, cacti and grass
+  int rocks = 100;      // % of the rock outcrops
+};
+
 // Paints into an empty world (call Simulation::Reset first). The first form
 // picks the map from the seed.
 Arena Generate(Simulation &sim, uint64_t seed);
 Arena Generate(Simulation &sim, uint64_t seed, Biome biome);
+Arena Generate(Simulation &sim, uint64_t seed, const Params &params);
+
+// Hold every rock cell in place as terrain, like the generator does
+void AnchorRock(Simulation &sim);
 
 } // namespace ArenaGen

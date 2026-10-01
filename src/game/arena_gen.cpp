@@ -32,6 +32,9 @@ int Bump(int x, int centre, int halfWidth) {
   return d >= halfWidth ? 0 : Smooth(256 - d * 256 / halfWidth);
 }
 
+// count scaled by a percentage knob
+int Scaled(int count, int percent) { return count * percent / 100; }
+
 int Between(DetRng &rng, int lo, int hi) {
   return lo + static_cast<int>(rng.Below(static_cast<uint32_t>(hi - lo + 1)));
 }
@@ -275,7 +278,21 @@ Arena Generate(Simulation &sim, uint64_t seed) {
 }
 
 Arena Generate(Simulation &sim, uint64_t seed, Biome biome) {
+  Params params;
+  params.biome = biome;
+  return Generate(sim, seed, params);
+}
+
+void AnchorRock(Simulation &sim) {
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (sim.GetCell(x, y).element == Element::ROCK)
+        sim.Anchor(x, y);
+}
+
+Arena Generate(Simulation &sim, uint64_t seed, const Params &params) {
   DetRng rng(seed, 0xA7E4A);
+  Biome biome = params.biome;
 
   Layout l;
   switch (biome) {
@@ -291,6 +308,24 @@ Arena Generate(Simulation &sim, uint64_t seed, Biome biome) {
   default:
     ShapeMeadow(rng, l);
     break;
+  }
+
+  // Knobs that don't touch the random stream, so the defaults change nothing
+  if (params.hills != 100) {
+    int mean = 0;
+    for (int h : l.surface)
+      mean += h;
+    mean /= GRID_W;
+    for (int x = 0; x < GRID_W; ++x) {
+      int lifted = mean + (l.surface[x] - mean) * params.hills / 100;
+      l.coreBottom[x] += lifted - l.surface[x];
+      l.surface[x] = std::clamp(lifted, 8, FLOOR_BOTTOM - ROCK_BED - 2);
+    }
+  }
+  if (params.waterRise != 0) {
+    int deepest = *std::max_element(l.surface.begin(), l.surface.end());
+    int level = l.waterLevel == NO_WATER ? deepest + 1 : l.waterLevel;
+    l.waterLevel = std::clamp(level - params.waterRise, 8, NO_WATER);
   }
 
   // Steep ground stays bare
@@ -344,23 +379,28 @@ Arena Generate(Simulation &sim, uint64_t seed, Biome biome) {
     for (int y = l.waterLevel; y < l.surface[x]; ++y)
       Set(sim, x, y, Element::WATER);
 
+  const int rocks = params.rocks, plants = params.vegetation;
+  auto grass = [&] {
+    if (plants > 0)
+      Grass(sim, rng, l);
+  };
   switch (biome) {
   case Biome::Meadow:
-    Outcrops(sim, rng, l, 1 + static_cast<int>(rng.Below(3)));
-    Grass(sim, rng, l);
-    Trees(sim, rng, l, spawnX, 2 + static_cast<int>(rng.Below(3)));
+    Outcrops(sim, rng, l, Scaled(1 + static_cast<int>(rng.Below(3)), rocks));
+    grass();
+    Trees(sim, rng, l, spawnX, Scaled(2 + static_cast<int>(rng.Below(3)), plants));
     break;
   case Biome::Mountain:
-    Outcrops(sim, rng, l, 2 + static_cast<int>(rng.Below(3)));
-    Grass(sim, rng, l);
-    Trees(sim, rng, l, spawnX, 1 + static_cast<int>(rng.Below(3)));
+    Outcrops(sim, rng, l, Scaled(2 + static_cast<int>(rng.Below(3)), rocks));
+    grass();
+    Trees(sim, rng, l, spawnX, Scaled(1 + static_cast<int>(rng.Below(3)), plants));
     break;
   case Biome::Lake:
-    Grass(sim, rng, l);
-    Trees(sim, rng, l, spawnX, 2 + static_cast<int>(rng.Below(3)));
+    grass();
+    Trees(sim, rng, l, spawnX, Scaled(2 + static_cast<int>(rng.Below(3)), plants));
     break;
   case Biome::Canyon:
-    Cacti(sim, rng, l, spawnX, 2 + static_cast<int>(rng.Below(4)));
+    Cacti(sim, rng, l, spawnX, Scaled(2 + static_cast<int>(rng.Below(4)), plants));
     break;
   default:
     break;
@@ -368,10 +408,7 @@ Arena Generate(Simulation &sim, uint64_t seed, Biome biome) {
 
   // Terrain rock stays put like the earth around it, instead of bodies that
   // settle and wobble (and thump) all round long
-  for (int y = 0; y < GRID_H; ++y)
-    for (int x = 0; x < GRID_W; ++x)
-      if (sim.GetCell(x, y).element == Element::ROCK)
-        sim.Anchor(x, y);
+  AnchorRock(sim);
 
   Arena arena;
   arena.biome = biome;
