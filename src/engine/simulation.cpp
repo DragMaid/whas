@@ -65,6 +65,7 @@ void Simulation::Update(float dt, bool isPainting) {
     m_syncBarrier.arrive_and_wait();
   }
   FlushWorkerSpawns();
+  SkyRain();
 
   // Damage check: release bodies whose pixels were erased, painted over,
   // broken by last frame's projectiles or changed by this frame's elements
@@ -178,6 +179,26 @@ void Simulation::UpdateChunk(int chunkIdx, const ElementContext &base) {
 }
 
 void Simulation::UpdateElements() {}
+
+void Simulation::SkyRain() {
+  // Whole drops per tick plus a chance at one more; the stream is only
+  // touched when it rains, so worlds without sky rain don't change
+  float rate = m_frameConfig.cloud.skyRain;
+  if (rate <= 0.0f)
+    return;
+  int drops = static_cast<int>(rate);
+  if (m_rng.Unit() < rate - static_cast<float>(drops))
+    ++drops;
+  for (int i = 0; i < drops; ++i) {
+    int x = static_cast<int>(m_rng.Below(GRID_W));
+    if (m_grid.Get(x, 0).element != Element::AIR)
+      continue;
+    Cell rain = ElementFactory::Create(Element::WATER, m_frameConfig);
+    rain.vy = m_frameConfig.cloud.rainVelocity;
+    m_grid.Get(x, 0) = rain;
+    m_chunks.WakeChunkAt(x, 0, m_frameCounter, false);
+  }
+}
 
 void Simulation::FlushWorkerSpawns() {
   for (auto &spawns : m_chunkSpawns) {

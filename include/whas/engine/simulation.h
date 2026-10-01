@@ -107,6 +107,8 @@ private:
   float m_avgTemp = 0.0f;
 
   void UpdateElements();
+  // Raindrops from the top row (CloudConfig::skyRain)
+  void SkyRain();
   void UpdatePhysics(float dt, bool isPainting);
   void CollectStatistics();
 

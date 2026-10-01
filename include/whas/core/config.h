@@ -37,6 +37,10 @@ struct CloudConfig {
   float rainMoistureCost = 0.1f;
   float rainVelocity = 2.0f;
   float rainBurstVelocity = 1.0f;
+  // Clouds keep raining without drying out
+  bool infiniteRain = false;
+  // Raindrops falling from the top of the sky per tick, clouds or not
+  float skyRain = 0.0f;
 };
 
 struct FireConfig {

@@ -32,7 +32,8 @@ void UpdateCloud(int x, int y, ElementContext &ctx) {
       if (MovementSystem::CanDisplace(rain, ctx.grid.Get(x, ry), ctx)) {
         rain.vy = cConfig.rainVelocity;
         MovementSystem::SetNext(x, ry, rain, ctx);
-        src.moisture -= cConfig.rainMoistureCost;
+        if (!cConfig.infiniteRain)
+          src.moisture -= cConfig.rainMoistureCost;
       }
     }
   }
