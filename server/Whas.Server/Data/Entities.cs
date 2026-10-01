@@ -46,6 +46,8 @@ public sealed class Match
     public MatchMode Mode { get; set; }
     public int RulesetVersion { get; set; }
     public required string BuildId { get; set; }
+    // The room's maps and modes (RoomOptions), as both clients received them
+    public string OptionsJson { get; set; } = "{}"; // jsonb
     public DateTimeOffset StartedAt { get; set; }
     public DateTimeOffset? EndedAt { get; set; }
     public long? WinnerId { get; set; }

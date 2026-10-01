@@ -36,6 +36,7 @@ public sealed class WhasDb(DbContextOptions<WhasDb> options) : DbContext(options
         {
             e.Property(m => m.Mode).HasConversion<string>();
             e.Property(m => m.Status).HasConversion<string>();
+            e.Property(m => m.OptionsJson).HasColumnType("jsonb").HasDefaultValueSql("'{}'::jsonb");
             e.HasMany(m => m.Players).WithOne().HasForeignKey(p => p.MatchId);
         });
 

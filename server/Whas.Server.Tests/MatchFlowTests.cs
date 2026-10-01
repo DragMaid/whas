@@ -274,6 +274,42 @@ public class MatchFlowTests(ServerFixture server)
     }
 
     [Fact]
+    public async Task LobbyMapPoolsReachBothPlayersAndTheReplay()
+    {
+        string build = "maps-" + Guid.NewGuid();
+        var host = await NewPlayerAsync(build);
+        var friend = await NewPlayerAsync(build);
+
+        var tooMany = new object[] { new { kind = "random" }, new { kind = "random" },
+                                     new { kind = "random" }, new { kind = "random" } };
+        await host.Client.SendAsync(new { type = "createLobby", options = new { maps = tooMany } });
+        Assert.Contains("at most", (await host.Client.ExpectAsync("error")).GetProperty("message").GetString());
+
+        var huge = new { kind = "custom", map = new { cells = new string('A', 70 * 1024) } };
+        await host.Client.SendAsync(new { type = "createLobby", options = new { maps = new object[] { huge } } });
+        Assert.Contains("too large", (await host.Client.ExpectAsync("error")).GetProperty("message").GetString());
+
+        var custom = new { kind = "custom", map = new { format = 1, name = "Pond" } };
+        await host.Client.SendAsync(new
+        {
+            type = "createLobby",
+            options = new { maps = new object[] { custom, new { kind = "random" } }, chaos = true },
+        });
+        string code = (await host.Client.ExpectAsync("lobbyCreated")).GetProperty("code").GetString()!;
+        await friend.Client.SendAsync(new { type = "joinLobby", code });
+        foreach (var p in new[] { host, friend })
+        {
+            var options = (await p.Client.ExpectAsync("matchFound")).GetProperty("options");
+            var maps = options.GetProperty("maps");
+            Assert.Equal(2, maps.GetArrayLength());
+            Assert.Equal("Pond", maps[0].GetProperty("map").GetProperty("name").GetString());
+            Assert.Equal("random", maps[1].GetProperty("kind").GetString());
+            Assert.True(options.GetProperty("chaos").GetBoolean());
+            Assert.False(options.GetProperty("rts").GetBoolean());
+        }
+    }
+
+    [Fact]
     public async Task UploadsAreValidatedAndStatsComeFromTheServer()
     {
         var c = await TestClient.ConnectAsync(server, "b");

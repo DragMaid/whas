@@ -70,9 +70,10 @@ public sealed class MatchActor
     public long MatchId { get; private set; }
     public ulong Seed { get; }
     public MatchMode Mode { get; }
+    public RoomOptions Room { get; }
     public Task Completion { get; private set; } = Task.CompletedTask;
 
-    public MatchActor(ClientSession a, ClientSession b, MatchMode mode,
+    public MatchActor(ClientSession a, ClientSession b, MatchMode mode, RoomOptions room,
                       IDbContextFactory<WhasDb> dbFactory, SpellService spells,
                       MatchOptions options, ILogger log, TimeProvider? time = null)
     {
@@ -82,6 +83,7 @@ public sealed class MatchActor
         _log = log;
         _time = time ?? TimeProvider.System;
         Mode = mode;
+        Room = room;
         Seed = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8));
         _buildId = a.BuildId ?? "";
         // Who is slot 0 is random too
@@ -108,6 +110,7 @@ public sealed class MatchActor
                 Mode = Mode,
                 RulesetVersion = Protocol.RulesetVersion,
                 BuildId = _buildId,
+                OptionsJson = Room.Json.GetRawText(),
                 StartedAt = Now,
                 Status = MatchStatus.Running,
             };
@@ -245,6 +248,7 @@ public sealed class MatchActor
                 slot = i,
                 rulesetVersion = Protocol.RulesetVersion,
                 mode = Mode.ToString(),
+                options = Room.Json,
                 deckDeadlineMs = DeadlineMs(_phaseDeadline),
             });
 
@@ -516,6 +520,7 @@ public sealed class MatchActor
             seed = Protocol.U64(Seed),
             slot,
             rulesetVersion = Protocol.RulesetVersion,
+            options = Room.Json,
             decks = _decks.Select(d => d?.Take(_round + 1).ToList()).ToArray(),
             yourDecks = _decks[slot],
             turns = _history.Select(h => new { round = h.Round, turn = h.Turn, plans = h.Plans }),

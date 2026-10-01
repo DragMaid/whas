@@ -104,9 +104,33 @@ the quantized `SpellQuant::Stats`:
 | Client → server | Server → client |
 |---|---|
 | `queue {}` / `cancelQueue {}` | `queued` / `queueCancelled` |
-| `createLobby {}` | `lobbyCreated {code}` (6 characters) |
+| `createLobby {options?}` | `lobbyCreated {code}` (6 characters) or `error` |
 | `joinLobby {code}` | `matchFound` or `error` |
-| | `matchFound {matchId, seed, slot, rulesetVersion, mode, deckDeadlineMs}` |
+| | `matchFound {matchId, seed, slot, rulesetVersion, mode, options, deckDeadlineMs}` |
+
+#### Room options
+
+The host picks what the room plays by. Quick matches always get the defaults.
+
+```
+options = {"maps": [MapEntry, ...], "chaos": false, "rts": false}
+MapEntry = {"kind": "random"} | {"kind": "custom", "map": MapFile}
+```
+
+- Round `r` is played on `maps[r % maps.length]`. An empty list means a
+  generated arena every round, as before.
+- **`random`** builds the arena from the round seed with the default world
+  settings.
+- **`custom`** carries the whole map file: the `data/maps/<id>.json` format
+  from `src/game/map.cpp`. That is `{format: 1, name, gen, spawns[2], cells,
+  settings}`, where `cells` is a base64 run-length list of one element per
+  cell and `settings` holds the world settings that differ from the defaults.
+  The round is built by applying the settings, painting the cells and
+  anchoring the rock.
+- The server checks the shape: at most 3 maps, and at most 64 KB per map. It
+  hands the same JSON to both players, to `catchUp` and to the replay. A
+  client that can't read a map falls back to generated arenas, and since both
+  clients read the same JSON, both fall back together.
 
 ### Match
 
@@ -147,7 +171,7 @@ the quantized `SpellQuant::Stats`:
   `rejoin {matchId}`. The server replies:
 
   ```
-  catchUp {seed, slot, decks, yourDecks, turns[{round, turn, plans}], roundsWon, current {round, turn, phase, committed, deadlineMs}}
+  catchUp {seed, slot, options, decks, yourDecks, turns[{round, turn, plans}], roundsWon, current {round, turn, phase, committed, deadlineMs}}
   ```
 
   The client re-simulates from the seed through every turn and carries on.
@@ -181,8 +205,8 @@ Send `Authorization: Bearer <guest token>` with every request.
 
 - `GET /api/players/me` returns `{playerId, wins, losses}`.
 - `GET /api/players/me/matches` returns your last 50 matches.
-- `GET /api/matches/{id}/replay` returns the seed, build, both players' round
-  decks and every turn's plans and hashes. That is enough to re-simulate the
+- `GET /api/matches/{id}/replay` returns the seed, build, room options, both
+  players' round decks and every turn's plans and hashes. That is enough to re-simulate the
   match.
 - `GET /api/spells/mine`, `GET /api/decks/mine`
 - `GET /health`

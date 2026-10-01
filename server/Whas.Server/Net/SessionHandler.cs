@@ -83,7 +83,10 @@ public sealed class SessionHandler(PlayerService players, SpellService spells,
                 session.Send("queueCancelled");
                 break;
             case "createLobby":
-                matchmaking.CreateLobby(session);
+                if (RoomOptions.TryParse(msg, out var room, out var roomError))
+                    matchmaking.CreateLobby(session, room);
+                else
+                    session.Error(roomError);
                 break;
             case "joinLobby":
                 await matchmaking.JoinLobbyAsync(session, msg.Str("code"));
