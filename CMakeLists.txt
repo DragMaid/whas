@@ -151,6 +151,7 @@ set(SOURCES
     src/game/sandbox.cpp
     src/game/flight_trail.cpp
     src/game/replay.cpp
+    src/game/replay_store.cpp
     src/game/replay_view.cpp
 
     src/net/plan_codec.cpp

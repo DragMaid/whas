@@ -1,5 +1,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/replay.h"
+#include "whas/game/replay_store.h"
+#include <filesystem>
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
 
@@ -39,4 +41,31 @@ TEST_CASE("a replay catches a changed plan", "[replay]") {
   REQUIRE(player.Load(replay, error));
   Simulation sim;
   REQUIRE(player.VerifyAll(sim) > 0);
+}
+
+TEST_CASE("finished matches are kept on this machine", "[replay]") {
+  std::string dir = std::string(WHAS_SOURCE_DIR) + "/build/test_replays";
+  std::filesystem::remove_all(dir);
+  ReplayStore::SetDirectory(dir);
+
+  nlohmann::json replay = LoadReplay();
+  int slot = 1;
+  std::string error;
+  REQUIRE(ReplayStore::Save(replay, slot, slot, error));
+  auto entries = ReplayStore::List();
+  REQUIRE(entries.size() == 1);
+  REQUIRE(entries[0].matchId == replay["matchId"].get<int64_t>());
+  REQUIRE(entries[0].result == 1);
+  REQUIRE(entries[0].slot == 1);
+
+  // What was saved still plays: the local header doesn't get in the way
+  auto stored = ReplayStore::Load(entries[0].path);
+  REQUIRE(stored);
+  ReplayPlayer player;
+  REQUIRE(player.Load(*stored, error));
+  REQUIRE(player.TurnCount() == static_cast<int>(replay["turns"].size()));
+
+  REQUIRE(ReplayStore::Remove(entries[0].path));
+  REQUIRE(ReplayStore::List().empty());
+  ReplayStore::SetDirectory("data/replays");
 }
