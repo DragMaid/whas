@@ -11,6 +11,7 @@
 #include "whas/game/replay_view.h"
 #include "whas/game/sandbox.h"
 #include "whas/net/lockstep_client.h"
+#include "whas/ui/grimoire_panel.h"
 #include "whas/ui/map_editor.h"
 #include "whas/ui/map_gallery.h"
 #include "whas/ui/play_menu.h"
@@ -91,6 +92,7 @@ int main(int argc, char **argv) {
   MapGallery maps;
   MapEditor mapEditor(maps.Thumbnails());
   PlayMenu menu(client, ui, maps);
+  GrimoirePanel grimoire(ui);
   if (const char *server = Arg(argc, argv, "--server")) {
     client.Connect(server);
   }
@@ -101,6 +103,15 @@ int main(int argc, char **argv) {
     mapEditor.DrawPanel(sim);
     if (replay.Active())
       replay.DrawControls(sim);
+    // The decks the players brought: after an online match, or beside a
+    // replay, so spells can be copied
+    if (game.IsOnline() &&
+        client.GetPhase() == LockstepClient::Phase::MatchOver)
+      grimoire.Draw(client.AllCards(), client.Slot());
+    else if (replay.Active() && replay.ShowSpells())
+      grimoire.Draw(replay.Player().Cards(), replay.Player().LocalSlot());
+    else
+      grimoire.Reset();
   });
 
   // --open sandbox|duel|spells|spell-editor|maps|map-editor starts on that screen
@@ -130,6 +141,16 @@ int main(int argc, char **argv) {
   // screens without clicking through them)
   const char *screenshot = Arg(argc, argv, "--screenshot");
   int frames = 0;
+
+  // --watch replay.json opens a saved replay
+  if (const char *path = Arg(argc, argv, "--watch")) {
+    std::ifstream file(path);
+    auto stored = nlohmann::json::parse(file, nullptr, false);
+    if (file && !stored.is_discarded()) {
+      menu.Close();
+      replay.Open(stored, sim);
+    }
+  }
 
   bool wasEditing = false;
   while (!WindowShouldClose()) {

@@ -89,6 +89,7 @@ public:
   void SetOverlay(std::function<void()> draw) { m_overlay = std::move(draw); }
 
   SpellLibrary &Library() { return m_library; }
+  SpellThumbnails &Thumbnails() { return *m_thumbnails; }
   DeckBook &Decks() { return m_decks; }
   // Beam preview plus aim-vs-cast arrows, origin in (fractional) cells.
   // worldGravity is the config's world gravity, for the falling arcs.

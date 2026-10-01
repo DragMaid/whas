@@ -127,6 +127,7 @@ set(SOURCES
     src/ui/map_thumbnails.cpp
     src/ui/map_gallery.cpp
     src/ui/map_editor.cpp
+    src/ui/grimoire_panel.cpp
     src/ui/audio_settings.cpp
 
     src/spell/spell_geometry.cpp

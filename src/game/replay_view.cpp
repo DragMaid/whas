@@ -4,6 +4,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/character_draw.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/theme.h"
 #include "whas/ui/widgets.h"
 
 namespace {
@@ -69,6 +70,11 @@ void ReplayView::DrawControls(Simulation &sim) {
   if (Widgets::Button("Restart"))
     m_player.Start(sim);
   ImGui::SameLine();
+  if (Widgets::Button("Spells", {0, 0}, m_showSpells))
+    m_showSpells = !m_showSpells;
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Both players' decks; copy any spell into your library");
+  ImGui::SameLine();
   if (Widgets::Button("Close"))
     m_active = false;
 
@@ -81,10 +87,10 @@ void ReplayView::DrawControls(Simulation &sim) {
 
   if (m_player.Checked() > 0) {
     if (m_player.Mismatches() == 0)
-      ImGui::TextColored({0.5f, 0.9f, 0.5f, 1}, "%d hashes match the players'",
+      ImGui::TextColored(Theme::Vec(Theme::Tone::Moss), "%d hashes match the players'",
                          m_player.Checked());
     else
-      ImGui::TextColored({1, 0.5f, 0.4f, 1},
+      ImGui::TextColored(Theme::Vec(Theme::Tone::Oxblood),
                          "%d of %d hashes differ (a resync or another build)",
                          m_player.Mismatches(), m_player.Checked());
   }
