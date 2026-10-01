@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <string>
 
+using Theme::Tone;
+
 namespace {
 
 void DrawDashedLine(Vector2 a, Vector2 b, float dash, float thick,
@@ -217,7 +219,7 @@ void UI::DrawInspector(Simulation &sim) {
           ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing |
           ImGuiWindowFlags_NoNav);
 
-  ImGui::TextColored(ImVec4(0.8f, 0.8f, 1.0f, 1.0f), "Cell [%d, %d]", cx, cy);
+  ImGui::TextColored(Theme::Vec(Tone::Brass), "Cell [%d, %d]", cx, cy);
   ImGui::Separator();
   ImGui::Text("Type: %s", ElementName(cell.element));
   ImGui::Text("Temp: %.1f C", cell.temperature);
@@ -505,9 +507,9 @@ void UI::DrawAimIndicator(const Spell &spell, Vector2 originCells,
   float arrowLen = std::max(40.0f, mouseDist);
 
   // Raw aim (faint) vs where the circle actually sends the spell (solid)
-  DrawDashedLine(screenOrigin, mousePos, 6.0f, 1.5f, Color{120, 160, 255, 140});
+  DrawDashedLine(screenOrigin, mousePos, 6.0f, 1.5f, Theme::Rl(Tone::Verdigris, 0.55f));
   DrawCircleLines((int)screenOrigin.x, (int)screenOrigin.y, 10, BLUE);
-  DrawCircleV(mousePos, 3.0f, Color{120, 160, 255, 200});
+  DrawCircleV(mousePos, 3.0f, Theme::Rl(Tone::Verdigris, 0.8f));
 
   Color balance = SpellEditor::BalanceColor(stats.imbalance);
   DrawArrow(screenOrigin, castDir, arrowLen, 2.5f, balance);
@@ -533,7 +535,7 @@ void UI::DrawAimIndicator(const Spell &spell, Vector2 originCells,
 
   Vector2 labelPos{screenOrigin.x + castDir.x * (arrowLen + 10.0f),
                    screenOrigin.y + castDir.y * (arrowLen + 10.0f)};
-  DrawText(label, (int)labelPos.x, (int)labelPos.y - 8, 16, balance);
+  Theme::DrawText(Theme::RlBody(), label, {labelPos.x, labelPos.y - 10}, 19, balance);
 }
 
 Color UI::GetSpellColor(const Spell &spell) const {

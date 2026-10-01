@@ -8,8 +8,11 @@
 #include "whas/game/character_draw.h"
 #include "whas/game/match.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <cmath>
+
+using Theme::Tone;
 
 namespace {
 
@@ -259,14 +262,16 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                MouseCell())) {
     Rectangle r{grab.x * CELL_SIZE - 3, grab.y * CELL_SIZE - 3,
                 grab.width * CELL_SIZE + 6, grab.height * CELL_SIZE + 6};
-    DrawRectangleLinesEx(r, 1.5f, Color{130, 170, 255, 220});
-    DrawText("drag", (int)r.x, (int)(r.y - 14), 12, Color{130, 170, 255, 220});
+    DrawRectangleLinesEx(r, 1.5f, Theme::Rl(Tone::Brass, 0.85f));
+    Theme::DrawText(Theme::RlBody(), "drag", {r.x, r.y - 18}, 16,
+                    Theme::Rl(Tone::Brass, 0.85f));
     return;
   }
   if (const Spell *spell = ui.GetSelectedSpell())
     ui.DrawAimIndicator(*spell, m_avatar.Center(), AimAtMouse(), gravity);
   if (m_stopped)
-    DrawText(TextFormat("TIME STOPPED - %d queued, Space to release",
-                        (int)m_queued.size()),
-             12, 12, 18, Color{110, 210, 255, 255});
+    Theme::DrawText(Theme::RlHeading(),
+                    TextFormat("TIME STOPPED  -  %d queued, Space to release",
+                               (int)m_queued.size()),
+                    {14, 12}, 18, Theme::Rl(Tone::Verdigris));
 }

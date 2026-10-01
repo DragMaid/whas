@@ -91,8 +91,8 @@ void DrawCharacterBody(const Character &c, Color color, bool drawHp) {
     return;
   float w = 28.0f;
   Vector2 top{r.x + r.width * 0.5f - w * 0.5f, dst.y - 6.0f};
-  DrawRectangleV(top, {w, 4.0f}, Color{40, 20, 20, 220});
-  DrawRectangleV(top, {w * (c.hp / c.maxHp), 4.0f}, Color{90, 220, 110, 255});
+  DrawRectangleV(top, {w, 4.0f}, Color{30, 18, 14, 220});
+  DrawRectangleV(top, {w * (c.hp / c.maxHp), 4.0f}, Color{150, 176, 98, 255});
 
   // Whose body this is, now that the body itself isn't painted in the colour
   float mx = r.x + r.width * 0.5f;

@@ -8,10 +8,13 @@
 #include "whas/net/lockstep_client.h"
 #include "whas/spell/spell_system.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <string_view>
+
+using Theme::Tone;
 
 namespace {
 
@@ -618,13 +621,20 @@ void Game::DrawHud() const {
     }
     planning = m_online->GetPhase() == Phase::Planning && !m_submitted;
   }
-  DrawText(TextFormat("ROUND %d (%d-%d)   TURN %d  -  %s", m_match.round + 1,
-                      m_roundsWon[Local()], m_roundsWon[Opponent()],
-                      m_turnNumber, phase),
-           (int)x, (int)y, 16, RAYWHITE);
-  y += 20.0f;
+  const Font &heading = Theme::RlHeading();
+  const Font &body = Theme::RlBody();
+  Theme::DrawText(heading,
+                  TextFormat("ROUND %d  (%d-%d)    TURN %d", m_match.round + 1,
+                             m_roundsWon[Local()], m_roundsWon[Opponent()],
+                             m_turnNumber),
+                  {x, y}, 17, Theme::Rl(Tone::Parchment));
+  if (phase[0]) {
+    Vector2 left = Theme::MeasureText(heading, "ROUND 0  (0-0)    TURN 00", 17);
+    Theme::DrawText(heading, phase, {x + left.x + 18, y}, 17, Theme::Rl(Tone::Brass));
+  }
+  y += 22.0f;
 
-  DrawRectangleV({x, y}, {barW, barH}, Color{30, 30, 45, 230});
+  DrawRectangleV({x, y}, {barW, barH}, Theme::Rl(Tone::Ink, 0.9f));
   float perTick = barW / TurnController::TURN_TICKS;
 
   // Movement in blue, channelling in amber (empty until time is stopped)
@@ -636,7 +646,7 @@ void Game::DrawHud() const {
       owed += TurnController::CastTicks(cast.stats);
     bool channelling = owed > 0;
     owed = std::max(0, owed - 1);
-    Color c = channelling ? Color{255, 190, 70, 255} : Color{110, 160, 255, 255};
+    Color c = channelling ? Theme::Rl(Tone::Brass) : Theme::Rl(Tone::Verdigris);
     DrawRectangleV({x + i * perTick, y}, {perTick + 0.5f, barH}, c);
   }
   // Channel time already promised to casts queued in this pause
@@ -645,41 +655,43 @@ void Game::DrawHud() const {
                    m_turn.TicksUsed();
     if (reserved > 0)
       DrawRectangleV({x + steps.size() * perTick, y},
-                     {reserved * perTick, barH}, Color{255, 190, 70, 110});
+                     {reserved * perTick, barH}, Theme::Rl(Tone::Brass, 0.45f));
   }
   if (!planning && !m_waiting) {
     int executed = m_online ? m_online->ExecutedTicks() : m_turn.ExecutedTicks();
     float px = x + executed * perTick;
-    DrawLineEx({px, y - 2}, {px, y + barH + 2}, 2.0f, RAYWHITE);
+    DrawLineEx({px, y - 2}, {px, y + barH + 2}, 2.0f, Theme::Rl(Tone::Parchment));
   }
-  DrawRectangleLinesEx({x, y, barW, barH}, 1.0f, Color{200, 200, 220, 255});
-  DrawText(TextFormat("%.2fs / %.1fs",
-                      steps.size() * TurnController::TICK_DT,
-                      TurnController::TURN_SECONDS),
-           (int)(x + barW + 8), (int)y, 14, RAYWHITE);
+  DrawRectangleLinesEx({x, y, barW, barH}, 1.0f, Theme::Rl(Tone::BrassDim));
+  Theme::DrawText(body,
+                  TextFormat("%.2fs / %.1fs", steps.size() * TurnController::TICK_DT,
+                             TurnController::TURN_SECONDS),
+                  {x + barW + 8, y - 3}, 17, Theme::Rl(Tone::Muted));
   y += barH + 6.0f;
 
+  const char *hint = nullptr;
+  Color hintColor = Theme::Rl(Tone::Muted);
   if (m_online) {
-    if (!m_online->OpponentConnected())
-      DrawText("Opponent disconnected - they have a minute to come back",
-               (int)x, (int)y, 12, Color{255, 170, 90, 255});
-    else if (planning)
-      DrawText("Click cast  Space stop/flow time  Backspace undo  Enter send "
-               "plan",
-               (int)x - 20, (int)y, 12, Color{190, 190, 210, 255});
-  } else if (m_state == RoundState::Playing && m_waiting)
-    DrawText("Space stop time  R reset dummy  F1 sandbox", (int)x, (int)y,
-             12, Color{190, 190, 210, 255});
-  else if (m_state == RoundState::Playing && planning)
-    DrawText(m_paused
-                 ? "Click queue cast  Space let time flow  Backspace undo  "
-                   "Enter run now"
-                 : "A/D move  W jump  Click cast  Space stop time  "
-                   "Backspace undo  (runs when the bar fills)",
-             (int)x - 40, (int)y, 12, Color{190, 190, 210, 255});
+    if (!m_online->OpponentConnected()) {
+      hint = "Opponent disconnected - they have a minute to come back";
+      hintColor = Theme::Rl(Tone::Oxblood);
+    } else if (planning) {
+      hint = "Click cast    Space stop/flow time    Backspace undo    Enter send plan";
+    }
+  } else if (m_state == RoundState::Playing && m_waiting) {
+    hint = "Space stop time    R reset dummy    F1 sandbox";
+  } else if (m_state == RoundState::Playing && planning) {
+    hint = m_paused ? "Click queue cast    Space let time flow    Backspace undo    "
+                      "Enter run now"
+                    : "A/D move    W jump    Click cast    Space stop time    "
+                      "Backspace undo    (runs when the bar fills)";
+  }
+  if (hint)
+    Theme::DrawTextCentered(body, hint, x + barW * 0.5f, y, 15, hintColor);
 
   if (m_notice && m_noticeTime > 0.0f)
-    DrawText(m_notice, (int)x, (int)y + 18, 16, Color{255, 170, 90, 255});
+    Theme::DrawTextCentered(body, m_notice, x + barW * 0.5f, y + 20, 19,
+                            Theme::Rl(Tone::BrassBright));
 }
 
 void Game::DrawBanner() const {
@@ -688,18 +700,29 @@ void Game::DrawBanner() const {
     return;
 
   bool bad = m_banner[0] == 'D' || std::string_view(m_banner) == "ROUND LOST";
-  Color color = bad ? Color{230, 80, 80, 255} : Color{120, 230, 140, 255};
-  constexpr int size = 64;
-  int w = MeasureText(m_banner, size);
-  int y = WINDOW_HEIGHT / 2 - 90;
-  DrawRectangle(0, y - 16, WINDOW_WIDTH, size + 60, Color{10, 10, 15, 190});
-  DrawText(m_banner, (WINDOW_WIDTH - w) / 2, y, size, color);
+  Color color = bad ? Theme::Rl(Tone::Oxblood) : Theme::Rl(Tone::BrassBright);
+  constexpr float size = 64;
+  float y = WINDOW_HEIGHT / 2.0f - 90;
+  // A band of ink with brass rules, the banner set in the display face
+  float top = y - 22, bottom = y + size + 46;
+  DrawRectangleGradientV(0, (int)top, WINDOW_WIDTH, (int)((bottom - top) * 0.5f),
+                         Theme::Rl(Tone::Ink, 0.0f), Theme::Rl(Tone::Ink, 0.85f));
+  DrawRectangleGradientV(0, (int)((top + bottom) * 0.5f), WINDOW_WIDTH,
+                         (int)((bottom - top) * 0.5f), Theme::Rl(Tone::Ink, 0.85f),
+                         Theme::Rl(Tone::Ink, 0.0f));
+  float cx = WINDOW_WIDTH * 0.5f;
+  DrawLineEx({cx - 260, top + 10}, {cx + 260, top + 10}, 1.0f, Theme::Rl(Tone::BrassDim));
+  DrawLineEx({cx - 260, bottom - 10}, {cx + 260, bottom - 10}, 1.0f,
+             Theme::Rl(Tone::BrassDim));
+  Theme::DrawTextCentered(Theme::RlHeading(), m_banner, cx, y + 2, size,
+                          Theme::Rl(Tone::Ink));
+  Theme::DrawTextCentered(Theme::RlHeading(), m_banner, cx, y, size, color);
 
   const char *sub =
       m_bannerSub ? m_bannerSub
                   : TextFormat("Round %d of %d  (%d - %d)", m_match.round + 2,
                                Match::ROUNDS, m_roundsWon[Local()],
                                m_roundsWon[Opponent()]);
-  int sw = MeasureText(sub, 20);
-  DrawText(sub, (WINDOW_WIDTH - sw) / 2, y + size + 8, 20, RAYWHITE);
+  Theme::DrawTextCentered(Theme::RlBody(), sub, cx, y + size + 4, 24,
+                          Theme::Rl(Tone::Parchment));
 }
