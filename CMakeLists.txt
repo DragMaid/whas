@@ -74,6 +74,7 @@ FetchContent_MakeAvailable(ixwebsocket)
 
 set(SOURCES
     src/core/bytes.cpp
+    src/core/config_json.cpp
     src/engine/snapshot.cpp
     src/element/base/factory.cpp
     src/element/base/properties.cpp
