@@ -3,6 +3,7 @@
 #include "whas/game/arena_gen.h"
 #include "whas/game/map.h"
 #include "whas/game/match.h"
+#include "whas/spell/spell_rules.h"
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
@@ -119,4 +120,28 @@ TEST_CASE("rounds rotate through the map pool", "[map]") {
   REQUIRE(back.pool.size() == 2);
   REQUIRE(back.pool[0].custom);
   REQUIRE_FALSE(back.pool[1].custom);
+}
+
+TEST_CASE("signs are counted per circle against the limit", "[spell]") {
+  Spell spell;
+  spell.glyphs.push_back({"water", GlyphKind::Sigil});
+  for (int i = 0; i < SIGN_LIMIT; ++i)
+    spell.glyphs.push_back({"column", GlyphKind::Sign});
+  SpellRules::Count count = SpellRules::CountGlyphs(spell);
+  REQUIRE(count.mostSigns == SIGN_LIMIT);
+  REQUIRE(count.sigils == 1);
+  REQUIRE(SpellRules::WithinLimits(spell));
+  spell.glyphs.push_back({"column", GlyphKind::Sign});
+  REQUIRE_FALSE(SpellRules::WithinLimits(spell));
+
+  // A layered spell: the limit is per circle, not for the whole spell
+  Spell layered;
+  layered.glyphs.assign(20, {"column", GlyphKind::Sign});
+  SpellComponent part;
+  part.glyphs.assign(20, {"orb", GlyphKind::Sign});
+  layered.components = {part, part};
+  count = SpellRules::CountGlyphs(layered);
+  REQUIRE(count.signs == 60);
+  REQUIRE(count.mostSigns == 20);
+  REQUIRE_FALSE(count.OverLimit());
 }

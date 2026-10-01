@@ -11,6 +11,8 @@ constexpr float GLYPH_SCALE_MAX = 3.0f;
 constexpr float GLYPH_ROTATION_MIN = -180.0f;
 constexpr float GLYPH_ROTATION_MAX = 180.0f;
 constexpr int SPELL_NAME_MAX_LEN = 32;
+// Signs in one circle in an ordinary match; chaos rooms have no limit
+constexpr int SIGN_LIMIT = 32;
 
 // Layered spells: the embedded spells sit in the core, the outer ring band
 // holds signs that modify every one of them. Only one level of nesting.

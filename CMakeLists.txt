@@ -141,6 +141,7 @@ set(SOURCES
     src/spell/spell_system.cpp
     src/spell/spell_quant.cpp
     src/spell/spell_library.cpp
+    src/spell/spell_rules.cpp
     src/spell/deck_store.cpp
 
     src/game/character.cpp
