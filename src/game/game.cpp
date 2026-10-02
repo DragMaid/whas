@@ -269,10 +269,14 @@ void Game::UpdateRts(Simulation &sim, UI &ui) {
   m_waiting = false;
   QueueRtsCast(ui, m_rtsTick);
 
+  // A slow frame catches up a little, then the time is dropped rather than
+  // owed: owing it makes every later frame slower still
+  constexpr int MAX_TICKS_PER_FRAME = 2;
   m_rtsAccumulator += std::min(GetFrameTime(), 0.1f);
   static const TurnPlan kStill;
-  while (m_rtsAccumulator >= TurnController::TICK_DT &&
-         m_state == RoundState::Playing) {
+  for (int steps = 0; m_rtsAccumulator >= TurnController::TICK_DT &&
+                      m_state == RoundState::Playing && steps < MAX_TICKS_PER_FRAME;
+       ++steps) {
     m_rtsAccumulator -= TurnController::TICK_DT;
     TurnPlan local;
     local.steps.push_back(m_rts.TakeStep(
@@ -287,6 +291,7 @@ void Game::UpdateRts(Simulation &sim, UI &ui) {
     if (winner >= 0)
       EndRound(winner);
   }
+  m_rtsAccumulator = std::min(m_rtsAccumulator, TurnController::TICK_DT);
 }
 
 // Offline practice: put the dummy back where it started, at full health
