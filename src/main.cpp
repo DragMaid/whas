@@ -114,8 +114,8 @@ int main(int argc, char **argv) {
       grimoire.Reset();
   });
 
-  // --open sandbox|duel|spells|spell-editor|maps|map-editor starts on that screen
-  bool startDuel = false;
+  // --open sandbox|duel|rts|spells|spell-editor|maps|map-editor starts on that screen
+  bool startDuel = false, startRts = false;
   if (const char *screen = Arg(argc, argv, "--open")) {
     if (std::strcmp(screen, "sandbox") == 0) {
       menu.Close();
@@ -125,9 +125,11 @@ int main(int argc, char **argv) {
     } else if (std::strcmp(screen, "spells") == 0) {
       menu.Close();
       ui.OpenSpellLibrary();
-    } else if (std::strcmp(screen, "duel") == 0) {
+    } else if (std::strcmp(screen, "duel") == 0 ||
+               std::strcmp(screen, "rts") == 0) {
       menu.Close();
       startDuel = true;
+      startRts = std::strcmp(screen, "rts") == 0;
     } else if (std::strcmp(screen, "maps") == 0) {
       menu.Close();
       maps.Open();
@@ -173,8 +175,10 @@ int main(int argc, char **argv) {
     }
     // A solo match: from the menu's setup, the gallery or the map editor
     std::optional<MatchOptions> practice = menu.TakePracticeRequest();
-    if (std::exchange(startDuel, false))
+    if (std::exchange(startDuel, false)) {
       practice = MatchOptions{};
+      practice->rts = startRts;
+    }
     if (std::optional<MapDef> map = maps.TakePlay(); map) {
       practice = MatchOptions{};
       practice->pool.push_back({std::move(map)});

@@ -201,7 +201,92 @@ void Game::BeginRound(Simulation &sim, int round) {
     m_spawns[i] = m_match.characters[i].pos;
   m_turnNumber = 1;
   m_state = RoundState::Playing;
+  m_rts.BeginRound();
+  m_rtsTick = 0;
+  m_rtsAccumulator = 0.0f;
   EnterWaiting();
+}
+
+bool Game::IsRts() const {
+  return m_online ? m_online->Options().rts : m_options.rts;
+}
+
+CharacterInput Game::RtsInput() const {
+  CharacterInput input;
+  if (ImGui::GetIO().WantCaptureKeyboard)
+    return input;
+  input.left = IsKeyDown(KEY_A);
+  input.right = IsKeyDown(KEY_D);
+  input.jump = IsKeyDown(KEY_W) || IsKeyDown(KEY_SPACE);
+  input.down = IsKeyDown(KEY_S);
+  return input;
+}
+
+void Game::QueueRtsCast(UI &ui, int tick) {
+  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || ui.IsBlockingWorldInput())
+    return;
+  const Spell *spell = ui.GetSelectedSpell();
+  if (!spell) {
+    Notify("Pick a spell from the hotbar first (1-6)", 2.0f);
+    return;
+  }
+  const Character &me = m_match.characters[Local()];
+  Vector2 mouse = View::MouseCells();
+  Vector2 aim{mouse.x - me.Center().x, mouse.y - me.Center().y};
+  float len = std::hypot(aim.x, aim.y);
+  aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
+                     : Vector2{(float)me.facing, 0.0f};
+  PlannedCast cast = MakeCast(*spell, aim);
+  if (!cast.stats.valid) {
+    m_noticeText = SpellSystem::Problem(*spell);
+    Notify(m_noticeText.empty() ? "That spell can't be cast here"
+                                : m_noticeText.c_str(),
+           2.5f);
+    return;
+  }
+  int64_t key = Rts::CooldownKey(cast, ui.GetSelectedSlot());
+  switch (m_rts.QueueCast(std::move(cast), key, tick)) {
+  case Rts::Controller::CastResult::Queued:
+    if (AudioManager *audio = AudioManager::Instance())
+      audio->PlayUi(UiSound::SpellPlan);
+    break;
+  case Rts::Controller::CastResult::CoolingDown:
+    Notify("Still cooling down", 1.0f);
+    break;
+  case Rts::Controller::CastResult::SecondFlight:
+    Notify("One wind underfoot cast at a time", 1.5f);
+    break;
+  }
+}
+
+// Offline real time: the world runs at 60 ticks a second and the dummy
+// stands still
+void Game::UpdateRts(Simulation &sim, UI &ui) {
+  if (!ImGui::GetIO().WantCaptureKeyboard && IsKeyPressed(KEY_R)) {
+    ResetOpponent(sim);
+    Notify("Opponent reset", 1.5f);
+  }
+  m_waiting = false;
+  QueueRtsCast(ui, m_rtsTick);
+
+  m_rtsAccumulator += std::min(GetFrameTime(), 0.1f);
+  static const TurnPlan kStill;
+  while (m_rtsAccumulator >= TurnController::TICK_DT &&
+         m_state == RoundState::Playing) {
+    m_rtsAccumulator -= TurnController::TICK_DT;
+    TurnPlan local;
+    local.steps.push_back(m_rts.TakeStep(
+        RtsInput(), PlanCursor::FromCells(View::MouseCells())));
+    std::array<const TurnPlan *, Match::PLAYERS> plans{&kStill, &kStill};
+    plans[Local()] = &local;
+    Rts::ExecuteTick(sim, m_match, plans, 0, m_rtsTick++);
+
+    int winner = Match::RoundWinner(m_match);
+    if (winner < 0 && m_rtsTick >= Rts::ROUND_TICKS)
+      winner = Match::PLAYERS; // out of time: a draw
+    if (winner >= 0)
+      EndRound(winner);
+  }
 }
 
 // Offline practice: put the dummy back where it started, at full health
@@ -241,7 +326,7 @@ void Game::Commit() {
 }
 
 void Game::ToggleTime(Simulation &sim) {
-  if (m_state != RoundState::Playing)
+  if (m_state != RoundState::Playing || IsRts())
     return;
   // Online, turns start when the server says so
   if (m_online && (m_waiting || m_submitted))
@@ -263,6 +348,9 @@ void Game::ToggleTime(Simulation &sim) {
 Game::ClockState Game::GetClockState() const {
   if (m_state == RoundState::MatchOver)
     return ClockState::Over;
+  if (IsRts())
+    return m_state == RoundState::Playing ? ClockState::Executing
+                                          : ClockState::Over;
   if (m_online) {
     using Phase = LockstepClient::Phase;
     Phase p = m_online->GetPhase();
@@ -282,6 +370,8 @@ Game::ClockState Game::GetClockState() const {
 }
 
 float Game::TurnProgress() const {
+  if (IsRts())
+    return static_cast<float>(m_rtsTick) / Rts::ROUND_TICKS;
   if (m_online && m_online->GetPhase() == LockstepClient::Phase::Executing)
     return static_cast<float>(m_online->ExecutedTicks()) /
            TurnController::TURN_TICKS;
@@ -344,8 +434,19 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
     break;
   }
   state.clockProgress = TurnProgress();
-  state.ticksFree = TicksFree();
+  state.ticksFree = IsRts() ? TurnController::TURN_TICKS : TicksFree();
   state.matchRound = m_match.round;
+  state.cooldowns = {};
+  if (IsRts()) {
+    int tick = m_rtsTick;
+    for (int i = 0; i < DECK_SLOTS; ++i) {
+      int64_t key = -(i + 1);
+      if (m_online)
+        if (const auto &card = m_online->Cards(Local())[i])
+          key = card->id;
+      state.cooldowns[i] = m_rts.GetCooldowns().Remaining(key, tick);
+    }
+  }
 
   // Flashed during the turn: blind for the rest of it, then the white
   // fades through the next planning phase
@@ -373,7 +474,9 @@ void Game::Update(Simulation &sim, UI &ui) {
     return;
   }
 
-  if (m_waiting)
+  if (IsRts())
+    UpdateRts(sim, ui);
+  else if (m_waiting)
     UpdateWaiting(sim);
   else if (m_turn.GetPhase() == TurnController::Phase::Planning)
     UpdatePlanning(sim, ui);
@@ -473,7 +576,10 @@ void Game::FinishTurn(Simulation &sim) {
     EnterWaiting();
     return;
   }
+  EndRound(winner);
+}
 
+void Game::EndRound(int winner) {
   if (winner < Match::PLAYERS)
     m_roundsWon[winner]++;
   int needed = Match::ROUNDS / 2 + 1;
@@ -498,7 +604,8 @@ void Game::FinishTurn(Simulation &sim) {
 }
 
 void Game::Draw(const Simulation &sim, const UI &ui) const {
-  bool planning = m_state == RoundState::Playing && !m_waiting &&
+  bool rts = IsRts();
+  bool planning = !rts && m_state == RoundState::Playing && !m_waiting &&
                   m_turn.GetPhase() == TurnController::Phase::Planning;
 
   m_trail.Draw();
@@ -520,9 +627,11 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
   }
 
   // Live aim from where the local player will be when this cast would fire
-  if (planning && !ui.IsBlockingWorldInput()) {
+  bool aiming = planning || (rts && m_state == RoundState::Playing);
+  if (aiming && !ui.IsBlockingWorldInput()) {
     if (const Spell *spell = ui.GetSelectedSpell()) {
-      Vector2 origin = m_turn.LocalPreview().end.Center();
+      Vector2 origin = rts ? m_match.characters[Local()].Center()
+                           : m_turn.LocalPreview().end.Center();
       Vector2 mouse = View::MouseCells();
       Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
       float len = std::hypot(aim.x, aim.y);
@@ -576,7 +685,30 @@ void Game::DrawCharacter(const Character &c, Color color, bool drawHp) const {
   DrawCharacterBody(c, color, drawHp);
 }
 
+void Game::DrawRtsHud() const {
+  const Font &heading = Theme::RlHeading();
+  const Font &body = Theme::RlBody();
+  float cx = WINDOW_WIDTH * 0.5f;
+  int left = std::max(0, Rts::ROUND_TICKS - m_rtsTick) / TurnController::TICKS_PER_SECOND;
+  Theme::DrawTextCentered(heading,
+                          TextFormat("ROUND %d  (%d-%d)", m_match.round + 1,
+                                     m_roundsWon[Local()], m_roundsWon[Opponent()]),
+                          cx, 10, 17, Theme::Rl(Tone::Parchment));
+  Theme::DrawTextCentered(heading, TextFormat("%d:%02d", left / 60, left % 60), cx,
+                          30, 26, Theme::Rl(left <= 15 ? Tone::Oxblood : Tone::Brass));
+  const char *hint = "A/D move    W or Space jump    S dive    1-6 pick    Click cast";
+  if (m_online && !m_online->OpponentConnected())
+    hint = "Opponent disconnected - they have a minute to come back";
+  Theme::DrawTextCentered(body, hint, cx, 60, 15, Theme::Rl(Tone::Muted));
+  if (m_notice && m_noticeTime > 0.0f)
+    Theme::DrawTextCentered(body, m_notice, cx, 80, 19, Theme::Rl(Tone::BrassBright));
+}
+
 void Game::DrawHud() const {
+  if (IsRts()) {
+    DrawRtsHud();
+    return;
+  }
   constexpr float barW = 360.0f;
   constexpr float barH = 14.0f;
   float x = (WINDOW_WIDTH - barW) * 0.5f;

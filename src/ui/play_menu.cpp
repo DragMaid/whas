@@ -357,9 +357,12 @@ void PlayMenu::DrawSoloSetup() {
                      "your match decks for each round.");
   Widgets::SectionHeader("Maps");
   m_maps.DrawPoolPicker(m_soloPool);
+  Widgets::SectionHeader("Mode");
+  Widgets::Toggle("Real time: no planning, spells cool down", &m_soloRts);
   ImGui::Spacing();
   if (Widgets::Button("Begin the duel", {-1, 0}, true)) {
     m_practice = m_maps.BuildOptions(m_soloPool);
+    m_practice->rts = m_soloRts;
     m_open = false;
   }
 }

@@ -146,6 +146,7 @@ set(SOURCES
 
     src/game/character.cpp
     src/game/turn_controller.cpp
+    src/game/rts.cpp
     src/game/match.cpp
     src/game/arena_gen.cpp
     src/game/map.cpp

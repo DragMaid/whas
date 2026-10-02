@@ -2,6 +2,7 @@
 #include "whas/game/character.h"
 #include "whas/game/flight_trail.h"
 #include "whas/game/match.h"
+#include "whas/game/rts.h"
 #include "whas/game/turn_controller.h"
 #include <array>
 #include <cstdint>
@@ -27,6 +28,8 @@ public:
   void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0,
                   MatchOptions options = {});
   const MatchOptions &Options() const { return m_options; }
+  // Real time instead of planned turns
+  bool IsRts() const;
 
   // Online: the client runs the turn flow (the server's clock, both plans,
   // hashes); the game lets the local player plan in between and shows it
@@ -81,6 +84,13 @@ private:
   void UpdatePlanning(Simulation &sim, UI &ui);
   void UpdateExecuting(Simulation &sim);
   void FinishTurn(Simulation &sim);
+  // winner: a slot, Match::PLAYERS for a double KO or a draw
+  void EndRound(int winner);
+  void UpdateRts(Simulation &sim, UI &ui);
+  // Real time: clicks become casts on the next tick
+  void QueueRtsCast(UI &ui, int tick);
+  CharacterInput RtsInput() const;
+  void DrawRtsHud() const;
   void Notify(const char *text, float seconds);
 
   void DrawCharacter(const Character &c, Color color, bool drawHp) const;
@@ -99,6 +109,9 @@ private:
   std::array<int, Match::PLAYERS> m_roundsWon{};
   std::array<Vector2, Match::PLAYERS> m_spawns{};
   TurnController m_turn;
+  Rts::Controller m_rts;
+  int m_rtsTick = 0; // ticks played this round
+  float m_rtsAccumulator = 0.0f;
   FlightTrail m_trail;
   RoundState m_state = RoundState::Playing;
   // Between turns: the world is frozen until Space stops time to plan

@@ -227,6 +227,20 @@ void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
     ImVec2 t0{p0.x + 3, p0.y + 3};
     if (spell)
       m_thumbnails->Draw(dl, *spell, t0, {t0.x + thumb, t0.y + thumb}, alpha);
+    // Real time: a shadow sweeps off the circle as the cooldown runs out
+    if (float cool = state.cooldowns[i]; cool > 0.0f) {
+      ImVec2 c{t0.x + thumb * 0.5f, t0.y + thumb * 0.5f};
+      float r = thumb * 0.5f;
+      constexpr float TOP = -PI * 0.5f;
+      // In halves: a fill has to be convex
+      for (float from = 0.0f; from < cool; from += 0.5f) {
+        float to = std::min(cool, from + 0.5f);
+        dl->PathLineTo(c);
+        dl->PathArcTo(c, r, TOP + from * 2 * PI, TOP + to * 2 * PI, 16);
+        dl->PathFillConvex(Theme::U32(Tone::Ink, 0.72f));
+      }
+      dl->AddCircle(c, r, Theme::U32(Tone::Oxblood, 0.8f), 32, 1.5f);
+    }
 
     // Key badge in the corner
     ImVec2 badge{p0.x + Px(10), p0.y + Px(10)};
