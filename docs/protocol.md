@@ -68,13 +68,22 @@ and `pulling` may set it.
   files are marked `"format": 2` from then on.
 - Uploads are rejected unless the evaluator makes a valid spell of them.
 
-A layered spell also has `components`: 1 to 5 entries of
+A layered spell also has `components`: 1 to 64 entries of
 `{source, x, y, scale (0.2-0.7), rotation, glyphs[]}`.
 
 - Each entry is a plain spell.
 - The top-level `glyphs` are the outer ring and must all be signs.
 - Plain spells leave out `components`, which keeps their upload hash
   unchanged.
+
+**Limits.** Ordinary matches allow at most 32 signs in any one circle and
+at most 5 spells in a layered spell. The sigil rules above apply everywhere.
+
+- Spells over the limits are still accepted.
+- In a room with `chaos: true` they play like any other spell.
+- In every other match the server leaves them out of the locked decks, as
+  empty slots. A round whose deck would be left empty is rejected.
+- A circle never holds more than 256 glyphs, chaos or not.
 
 A `SpellCard` is `{id, name, glyphs, stats, components?}`, where `stats` is
 the quantized `SpellQuant::Stats`:
@@ -104,9 +113,33 @@ the quantized `SpellQuant::Stats`:
 | Client → server | Server → client |
 |---|---|
 | `queue {}` / `cancelQueue {}` | `queued` / `queueCancelled` |
-| `createLobby {}` | `lobbyCreated {code}` (6 characters) |
+| `createLobby {options?}` | `lobbyCreated {code}` (6 characters) or `error` |
 | `joinLobby {code}` | `matchFound` or `error` |
-| | `matchFound {matchId, seed, slot, rulesetVersion, mode, deckDeadlineMs}` |
+| | `matchFound {matchId, seed, slot, rulesetVersion, mode, options, deckDeadlineMs}` |
+
+#### Room options
+
+The host picks what the room plays by. Quick matches always get the defaults.
+
+```
+options = {"maps": [MapEntry, ...], "chaos": false, "rts": false}
+MapEntry = {"kind": "random"} | {"kind": "custom", "map": MapFile}
+```
+
+- Round `r` is played on `maps[r % maps.length]`. An empty list means a
+  generated arena every round, as before.
+- **`random`** builds the arena from the round seed with the default world
+  settings.
+- **`custom`** carries the whole map file: the `data/maps/<id>.json` format
+  from `src/game/map.cpp`. That is `{format: 1, name, gen, spawns[2], cells,
+  settings}`, where `cells` is a base64 run-length list of one element per
+  cell and `settings` holds the world settings that differ from the defaults.
+  The round is built by applying the settings, painting the cells and
+  anchoring the rock.
+- The server checks the shape: at most 3 maps, and at most 64 KB per map. It
+  hands the same JSON to both players, to `catchUp` and to the replay. A
+  client that can't read a map falls back to generated arenas, and since both
+  clients read the same JSON, both fall back together.
 
 ### Match
 
@@ -139,6 +172,48 @@ the quantized `SpellQuant::Stats`:
 5. `roundEnd {round, winner, roundsWon}`, and finally
    `matchEnd {winner, reason, status, roundsWon}`.
 
+### Real-time rounds (`options.rts`)
+
+In a real-time room there is no planning: both players act at once
+(`include/whas/game/rts.h`). A spell can't be cast again until its cast time
+(`CastTicks`) has passed since its last cast. Nobody is held still while
+casting.
+
+**Constants**
+
+| Name | Value |
+|---|---|
+| Batch | 6 ticks (0.1 s) |
+| Input delay | 2 batches |
+| Hash report | every 10 batches |
+| Round | 1800 batches (3 minutes), then a draw |
+
+**Flow**
+
+1. After `roundStart`, each client sends `inputs {round, batch, plan}` for
+   batches 0 and 1 with an empty plan. The plan is the usual plan format,
+   holding at most 6 steps.
+2. The server relays a batch as `frames {round, batch, plans[2],
+   substituted[2]}` once both players' parts are in. If a part is still
+   missing after 2 s, or its player has disconnected, it becomes an empty
+   plan.
+3. A plan that fails validation also becomes an empty plan, and its sender
+   gets `planRejected`. Validation checks the deck, the aim, one wind
+   underfoot cast per tick, and cooldowns tracked per spell id.
+4. While a client plays batch `b`, it records its input for batch `b + 2`,
+   and sends it when `b` is done. A client that hasn't received batch `b`
+   yet waits for it.
+5. After batch `b` a client sends `stateHash {round, turn: b, hash, winner}`
+   when `(b + 1) % 10 == 0`, or as soon as someone has fallen.
+   - Matching reports with a winner end the round (`roundEnd`).
+   - Reports that differ void the match. Unlike planned turns, there is no
+     snapshot resync.
+6. Each batch is stored as one turn record, with `turn` set to the batch
+   number. A replay of a real-time match plays each record for 6 ticks.
+7. `catchUp` has `current.phase = "rts"` and `current.turn` set to the next
+   batch. A returning client re-simulates the batches so far and carries on
+   from there.
+
 ### Disconnects
 
 - **Leaving on purpose.** `leave {}` forfeits.
@@ -147,7 +222,7 @@ the quantized `SpellQuant::Stats`:
   `rejoin {matchId}`. The server replies:
 
   ```
-  catchUp {seed, slot, decks, yourDecks, turns[{round, turn, plans}], roundsWon, current {round, turn, phase, committed, deadlineMs}}
+  catchUp {seed, slot, options, decks, yourDecks, turns[{round, turn, plans}], roundsWon, current {round, turn, phase, committed, deadlineMs}}
   ```
 
   The client re-simulates from the seed through every turn and carries on.
@@ -162,7 +237,7 @@ collapsed into runs, and casts carry the server spell id:
 {"v":1,"runs":[{"n":30,"in":2},{"n":1,"in":0,"casts":[{"id":7,"ax":16383,"ay":0}]},{"n":29,"in":0,"c":[1280,400]}]}
 ```
 
-`in` is a bit field: 1 = left, 2 = right, 4 = jump. `c` is where the
+`in` is a bit field: 1 = left, 2 = right, 4 = jump, 8 = down (dive while airborne). `c` is where the
 player's cursor was, in 1/8 cells, for sights set spells (two int16s); a
 run without it keeps the last one. The server rejects a plan
 (`server/Whas.Server/Matches/PlanValidator.cs`) if any of these hold:
@@ -181,8 +256,8 @@ Send `Authorization: Bearer <guest token>` with every request.
 
 - `GET /api/players/me` returns `{playerId, wins, losses}`.
 - `GET /api/players/me/matches` returns your last 50 matches.
-- `GET /api/matches/{id}/replay` returns the seed, build, both players' round
-  decks and every turn's plans and hashes. That is enough to re-simulate the
+- `GET /api/matches/{id}/replay` returns the seed, build, room options, both
+  players' round decks and every turn's plans and hashes. That is enough to re-simulate the
   match.
 - `GET /api/spells/mine`, `GET /api/decks/mine`
 - `GET /health`

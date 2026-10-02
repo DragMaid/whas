@@ -35,7 +35,7 @@ public class PlanValidatorTests
     [Theory]
     [InlineData("""{"v":2,"runs":[]}""", "version")]
     [InlineData("""{"v":1,"runs":[{"n":181,"in":0}]}""", "longer")]
-    [InlineData("""{"v":1,"runs":[{"n":1,"in":9}]}""", "bad run")]
+    [InlineData("""{"v":1,"runs":[{"n":1,"in":16}]}""", "bad run")]
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":99,"ax":16383,"ay":0}]}]}""", "deck")]
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":9,"ax":16383,"ay":0}]}]}""", "invalid")]
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":7,"ax":9000,"ay":0}]}]}""", "unit")]

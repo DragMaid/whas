@@ -117,6 +117,12 @@ namespace Whas.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("OptionsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasDefaultValueSql("'{}'::jsonb");
+
                     b.Property<int>("RulesetVersion")
                         .HasColumnType("integer");
 

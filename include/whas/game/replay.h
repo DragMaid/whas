@@ -31,10 +31,16 @@ public:
   int Round() const { return m_state.round; }
   int Turn() const;
   int Tick() const { return m_tick; }
+  // Ticks in one stored turn: a planned turn, or a real-time batch
+  int TicksPerRecord() const;
   bool Finished() const { return m_index >= TurnCount(); }
   int Checked() const { return m_checked; }
   int Mismatches() const { return m_mismatches; }
   const std::vector<std::string> &Report() const { return m_report; }
+  // Both players' cards per round
+  const std::array<std::vector<RoundCards>, 2> &Cards() const { return m_cards; }
+  // Which slot saved this replay (its "local" header), -1 if unknown
+  int LocalSlot() const { return m_localSlot; }
 
 private:
   struct TurnRecord {
@@ -48,6 +54,9 @@ private:
 
   int64_t m_matchId = 0;
   uint64_t m_seed = 0;
+  MatchOptions m_options;
+  std::array<std::vector<RoundCards>, 2> m_cards;
+  int m_localSlot = -1;
   std::string m_buildId;
   std::vector<TurnRecord> m_turns;
   Match::State m_state;

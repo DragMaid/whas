@@ -41,6 +41,7 @@ public:
   static void DrawStats(const SpellStats &stats, const char *problem = nullptr);
 
 private:
+  void DrawGlyphCounter() const;
   void DrawOverlay();
   void DrawCanvas(ImVec2 canvasOrigin, ImVec2 canvasSize);
   void DrawPalette();

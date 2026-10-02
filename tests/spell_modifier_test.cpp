@@ -518,9 +518,12 @@ TEST_CASE("a layered spell fires every part and takes longer to cast",
   // Flight moves the caster; the other two are effects
   REQUIRE(sim.GetActiveSpellEffects().size() == 2);
 
-  // At most five parts, and nothing but signs in the outer ring
-  layered.components.assign(6, Part(water, 0.2f));
+  // Past five parts it's a chaos-room spell, past the ceiling no spell;
+  // and nothing but signs in the outer ring
+  layered.components.assign(LAYER_HARD_MAX_COMPONENTS + 1, Part(water, 0.2f));
   REQUIRE_FALSE(SpellSystem::Evaluate(layered).valid);
+  layered.components.resize(6);
+  REQUIRE(SpellSystem::Evaluate(layered).valid);
   layered.components.resize(5);
   REQUIRE(SpellSystem::Evaluate(layered).valid);
   layered.glyphs.push_back({"fire", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f});

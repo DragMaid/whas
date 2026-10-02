@@ -11,7 +11,7 @@ public sealed class SessionHandler(PlayerService players, SpellService spells,
                                    MatchmakingService matchmaking)
 {
     static readonly HashSet<string> MatchTypes =
-        ["matchDecks", "commit", "reveal", "stateHash", "snapshot", "leave"];
+        ["matchDecks", "commit", "reveal", "stateHash", "snapshot", "leave", "inputs"];
 
     public async Task HandleAsync(ClientSession session, JsonElement msg)
     {
@@ -83,7 +83,10 @@ public sealed class SessionHandler(PlayerService players, SpellService spells,
                 session.Send("queueCancelled");
                 break;
             case "createLobby":
-                matchmaking.CreateLobby(session);
+                if (RoomOptions.TryParse(msg, out var room, out var roomError))
+                    matchmaking.CreateLobby(session, room);
+                else
+                    session.Error(roomError);
                 break;
             case "joinLobby":
                 await matchmaking.JoinLobbyAsync(session, msg.Str("code"));

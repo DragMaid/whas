@@ -11,6 +11,8 @@ constexpr float GLYPH_SCALE_MAX = 3.0f;
 constexpr float GLYPH_ROTATION_MIN = -180.0f;
 constexpr float GLYPH_ROTATION_MAX = 180.0f;
 constexpr int SPELL_NAME_MAX_LEN = 32;
+// Signs in one circle in an ordinary match; chaos rooms have no limit
+constexpr int SIGN_LIMIT = 32;
 
 // Layered spells: the embedded spells sit in the core, the outer ring band
 // holds signs that modify every one of them. Only one level of nesting.
@@ -18,7 +20,10 @@ constexpr int SPELL_NAME_MAX_LEN = 32;
 constexpr float LAYER_CORE_RADIUS = 175.0f;
 constexpr float LAYER_RING_INNER = 183.0f;
 constexpr float LAYER_RING_OUTER = SPELL_OUTER_RADIUS - 4.0f;
+// Parts of a layered spell in an ordinary match; chaos rooms take more, up
+// to the hard ceiling (which keeps spells a sane size on the wire)
 constexpr int LAYER_MAX_COMPONENTS = 5;
+constexpr int LAYER_HARD_MAX_COMPONENTS = 64;
 // Component scale is its radius as a share of a full circle's
 constexpr float COMPONENT_SCALE_MIN = 0.2f;
 constexpr float COMPONENT_SCALE_MAX = LAYER_CORE_RADIUS / SPELL_OUTER_RADIUS;

@@ -19,6 +19,9 @@ public sealed class MatchOptions
     public TimeSpan RejoinGrace { get; set; } = TimeSpan.FromSeconds(60);
     // A round that runs this long without a knockout is a draw
     public int MaxTurnsPerRound { get; set; } = 40;
+    // Real time: how long a missing input batch is waited for before the
+    // player is taken to stand still for it
+    public TimeSpan RtsInputTimeout { get; set; } = TimeSpan.FromSeconds(2);
 }
 
 public abstract record MatchEvent;
@@ -70,9 +73,10 @@ public sealed class MatchActor
     public long MatchId { get; private set; }
     public ulong Seed { get; }
     public MatchMode Mode { get; }
+    public RoomOptions Room { get; }
     public Task Completion { get; private set; } = Task.CompletedTask;
 
-    public MatchActor(ClientSession a, ClientSession b, MatchMode mode,
+    public MatchActor(ClientSession a, ClientSession b, MatchMode mode, RoomOptions room,
                       IDbContextFactory<WhasDb> dbFactory, SpellService spells,
                       MatchOptions options, ILogger log, TimeProvider? time = null)
     {
@@ -82,6 +86,7 @@ public sealed class MatchActor
         _log = log;
         _time = time ?? TimeProvider.System;
         Mode = mode;
+        Room = room;
         Seed = BitConverter.ToUInt64(RandomNumberGenerator.GetBytes(8));
         _buildId = a.BuildId ?? "";
         // Who is slot 0 is random too
@@ -108,6 +113,7 @@ public sealed class MatchActor
                 Mode = Mode,
                 RulesetVersion = Protocol.RulesetVersion,
                 BuildId = _buildId,
+                OptionsJson = Room.Json.GetRawText(),
                 StartedAt = Now,
                 Status = MatchStatus.Running,
             };
@@ -151,6 +157,16 @@ public sealed class MatchActor
             reason = "server error";
         }
 
+        // Stored first, so a client fetching the replay on matchEnd gets the
+        // finished match
+        try
+        {
+            await PersistEndAsync(winner, status, CancellationToken.None);
+        }
+        catch (Exception e)
+        {
+            _log.LogError(e, "match {Match} result not saved", MatchId);
+        }
         Broadcast("matchEnd", new { winner, reason, status = status.ToString(), roundsWon = _roundsWon });
         foreach (var s in _sessions)
             if (s is not null && s.Match == this)
@@ -158,7 +174,6 @@ public sealed class MatchActor
                 s.Match = null;
                 s.Slot = -1;
             }
-        await PersistEndAsync(winner, status, CancellationToken.None);
     }
 
     // ---- Events ------------------------------------------------------------
@@ -245,6 +260,7 @@ public sealed class MatchActor
                 slot = i,
                 rulesetVersion = Protocol.RulesetVersion,
                 mode = Mode.ToString(),
+                options = Room.Json,
                 deckDeadlineMs = DeadlineMs(_phaseDeadline),
             });
 
@@ -260,7 +276,8 @@ public sealed class MatchActor
             if (msg.Type != "matchDecks" || _decks[msg.Slot] is not null)
                 continue;
             long[] ids = msg.Body.GetProperty("deckIds").Deserialize<long[]>() ?? [];
-            var (rounds, error) = await _spells.LoadRoundDecksAsync(_playerIds[msg.Slot], ids, ct);
+            var (rounds, error) = await _spells.LoadRoundDecksAsync(_playerIds[msg.Slot], ids,
+                                                                    Room.Chaos, ct);
             if (rounds is null)
             {
                 SendTo(msg.Slot, "decksRejected", new { reason = error });
@@ -303,7 +320,9 @@ public sealed class MatchActor
             var decks = new[] { DeckMap(0, _round), DeckMap(1, _round) };
 
             int roundWinner = Players; // draw unless someone wins
-            for (_turn = 0; _turn < _options.MaxTurnsPerRound; ++_turn)
+            if (Room.Rts)
+                roundWinner = await PlayRtsRoundAsync(decks, ct);
+            else for (_turn = 0; _turn < _options.MaxTurnsPerRound; ++_turn)
             {
                 var plans = await PlayTurnAsync(decks, ct);
                 int winner = await CheckTurnAsync(plans, ct);
@@ -424,6 +443,151 @@ public sealed class MatchActor
         return final;
     }
 
+    // ---- Real time -----------------------------------------------------------
+
+    // Real time (rts.h): both players stream their input in batches of
+    // BatchTicks ticks. A batch is relayed as soon as both players' parts are
+    // in (or a missing one has waited RtsInputTimeout, or its player is gone).
+    // Clients report a state hash every few batches, and as soon as someone
+    // falls; agreeing reports with a winner end the round. Returns the round
+    // winner, Players for a draw.
+    public const int RtsRoundBatches = 1800; // 3 minutes (Rts::ROUND_BATCHES)
+    const int RtsMaxAhead = 50;              // batches a client may send early
+    const int MaxPlanLength = 16 * 1024;
+
+    async Task<int> PlayRtsRoundAsync(Dictionary<long, QuantizedStats>[] decks, CancellationToken ct)
+    {
+        const int batchTicks = PlanValidator.BatchTicks;
+        _phase = "rts";
+        _turn = 0;
+        var readyAt = new[] { new Dictionary<long, int>(), new Dictionary<long, int>() };
+        var pending = new Dictionary<int, string?[]>();
+        var reports = new Dictionary<int, (string? Hash, int Winner)[]>();
+        var unsaved = new Dictionary<int, TurnRecord>();
+        var waitingSince = Now;
+
+        string?[] Inputs(int batch) =>
+            pending.TryGetValue(batch, out var got) ? got : pending[batch] = new string?[Players];
+
+        async Task FlushAsync()
+        {
+            if (unsaved.Count == 0)
+                return;
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            db.Turns.AddRange(unsaved.Values);
+            await db.SaveChangesAsync(ct);
+            unsaved.Clear();
+        }
+
+        while (_turn < RtsRoundBatches)
+        {
+            var got = Inputs(_turn);
+            bool timedOut = Now >= waitingSince + _options.RtsInputTimeout;
+            if (Enumerable.Range(0, Players).All(i => got[i] is not null || !Connected(i) || timedOut))
+            {
+                var final = new string[Players];
+                var substituted = new bool[Players];
+                for (int i = 0; i < Players; ++i)
+                {
+                    string? why = got[i] is null ? "no input in time" : null;
+                    if (got[i] is { } plan)
+                    {
+                        var check = PlanValidator.ValidateBatch(plan, decks[i], _turn * batchTicks,
+                                                                readyAt[i]);
+                        if (check.Ok)
+                        {
+                            final[i] = plan;
+                            foreach (long id in check.CastSpellIds)
+                                _casts[id] = _casts.GetValueOrDefault(id) + 1;
+                            continue;
+                        }
+                        why = check.Error;
+                        SendTo(i, "planRejected", new { round = _round, turn = _turn, reason = why });
+                    }
+                    final[i] = PlanValidator.EmptyPlan;
+                    substituted[i] = true;
+                }
+                Broadcast("frames", new { round = _round, batch = _turn, plans = final, substituted });
+                _history.Add(new TurnHistory(_round, _turn, final));
+                unsaved[_turn] = new TurnRecord
+                {
+                    MatchId = MatchId,
+                    Round = _round,
+                    Turn = _turn,
+                    PlanSlot0Json = final[0],
+                    PlanSlot1Json = final[1],
+                    At = Now,
+                };
+                pending.Remove(_turn);
+                ++_turn;
+                waitingSince = Now;
+                continue;
+            }
+
+            var msg = await NextAsync(waitingSince + _options.RtsInputTimeout, ct);
+            if (msg is null || msg.Body.ValueKind != JsonValueKind.Object ||
+                !msg.Body.TryGetProperty("round", out var r) || r.ValueKind != JsonValueKind.Number ||
+                r.GetInt32() != _round)
+                continue;
+
+            if (msg.Type == "inputs")
+            {
+                int batch = msg.Body.Int("batch");
+                string plan = msg.Body.Str("plan");
+                if (batch >= _turn && batch < _turn + RtsMaxAhead && plan.Length <= MaxPlanLength &&
+                    Inputs(batch)[msg.Slot] is null)
+                    Inputs(batch)[msg.Slot] = plan;
+                continue;
+            }
+            if (msg.Type != "stateHash")
+                continue;
+
+            int at = msg.Body.Int("turn");
+            if (at < 0 || at >= _turn)
+                continue;
+            if (!reports.TryGetValue(at, out var rep))
+                reports[at] = rep = new (string?, int)[Players];
+            if (rep[msg.Slot].Hash is not null)
+                continue;
+            rep[msg.Slot] = (msg.Body.Str("hash"), Math.Clamp(msg.Body.Int("winner"), -1, Players));
+            if (unsaved.TryGetValue(at, out var record))
+            {
+                if (msg.Slot == 0) record.HashSlot0 = rep[0].Hash;
+                else record.HashSlot1 = rep[1].Hash;
+            }
+
+            bool both = rep[0].Hash is not null && rep[1].Hash is not null;
+            if (!both && Connected(1 - msg.Slot))
+                continue;
+            if (both && (rep[0].Hash != rep[1].Hash || rep[0].Winner != rep[1].Winner))
+            {
+                await FlushAsync();
+                await using var db = await _dbFactory.CreateDbContextAsync(ct);
+                db.DesyncReports.Add(new DesyncReport
+                {
+                    MatchId = MatchId,
+                    Round = _round,
+                    Turn = at,
+                    HashA = rep[0].Hash!,
+                    HashB = rep[1].Hash!,
+                    ReferenceSlot = -1,
+                    BuildIdA = _buildId,
+                    BuildIdB = _buildId,
+                    At = Now,
+                });
+                await db.SaveChangesAsync(ct);
+                throw new MatchOver(-1, MatchStatus.Voided, "the players' worlds drifted apart");
+            }
+            reports.Remove(at);
+            await FlushAsync();
+            int winner = rep[both ? 0 : msg.Slot].Winner;
+            if (winner >= 0)
+                return winner;
+        }
+        await FlushAsync();
+        return Players; // out of time
+    }
+
     bool IsThisTurn(JsonElement body) =>
         body.Int("round") == _round && body.Int("turn") == _turn;
 
@@ -516,6 +680,7 @@ public sealed class MatchActor
             seed = Protocol.U64(Seed),
             slot,
             rulesetVersion = Protocol.RulesetVersion,
+            options = Room.Json,
             decks = _decks.Select(d => d?.Take(_round + 1).ToList()).ToArray(),
             yourDecks = _decks[slot],
             turns = _history.Select(h => new { round = h.Round, turn = h.Turn, plans = h.Plans }),

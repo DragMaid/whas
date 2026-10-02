@@ -1,14 +1,18 @@
 #include "whas/engine/view.h"
 #include "whas/game/sandbox.h"
 #include "imgui.h"
+#include "whas/audio/audio_manager.h"
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
 #include "whas/game/character_draw.h"
 #include "whas/game/match.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <cmath>
+
+using Theme::Tone;
 
 namespace {
 
@@ -99,8 +103,10 @@ Vector2 Sandbox::AimAtMouse() const {
 
 void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
   sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
-  if (cast.stats.HasFlight())
-    m_avatar.Launch(SpellSystem::FlightVelocity(cast.stats, cast.aim));
+  if (cast.stats.HasFlight()) {
+    m_avatar.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
+    AudioManager::EmitFlightLaunch(m_avatar.Center().x);
+  }
 }
 
 void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
@@ -139,6 +145,7 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
     // Time we couldn't keep up with is dropped, not owed
     m_accumulator = std::min(m_accumulator, TurnController::TICK_DT);
   }
+  m_trail.Update(&m_avatar, m_hasAvatar ? 1 : 0, GetFrameTime());
 
   state.clock = m_stopped ? ClockLook::Stopped : ClockLook::Running;
   state.clockProgress =
@@ -198,9 +205,11 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   if (!spell || !SpellSystem::Evaluate(*spell).valid)
     return;
   PlannedCast cast = PlannedCast::Local(*spell, AimAtMouse());
-  if (m_stopped)
+  if (m_stopped) {
     m_queued.push_back(std::move(cast));
-  else
+    if (AudioManager *audio = AudioManager::Instance())
+      audio->PlayUi(UiSound::SpellPlan);
+  } else
     Fire(sim, cast);
 }
 
@@ -233,6 +242,7 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                    const UIState &state) const {
   if (!m_hasAvatar)
     return;
+  m_trail.Draw();
   DrawCharacterBody(m_avatar, AVATAR_COLOR, true);
 
   float gravity = sim.GetConfig().world.gravity;
@@ -252,14 +262,16 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                MouseCell())) {
     Rectangle r{grab.x * CELL_SIZE - 3, grab.y * CELL_SIZE - 3,
                 grab.width * CELL_SIZE + 6, grab.height * CELL_SIZE + 6};
-    DrawRectangleLinesEx(r, 1.5f, Color{130, 170, 255, 220});
-    DrawText("drag", (int)r.x, (int)(r.y - 14), 12, Color{130, 170, 255, 220});
+    DrawRectangleLinesEx(r, 1.5f, Theme::Rl(Tone::Brass, 0.85f));
+    Theme::DrawText(Theme::RlBody(), "drag", {r.x, r.y - 18}, 16,
+                    Theme::Rl(Tone::Brass, 0.85f));
     return;
   }
   if (const Spell *spell = ui.GetSelectedSpell())
     ui.DrawAimIndicator(*spell, m_avatar.Center(), AimAtMouse(), gravity);
   if (m_stopped)
-    DrawText(TextFormat("TIME STOPPED - %d queued, Space to release",
-                        (int)m_queued.size()),
-             12, 12, 18, Color{110, 210, 255, 255});
+    Theme::DrawText(Theme::RlHeading(),
+                    TextFormat("TIME STOPPED  -  %d queued, Space to release",
+                               (int)m_queued.size()),
+                    {14, 12}, 18, Theme::Rl(Tone::Verdigris));
 }

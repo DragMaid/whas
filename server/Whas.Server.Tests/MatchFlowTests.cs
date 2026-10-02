@@ -274,6 +274,135 @@ public class MatchFlowTests(ServerFixture server)
     }
 
     [Fact]
+    public async Task LobbyMapPoolsReachBothPlayersAndTheReplay()
+    {
+        string build = "maps-" + Guid.NewGuid();
+        var host = await NewPlayerAsync(build);
+        var friend = await NewPlayerAsync(build);
+
+        var tooMany = new object[] { new { kind = "random" }, new { kind = "random" },
+                                     new { kind = "random" }, new { kind = "random" } };
+        await host.Client.SendAsync(new { type = "createLobby", options = new { maps = tooMany } });
+        Assert.Contains("at most", (await host.Client.ExpectAsync("error")).GetProperty("message").GetString());
+
+        var huge = new { kind = "custom", map = new { cells = new string('A', 70 * 1024) } };
+        await host.Client.SendAsync(new { type = "createLobby", options = new { maps = new object[] { huge } } });
+        Assert.Contains("too large", (await host.Client.ExpectAsync("error")).GetProperty("message").GetString());
+
+        var custom = new { kind = "custom", map = new { format = 1, name = "Pond" } };
+        await host.Client.SendAsync(new
+        {
+            type = "createLobby",
+            options = new { maps = new object[] { custom, new { kind = "random" } }, chaos = true },
+        });
+        string code = (await host.Client.ExpectAsync("lobbyCreated")).GetProperty("code").GetString()!;
+        await friend.Client.SendAsync(new { type = "joinLobby", code });
+        foreach (var p in new[] { host, friend })
+        {
+            var options = (await p.Client.ExpectAsync("matchFound")).GetProperty("options");
+            var maps = options.GetProperty("maps");
+            Assert.Equal(2, maps.GetArrayLength());
+            Assert.Equal("Pond", maps[0].GetProperty("map").GetProperty("name").GetString());
+            Assert.Equal("random", maps[1].GetProperty("kind").GetString());
+            Assert.True(options.GetProperty("chaos").GetBoolean());
+            Assert.False(options.GetProperty("rts").GetBoolean());
+        }
+    }
+
+    [Fact]
+    public async Task SpellsOverTheLimitOnlyPlayInChaosRooms()
+    {
+        foreach (bool chaos in new[] { false, true })
+        {
+            string build = "chaos-" + Guid.NewGuid();
+            var host = await NewPlayerAsync(build);
+            var friend = await NewPlayerAsync(build);
+
+            // 33 signs: accepted, but over the ordinary limit
+            var signs = Enumerable.Repeat<object>(
+                new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 0.1f, rotation = 0f }, 33);
+            object[] glyphs = [new { assetId = "water", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
+                               .. signs];
+            await host.Client.SendAsync(new { type = "uploadSpell", @ref = "big", name = "Deluge", glyphs });
+            long big = (await host.Client.ExpectAsync("spellAccepted")).GetProperty("spellId").GetInt64();
+            await host.Client.SendAsync(new
+            {
+                type = "upsertDeck", @ref = "c", name = "Chaos",
+                spellIds = new[] { big, host.WaterId, 0, 0, 0, 0 },
+            });
+            long deck = (await host.Client.ExpectAsync("deckAccepted")).GetProperty("deckId").GetInt64();
+
+            await host.Client.SendAsync(new { type = "createLobby", options = new { chaos } });
+            string code = (await host.Client.ExpectAsync("lobbyCreated")).GetProperty("code").GetString()!;
+            await friend.Client.SendAsync(new { type = "joinLobby", code });
+            await host.Client.ExpectAsync("matchFound");
+            await friend.Client.ExpectAsync("matchFound");
+
+            await host.Client.SendAsync(new { type = "matchDecks", deckIds = new[] { deck, deck, deck } });
+            var locked = await host.Client.ExpectAsync("decksLocked");
+            var round = locked.GetProperty("rounds")[0];
+            Assert.Equal(chaos ? JsonValueKind.Object : JsonValueKind.Null, round[0].ValueKind);
+            Assert.Equal(JsonValueKind.Object, round[1].ValueKind);
+            await host.Client.SendAsync(new { type = "leave" });
+        }
+    }
+
+    static string BatchPlan(long spellId = 0) => spellId == 0
+        ? """{"v":1,"runs":[{"n":6,"in":2}]}"""
+        : $$"""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":{{spellId}},"ax":{{Unit}},"ay":0}]},{"n":5,"in":1}]}""";
+
+    [Fact]
+    public async Task RealTimeRoomsStreamInputBatches()
+    {
+        string build = "rts-" + Guid.NewGuid();
+        var host = await NewPlayerAsync(build);
+        var friend = await NewPlayerAsync(build);
+        await host.Client.SendAsync(new { type = "createLobby", options = new { rts = true } });
+        string code = (await host.Client.ExpectAsync("lobbyCreated")).GetProperty("code").GetString()!;
+        await friend.Client.SendAsync(new { type = "joinLobby", code });
+        foreach (var p in new[] { host, friend })
+        {
+            var found = await p.Client.ExpectAsync("matchFound");
+            Assert.True(found.GetProperty("options").GetProperty("rts").GetBoolean());
+            p.Slot = found.GetProperty("slot").GetInt32();
+            await p.Client.SendAsync(new { type = "matchDecks", deckIds = new[] { p.DeckId, p.DeckId, p.DeckId } });
+            await p.Client.ExpectAsync("decksLocked");
+        }
+        foreach (var p in new[] { host, friend })
+            await p.Client.ExpectAsync("roundStart");
+        var (p0, p1) = host.Slot == 0 ? (host, friend) : (friend, host);
+
+        // Batch 0: slot 0 casts, slot 1 walks. A batch goes out once both are in.
+        await p0.Client.SendAsync(new { type = "inputs", round = 0, batch = 0, plan = BatchPlan(p0.WaterId) });
+        await p1.Client.SendAsync(new { type = "inputs", round = 0, batch = 0, plan = BatchPlan() });
+        var frames = await p0.Client.ExpectAsync("frames");
+        Assert.Equal(0, frames.GetProperty("batch").GetInt32());
+        Assert.Equal(BatchPlan(p0.WaterId), frames.GetProperty("plans")[0].GetString());
+        await p1.Client.ExpectAsync("frames");
+
+        // Batch 1: casting the same spell again is too soon
+        await p0.Client.SendAsync(new { type = "inputs", round = 0, batch = 1, plan = BatchPlan(p0.WaterId) });
+        await p1.Client.SendAsync(new { type = "inputs", round = 0, batch = 1, plan = BatchPlan() });
+        Assert.Contains("cooling", (await p0.Client.ExpectAsync("planRejected")).GetProperty("reason").GetString());
+        frames = await p0.Client.ExpectAsync("frames");
+        Assert.True(frames.GetProperty("substituted")[0].GetBoolean());
+        await p1.Client.ExpectAsync("frames");
+
+        // Both report slot 1 down after batch 1: the round goes to slot 0
+        foreach (var p in new[] { p0, p1 })
+            await p.Client.SendAsync(new { type = "stateHash", round = 0, turn = 1, hash = "same", winner = 0 });
+        var end = await p0.Client.ExpectAsync("roundEnd");
+        Assert.Equal(0, end.GetProperty("winner").GetInt32());
+
+        using var db = Db();
+        var matchId = await db.Matches.Where(m => m.Players.Any(pl => pl.PlayerId == p0.Client.PlayerId))
+                                      .OrderByDescending(m => m.Id).Select(m => m.Id).FirstAsync();
+        var turns = await db.Turns.Where(t => t.MatchId == matchId).OrderBy(t => t.Turn).ToListAsync();
+        Assert.Equal(2, turns.Count);
+        Assert.Equal("same", turns[1].HashSlot0);
+    }
+
+    [Fact]
     public async Task UploadsAreValidatedAndStatsComeFromTheServer()
     {
         var c = await TestClient.ConnectAsync(server, "b");

@@ -5,6 +5,9 @@
 // Cell::flags bits
 constexpr uint8_t CELL_BURNING = 1 << 0; // flammable cell on fire, fuel in lifetime
 constexpr uint8_t CELL_CHARRED = 1 << 1; // scorched by fire (drawn darker)
+// Rigid material laid down as terrain (an arena's rock): held in place like
+// static terrain instead of becoming a body that settles and wobbles
+constexpr uint8_t CELL_ANCHORED = 1 << 2;
 
 struct Cell {
   Element element = Element::AIR;

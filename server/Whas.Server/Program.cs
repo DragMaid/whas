@@ -105,6 +105,7 @@ api.MapGet("/matches/{id:long}/replay", async (long id, IDbContextFactory<WhasDb
         seed = Protocol.U64(match.Seed),
         buildId = match.BuildId,
         rulesetVersion = match.RulesetVersion,
+        options = System.Text.Json.JsonDocument.Parse(match.OptionsJson).RootElement,
         status = match.Status.ToString(),
         players = match.Players.OrderBy(p => p.Slot).Select(p => new
         {

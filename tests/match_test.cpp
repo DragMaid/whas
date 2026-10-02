@@ -3,6 +3,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
 #include "whas/game/match.h"
+#include "whas/game/rts.h"
 #include "whas/net/plan_codec.h"
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -284,4 +285,72 @@ TEST_CASE("a round starts identically whatever the world did before",
     INFO("turn " << turn);
     REQUIRE(Match::Hash(used, a) == Match::Hash(fresh, b));
   }
+}
+
+TEST_CASE("holding down dives faster than falling", "[match]") {
+  Simulation sim;
+  Match::State state = Match::BeginRound(sim, 4242, 0);
+  Character fall = state.characters[0], dive = state.characters[0];
+  fall.pos.y = dive.pos.y = 5;
+  fall.grounded = dive.grounded = false;
+  fall.vel = dive.vel = {0, 0};
+  for (int i = 0; i < 10; ++i) {
+    fall.Step(sim, {}, TurnController::TICK_DT);
+    CharacterInput down;
+    down.down = true;
+    dive.Step(sim, down, TurnController::TICK_DT);
+  }
+  REQUIRE(dive.pos.y > fall.pos.y);
+  REQUIRE(dive.vel.y > fall.vel.y);
+}
+
+TEST_CASE("real-time casts wait out their cast time", "[match]") {
+  Spell water;
+  water.name = "Water";
+  water.glyphs = {{"water", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
+                  {"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
+  PlannedCast cast = PlannedCast::Local(water, {1, 0});
+  REQUIRE(cast.stats.valid);
+  int ticks = TurnController::CastTicks(cast.stats);
+
+  Rts::Controller rts;
+  rts.BeginRound();
+  using R = Rts::Controller::CastResult;
+  REQUIRE(rts.QueueCast(cast, -1, 0) == R::Queued);
+  REQUIRE(rts.QueueCast(cast, -1, ticks - 1) == R::CoolingDown);
+  REQUIRE(rts.QueueCast(cast, -2, ticks - 1) == R::Queued); // another slot
+  REQUIRE(rts.GetCooldowns().Remaining(-1, ticks / 2) > 0.0f);
+  REQUIRE(rts.QueueCast(cast, -1, ticks) == R::Queued);
+
+  // Both queued casts go out with the next tick, and nobody is held still
+  CharacterInput walk;
+  walk.right = true;
+  PlanStep step = rts.TakeStep(walk, {});
+  REQUIRE(step.casts.size() == 3);
+  REQUIRE(step.input.right);
+  REQUIRE(rts.TakeStep({}, {}).casts.empty());
+}
+
+TEST_CASE("real-time rounds play the same on every machine", "[match]") {
+  Simulation a, b;
+  MatchOptions options;
+  options.rts = true;
+  Match::State sa = Match::BeginRound(a, 99, 0, &options);
+  Match::State sb = Match::BeginRound(b, 99, 0, &options);
+  Spell water;
+  water.glyphs = {{"water", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
+                  {"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
+  for (int tick = 0; tick < 240; ++tick) {
+    TurnPlan p0, p1;
+    PlanStep s0, s1;
+    s0.input.right = tick % 50 < 25;
+    s1.input.jump = tick % 40 == 0;
+    if (tick == 30)
+      s0.casts.push_back(PlannedCast::Local(water, {1, 0}));
+    p0.steps = {s0};
+    p1.steps = {s1};
+    Rts::ExecuteTick(a, sa, {&p0, &p1}, 0, tick);
+    Rts::ExecuteTick(b, sb, {&p0, &p1}, 0, tick);
+  }
+  REQUIRE(Match::Hash(a, sa) == Match::Hash(b, sb));
 }

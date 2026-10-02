@@ -4,7 +4,13 @@ namespace Whas.Server.Spells;
 // glyphs needs the SVG shapes and is only checked by the client editor.)
 public static class SpellValidator
 {
-    public const int MaxGlyphs = 32;
+    // Ordinary matches (spell_types.h SIGN_LIMIT, LAYER_MAX_COMPONENTS): signs
+    // in one circle and spells in a layered spell. Spells over them are kept
+    // but only play in chaos rooms. Sigils have their own rules everywhere.
+    public const int MaxSigns = 32;
+    public const int MaxParts = 5;
+    // Glyphs in one circle, whatever kind: just a bound on message size
+    public const int MaxGlyphs = 256;
     public const int MaxNameLength = 32;
     const float OuterRadius = 250.0f;
     const float MinScale = 0.1f, MaxScale = 3.0f;
@@ -32,7 +38,7 @@ public static class SpellValidator
 
         // Layered: the outer ring holds signs only, the core 1-5 plain spells
         if (components.Count > SpellEvaluator.MaxComponents)
-            return $"a layered spell holds 1-{SpellEvaluator.MaxComponents} spells";
+            return $"a layered spell holds at most {SpellEvaluator.MaxComponents} spells";
         if (glyphs.Count > MaxGlyphs)
             return $"a ring has at most {MaxGlyphs} glyphs";
         if (CheckGlyphs(glyphs, out int sigils, out _, out _) is { } bad)
@@ -58,6 +64,15 @@ public static class SpellValidator
                 return $"layer: {inner}";
         }
         return null;
+    }
+
+    // Too many signs in a circle or spells in a layer for an ordinary match
+    public static bool OverLimit(IReadOnlyList<Glyph> glyphs, IReadOnlyList<Component>? components)
+    {
+        static int Signs(IReadOnlyList<Glyph> g) => g.Count(x => !x.IsSigil);
+        components ??= [];
+        return components.Count > MaxParts || Signs(glyphs) > MaxSigns ||
+               components.Any(c => c.Glyphs is not null && Signs(c.Glyphs) > MaxSigns);
     }
 
     // A plain circle: one sigil (plus at most one dragon, and guidance with

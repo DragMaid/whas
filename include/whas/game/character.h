@@ -8,16 +8,17 @@ struct CharacterInput {
   bool left = false;
   bool right = false;
   bool jump = false;
+  bool down = false; // fall faster while in the air
 
-  bool Any() const { return left || right || jump; }
+  bool Any() const { return left || right || jump || down; }
   bool operator==(const CharacterInput &) const = default;
 };
 
 // A walking body that lives on top of the grid (never written into it).
 // Positions and sizes are in cells; pos is the top-left corner.
 struct Character {
-  static constexpr float WIDTH = 3.0f;
-  static constexpr float HEIGHT = 6.0f;
+  static constexpr float WIDTH = 8.0f;
+  static constexpr float HEIGHT = 12.0f;
   static constexpr float MASS = 3.0f;     // for gust pushes
   static constexpr float GRAVITY = 90.0f; // cells/s^2 at world gravity 1
 
@@ -45,11 +46,20 @@ struct Character {
   // left out of the match hash; the game takes it with TakeFlash.
   float flash = 0.0f;
 
+  // Which way the sprite faces: the last way the body moved sideways. Only
+  // drawing reads it, so like flash it stays out of the match hash (facing,
+  // which aims casts, only follows walking input).
+  int look = 1;
+
   // Where the player's cursor is (cells), from the plan: sights set spells
   // follow it
   Vector2 cursor{0.0f, 0.0f};
   bool hasCursor = false;
   float TakeFlash() { return std::exchange(flash, 0.0f); }
+
+  // Riding wind underfoot, from take-off until landing. Only the trail and
+  // the sound read it, so like flash it stays out of the match hash.
+  bool flying = false;
 
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.
@@ -57,6 +67,11 @@ struct Character {
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);
+  // A flight spell: launch and fly until landing
+  void LaunchFlight(Vector2 velocity) {
+    Launch(velocity);
+    flying = true;
+  }
 
   // One tick of burning against the current grid: gain or clear stacks and
   // take the damage. Deterministic, part of lockstep state.

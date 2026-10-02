@@ -4,6 +4,8 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/character_draw.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/theme.h"
+#include "whas/ui/widgets.h"
 
 namespace {
 constexpr Color SLOT_COLORS[2] = {{230, 230, 240, 255}, {220, 80, 80, 255}};
@@ -26,15 +28,19 @@ void ReplayView::Update(Simulation &sim, UIState &state) {
   state.matchRound = -1;
   state.clock = m_playing ? ClockLook::Executing : ClockLook::Stopped;
   state.clockProgress =
-      static_cast<float>(m_player.Tick()) / TurnController::TURN_TICKS;
+      static_cast<float>(m_player.Tick()) / m_player.TicksPerRecord();
   state.timeToggleRequested = false;
   if (!ImGui::GetIO().WantCaptureKeyboard && IsKeyPressed(KEY_SPACE))
     m_playing = !m_playing;
   if (m_playing && !m_player.Finished())
     m_player.Step(sim, m_speed);
+  m_trail.Update(m_player.State().characters.data(),
+                 static_cast<int>(m_player.State().characters.size()),
+                 GetFrameTime());
 }
 
 void ReplayView::Draw() const {
+  m_trail.Draw();
   for (int i = 0; i < 2; ++i) {
     const Character &c = m_player.State().characters[i];
     DrawCharacterBody(c, c.Alive() ? SLOT_COLORS[i] : GRAY, true);
@@ -53,18 +59,23 @@ void ReplayView::DrawControls(Simulation &sim) {
                 m_player.Turn() + 1, m_player.CurrentTurn() + 1,
                 m_player.TurnCount());
 
-  if (ImGui::Button(m_playing ? "Pause" : "Play", {70, 0}))
+  if (Widgets::Button(m_playing ? "Pause" : "Play", {70, 0}))
     m_playing = !m_playing;
   ImGui::SameLine();
-  if (ImGui::Button("Next turn")) {
-    int left = TurnController::TURN_TICKS - m_player.Tick();
+  if (Widgets::Button("Next turn")) {
+    int left = m_player.TicksPerRecord() - m_player.Tick();
     m_player.Step(sim, left);
   }
   ImGui::SameLine();
-  if (ImGui::Button("Restart"))
+  if (Widgets::Button("Restart"))
     m_player.Start(sim);
   ImGui::SameLine();
-  if (ImGui::Button("Close"))
+  if (Widgets::Button("Spells", {0, 0}, m_showSpells))
+    m_showSpells = !m_showSpells;
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Both players' decks; copy any spell into your library");
+  ImGui::SameLine();
+  if (Widgets::Button("Close"))
     m_active = false;
 
   ImGui::Text("Speed");
@@ -76,10 +87,10 @@ void ReplayView::DrawControls(Simulation &sim) {
 
   if (m_player.Checked() > 0) {
     if (m_player.Mismatches() == 0)
-      ImGui::TextColored({0.5f, 0.9f, 0.5f, 1}, "%d hashes match the players'",
+      ImGui::TextColored(Theme::Vec(Theme::Tone::Moss), "%d hashes match the players'",
                          m_player.Checked());
     else
-      ImGui::TextColored({1, 0.5f, 0.4f, 1},
+      ImGui::TextColored(Theme::Vec(Theme::Tone::Oxblood),
                          "%d of %d hashes differ (a resync or another build)",
                          m_player.Mismatches(), m_player.Checked());
   }

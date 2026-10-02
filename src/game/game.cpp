@@ -1,4 +1,5 @@
 #include "whas/game/game.h"
+#include "whas/audio/audio_manager.h"
 #include "whas/game/character_draw.h"
 #include "imgui.h"
 #include "whas/constants.h"
@@ -7,10 +8,13 @@
 #include "whas/net/lockstep_client.h"
 #include "whas/spell/spell_system.h"
 #include "whas/ui/ui.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <string_view>
+
+using Theme::Tone;
 
 namespace {
 
@@ -52,7 +56,9 @@ void Game::SetActive(bool active, Simulation &sim, UI &ui) {
   EnterWaiting();
 }
 
-void Game::StartMatch(Simulation &sim, uint64_t seed, int localSlot) {
+void Game::StartMatch(Simulation &sim, uint64_t seed, int localSlot,
+                      MatchOptions options) {
+  m_options = std::move(options);
   m_local = localSlot;
   m_slots[Local()].color = LOCAL_COLOR;
   m_slots[Opponent()].color = OPPONENT_COLOR;
@@ -75,6 +81,7 @@ void Game::StartOnline(Simulation &sim, UI &ui, LockstepClient &client) {
   m_roundsWon = {};
   m_seenRoundEnds = client.RoundEnds();
   m_plannedTurn = -1;
+  m_rtsRound = -1;
   m_submitted = false;
   m_state = RoundState::Playing;
   m_banner = nullptr;
@@ -137,6 +144,9 @@ void Game::UpdateOnline(Simulation &sim, UI &ui) {
   }
 
   switch (client.GetPhase()) {
+  case Phase::Realtime:
+    UpdateOnlineRts(sim, ui);
+    break;
   case Phase::Planning: {
     int key = client.Round() * 1000 + client.Turn();
     if (key != m_plannedTurn) {
@@ -190,12 +200,128 @@ void Game::UpdateOnline(Simulation &sim, UI &ui) {
 }
 
 void Game::BeginRound(Simulation &sim, int round) {
-  m_match = Match::BeginRound(sim, m_match.seed, round);
+  m_match = Match::BeginRound(sim, m_match.seed, round, &m_options);
   for (int i = 0; i < Match::PLAYERS; ++i)
     m_spawns[i] = m_match.characters[i].pos;
   m_turnNumber = 1;
   m_state = RoundState::Playing;
+  m_rts.BeginRound();
+  m_rtsTick = 0;
+  m_rtsAccumulator = 0.0f;
   EnterWaiting();
+}
+
+bool Game::IsRts() const {
+  return m_online ? m_online->Options().rts : m_options.rts;
+}
+
+CharacterInput Game::RtsInput() const {
+  CharacterInput input;
+  if (ImGui::GetIO().WantCaptureKeyboard)
+    return input;
+  input.left = IsKeyDown(KEY_A);
+  input.right = IsKeyDown(KEY_D);
+  input.jump = IsKeyDown(KEY_W) || IsKeyDown(KEY_SPACE);
+  input.down = IsKeyDown(KEY_S);
+  return input;
+}
+
+void Game::QueueRtsCast(UI &ui, int tick) {
+  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || ui.IsBlockingWorldInput())
+    return;
+  const Spell *spell = ui.GetSelectedSpell();
+  if (!spell) {
+    Notify("Pick a spell from the hotbar first (1-6)", 2.0f);
+    return;
+  }
+  const Character &me = m_match.characters[Local()];
+  Vector2 mouse = View::MouseCells();
+  Vector2 aim{mouse.x - me.Center().x, mouse.y - me.Center().y};
+  float len = std::hypot(aim.x, aim.y);
+  aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
+                     : Vector2{(float)me.facing, 0.0f};
+  PlannedCast cast = MakeCast(*spell, aim);
+  if (!cast.stats.valid) {
+    m_noticeText = SpellSystem::Problem(*spell);
+    Notify(m_noticeText.empty() ? "That spell can't be cast here"
+                                : m_noticeText.c_str(),
+           2.5f);
+    return;
+  }
+  int64_t key = Rts::CooldownKey(cast, ui.GetSelectedSlot());
+  switch (m_rts.QueueCast(std::move(cast), key, tick)) {
+  case Rts::Controller::CastResult::Queued:
+    if (AudioManager *audio = AudioManager::Instance())
+      audio->PlayUi(UiSound::SpellPlan);
+    break;
+  case Rts::Controller::CastResult::CoolingDown:
+    Notify("Still cooling down", 1.0f);
+    break;
+  case Rts::Controller::CastResult::SecondFlight:
+    Notify("One wind underfoot cast at a time", 1.5f);
+    break;
+  }
+}
+
+// Online real time: ticks are played as the server's batches arrive; when
+// one is late the world waits for it rather than guessing
+void Game::UpdateOnlineRts(Simulation &sim, UI &ui) {
+  LockstepClient &client = *m_online;
+  if (m_rtsRound != client.Round()) {
+    m_rtsRound = client.Round();
+    m_rts.BeginRound();
+    m_rtsAccumulator = 0.0f;
+  }
+  m_waiting = false;
+  QueueRtsCast(ui, client.RtsInputTick());
+
+  constexpr int MAX_TICKS_PER_FRAME = 3; // a little catching up after a stall
+  m_rtsAccumulator += std::min(GetFrameTime(), 0.1f);
+  for (int steps = 0; m_rtsAccumulator >= TurnController::TICK_DT &&
+                      client.RtsReady() && steps < MAX_TICKS_PER_FRAME;
+       ++steps) {
+    m_rtsAccumulator -= TurnController::TICK_DT;
+    client.RtsStep(sim, m_match,
+                   m_rts.TakeStep(RtsInput(),
+                                  PlanCursor::FromCells(View::MouseCells())));
+  }
+  m_rtsAccumulator = std::min(m_rtsAccumulator, 2 * TurnController::TICK_DT);
+  m_rtsTick = client.RtsTick();
+}
+
+// Offline real time: the world runs at 60 ticks a second and the dummy
+// stands still
+void Game::UpdateRts(Simulation &sim, UI &ui) {
+  if (!ImGui::GetIO().WantCaptureKeyboard && IsKeyPressed(KEY_R)) {
+    ResetOpponent(sim);
+    Notify("Opponent reset", 1.5f);
+  }
+  m_waiting = false;
+  QueueRtsCast(ui, m_rtsTick);
+
+  // A slow frame catches up a little, then the time is dropped rather than
+  // owed: owing it makes every later frame slower still
+  constexpr int MAX_TICKS_PER_FRAME = 2;
+  m_rtsAccumulator += std::min(GetFrameTime(), 0.1f);
+  static const TurnPlan kStill;
+  for (int steps = 0; m_rtsAccumulator >= TurnController::TICK_DT &&
+                      m_state == RoundState::Playing && steps < MAX_TICKS_PER_FRAME;
+       ++steps) {
+    m_rtsAccumulator -= TurnController::TICK_DT;
+    TurnPlan local;
+    local.steps.push_back(m_rts.TakeStep(
+        RtsInput(), PlanCursor::FromCells(View::MouseCells())));
+    std::array<const TurnPlan *, Match::PLAYERS> plans{&kStill, &kStill};
+    plans[Local()] = &local;
+    Rts::ExecuteTick(sim, m_match, plans, 0, m_rtsTick++);
+
+    int winner = Match::RoundWinner(m_match);
+    if (winner < 0 && m_rtsTick >= Rts::ROUND_TICKS)
+      winner = Match::PLAYERS; // out of time: a draw
+    if (winner >= 0)
+      EndRound(winner);
+  }
+  m_rtsAccumulator = std::min(m_rtsAccumulator, TurnController::TICK_DT);
 }
 
 // Offline practice: put the dummy back where it started, at full health
@@ -235,7 +361,7 @@ void Game::Commit() {
 }
 
 void Game::ToggleTime(Simulation &sim) {
-  if (m_state != RoundState::Playing)
+  if (m_state != RoundState::Playing || IsRts())
     return;
   // Online, turns start when the server says so
   if (m_online && (m_waiting || m_submitted))
@@ -257,6 +383,9 @@ void Game::ToggleTime(Simulation &sim) {
 Game::ClockState Game::GetClockState() const {
   if (m_state == RoundState::MatchOver)
     return ClockState::Over;
+  if (IsRts())
+    return m_state == RoundState::Playing ? ClockState::Executing
+                                          : ClockState::Over;
   if (m_online) {
     using Phase = LockstepClient::Phase;
     Phase p = m_online->GetPhase();
@@ -276,6 +405,8 @@ Game::ClockState Game::GetClockState() const {
 }
 
 float Game::TurnProgress() const {
+  if (IsRts())
+    return static_cast<float>(m_rtsTick) / Rts::ROUND_TICKS;
   if (m_online && m_online->GetPhase() == LockstepClient::Phase::Executing)
     return static_cast<float>(m_online->ExecutedTicks()) /
            TurnController::TURN_TICKS;
@@ -318,6 +449,7 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
   state.resetAvatarRequested = false;
 
   Update(sim, ui);
+  m_trail.Update(m_match.characters.data(), Match::PLAYERS, GetFrameTime());
 
   switch (GetClockState()) {
   case ClockState::Waiting:
@@ -337,8 +469,19 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
     break;
   }
   state.clockProgress = TurnProgress();
-  state.ticksFree = TicksFree();
+  state.ticksFree = IsRts() ? TurnController::TURN_TICKS : TicksFree();
   state.matchRound = m_match.round;
+  state.cooldowns = {};
+  if (IsRts()) {
+    int tick = m_online ? m_online->RtsInputTick() : m_rtsTick;
+    for (int i = 0; i < DECK_SLOTS; ++i) {
+      int64_t key = -(i + 1);
+      if (m_online)
+        if (const auto &card = m_online->Cards(Local())[i])
+          key = card->id;
+      state.cooldowns[i] = m_rts.GetCooldowns().Remaining(key, tick);
+    }
+  }
 
   // Flashed during the turn: blind for the rest of it, then the white
   // fades through the next planning phase
@@ -357,7 +500,7 @@ void Game::Update(Simulation &sim, UI &ui) {
   }
   if (m_state == RoundState::MatchOver) {
     if (IsKeyPressed(KEY_ENTER))
-      StartMatch(sim, OfflineSeed(), m_local);
+      StartMatch(sim, OfflineSeed(), m_local, m_options);
     return;
   }
   if (m_state == RoundState::RoundOver) {
@@ -366,7 +509,9 @@ void Game::Update(Simulation &sim, UI &ui) {
     return;
   }
 
-  if (m_waiting)
+  if (IsRts())
+    UpdateRts(sim, ui);
+  else if (m_waiting)
     UpdateWaiting(sim);
   else if (m_turn.GetPhase() == TurnController::Phase::Planning)
     UpdatePlanning(sim, ui);
@@ -420,6 +565,8 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
                          : Vector2{(float)ghost.facing, 0.0f};
       switch (m_turn.QueueCast(MakeCast(*spell, aim))) {
       case TurnController::CastResult::Queued:
+        if (AudioManager *audio = AudioManager::Instance())
+          audio->PlayUi(UiSound::SpellPlan);
         break;
       case TurnController::CastResult::NoTime:
         Notify("Not enough time left in this turn to cast that", 2.0f);
@@ -438,6 +585,7 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
     input.left = IsKeyDown(KEY_A);
     input.right = IsKeyDown(KEY_D);
     input.jump = IsKeyDown(KEY_W);
+    input.down = IsKeyDown(KEY_S);
     // The cursor is recorded too: sights set spells follow it
     m_turn.FlowTick(sim, input, PlanCursor::FromCells(View::MouseCells()));
   }
@@ -463,7 +611,10 @@ void Game::FinishTurn(Simulation &sim) {
     EnterWaiting();
     return;
   }
+  EndRound(winner);
+}
 
+void Game::EndRound(int winner) {
   if (winner < Match::PLAYERS)
     m_roundsWon[winner]++;
   int needed = Match::ROUNDS / 2 + 1;
@@ -488,9 +639,11 @@ void Game::FinishTurn(Simulation &sim) {
 }
 
 void Game::Draw(const Simulation &sim, const UI &ui) const {
-  bool planning = m_state == RoundState::Playing && !m_waiting &&
+  bool rts = IsRts();
+  bool planning = !rts && m_state == RoundState::Playing && !m_waiting &&
                   m_turn.GetPhase() == TurnController::Phase::Planning;
 
+  m_trail.Draw();
   for (int i = 0; i < (int)m_slots.size(); ++i) {
     const Slot &slot = m_slots[i];
     const Character &c = m_match.characters[i];
@@ -509,9 +662,11 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
   }
 
   // Live aim from where the local player will be when this cast would fire
-  if (planning && !ui.IsBlockingWorldInput()) {
+  bool aiming = planning || (rts && m_state == RoundState::Playing);
+  if (aiming && !ui.IsBlockingWorldInput()) {
     if (const Spell *spell = ui.GetSelectedSpell()) {
-      Vector2 origin = m_turn.LocalPreview().end.Center();
+      Vector2 origin = rts ? m_match.characters[Local()].Center()
+                           : m_turn.LocalPreview().end.Center();
       Vector2 mouse = View::MouseCells();
       Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
       float len = std::hypot(aim.x, aim.y);
@@ -565,7 +720,30 @@ void Game::DrawCharacter(const Character &c, Color color, bool drawHp) const {
   DrawCharacterBody(c, color, drawHp);
 }
 
+void Game::DrawRtsHud() const {
+  const Font &heading = Theme::RlHeading();
+  const Font &body = Theme::RlBody();
+  float cx = WINDOW_WIDTH * 0.5f;
+  int left = std::max(0, Rts::ROUND_TICKS - m_rtsTick) / TurnController::TICKS_PER_SECOND;
+  Theme::DrawTextCentered(heading,
+                          TextFormat("ROUND %d  (%d-%d)", m_match.round + 1,
+                                     m_roundsWon[Local()], m_roundsWon[Opponent()]),
+                          cx, 10, 17, Theme::Rl(Tone::Parchment));
+  Theme::DrawTextCentered(heading, TextFormat("%d:%02d", left / 60, left % 60), cx,
+                          30, 26, Theme::Rl(left <= 15 ? Tone::Oxblood : Tone::Brass));
+  const char *hint = "A/D move    W or Space jump    S dive    1-6 pick    Click cast";
+  if (m_online && !m_online->OpponentConnected())
+    hint = "Opponent disconnected - they have a minute to come back";
+  Theme::DrawTextCentered(body, hint, cx, 60, 15, Theme::Rl(Tone::Muted));
+  if (m_notice && m_noticeTime > 0.0f)
+    Theme::DrawTextCentered(body, m_notice, cx, 80, 19, Theme::Rl(Tone::BrassBright));
+}
+
 void Game::DrawHud() const {
+  if (IsRts()) {
+    DrawRtsHud();
+    return;
+  }
   constexpr float barW = 360.0f;
   constexpr float barH = 14.0f;
   float x = (WINDOW_WIDTH - barW) * 0.5f;
@@ -611,13 +789,20 @@ void Game::DrawHud() const {
     }
     planning = m_online->GetPhase() == Phase::Planning && !m_submitted;
   }
-  DrawText(TextFormat("ROUND %d (%d-%d)   TURN %d  -  %s", m_match.round + 1,
-                      m_roundsWon[Local()], m_roundsWon[Opponent()],
-                      m_turnNumber, phase),
-           (int)x, (int)y, 16, RAYWHITE);
-  y += 20.0f;
+  const Font &heading = Theme::RlHeading();
+  const Font &body = Theme::RlBody();
+  Theme::DrawText(heading,
+                  TextFormat("ROUND %d  (%d-%d)    TURN %d", m_match.round + 1,
+                             m_roundsWon[Local()], m_roundsWon[Opponent()],
+                             m_turnNumber),
+                  {x, y}, 17, Theme::Rl(Tone::Parchment));
+  if (phase[0]) {
+    Vector2 left = Theme::MeasureText(heading, "ROUND 0  (0-0)    TURN 00", 17);
+    Theme::DrawText(heading, phase, {x + left.x + 18, y}, 17, Theme::Rl(Tone::Brass));
+  }
+  y += 22.0f;
 
-  DrawRectangleV({x, y}, {barW, barH}, Color{30, 30, 45, 230});
+  DrawRectangleV({x, y}, {barW, barH}, Theme::Rl(Tone::Ink, 0.9f));
   float perTick = barW / TurnController::TURN_TICKS;
 
   // Movement in blue, channelling in amber (empty until time is stopped)
@@ -629,7 +814,7 @@ void Game::DrawHud() const {
       owed += TurnController::CastTicks(cast.stats);
     bool channelling = owed > 0;
     owed = std::max(0, owed - 1);
-    Color c = channelling ? Color{255, 190, 70, 255} : Color{110, 160, 255, 255};
+    Color c = channelling ? Theme::Rl(Tone::Brass) : Theme::Rl(Tone::Verdigris);
     DrawRectangleV({x + i * perTick, y}, {perTick + 0.5f, barH}, c);
   }
   // Channel time already promised to casts queued in this pause
@@ -638,41 +823,43 @@ void Game::DrawHud() const {
                    m_turn.TicksUsed();
     if (reserved > 0)
       DrawRectangleV({x + steps.size() * perTick, y},
-                     {reserved * perTick, barH}, Color{255, 190, 70, 110});
+                     {reserved * perTick, barH}, Theme::Rl(Tone::Brass, 0.45f));
   }
   if (!planning && !m_waiting) {
     int executed = m_online ? m_online->ExecutedTicks() : m_turn.ExecutedTicks();
     float px = x + executed * perTick;
-    DrawLineEx({px, y - 2}, {px, y + barH + 2}, 2.0f, RAYWHITE);
+    DrawLineEx({px, y - 2}, {px, y + barH + 2}, 2.0f, Theme::Rl(Tone::Parchment));
   }
-  DrawRectangleLinesEx({x, y, barW, barH}, 1.0f, Color{200, 200, 220, 255});
-  DrawText(TextFormat("%.2fs / %.1fs",
-                      steps.size() * TurnController::TICK_DT,
-                      TurnController::TURN_SECONDS),
-           (int)(x + barW + 8), (int)y, 14, RAYWHITE);
+  DrawRectangleLinesEx({x, y, barW, barH}, 1.0f, Theme::Rl(Tone::BrassDim));
+  Theme::DrawText(body,
+                  TextFormat("%.2fs / %.1fs", steps.size() * TurnController::TICK_DT,
+                             TurnController::TURN_SECONDS),
+                  {x + barW + 8, y - 3}, 17, Theme::Rl(Tone::Muted));
   y += barH + 6.0f;
 
+  const char *hint = nullptr;
+  Color hintColor = Theme::Rl(Tone::Muted);
   if (m_online) {
-    if (!m_online->OpponentConnected())
-      DrawText("Opponent disconnected - they have a minute to come back",
-               (int)x, (int)y, 12, Color{255, 170, 90, 255});
-    else if (planning)
-      DrawText("Click cast  Space stop/flow time  Backspace undo  Enter send "
-               "plan",
-               (int)x - 20, (int)y, 12, Color{190, 190, 210, 255});
-  } else if (m_state == RoundState::Playing && m_waiting)
-    DrawText("Space stop time  R reset dummy  F1 sandbox", (int)x, (int)y,
-             12, Color{190, 190, 210, 255});
-  else if (m_state == RoundState::Playing && planning)
-    DrawText(m_paused
-                 ? "Click queue cast  Space let time flow  Backspace undo  "
-                   "Enter run now"
-                 : "A/D move  W jump  Click cast  Space stop time  "
-                   "Backspace undo  (runs when the bar fills)",
-             (int)x - 40, (int)y, 12, Color{190, 190, 210, 255});
+    if (!m_online->OpponentConnected()) {
+      hint = "Opponent disconnected - they have a minute to come back";
+      hintColor = Theme::Rl(Tone::Oxblood);
+    } else if (planning) {
+      hint = "Click cast    Space stop/flow time    Backspace undo    Enter send plan";
+    }
+  } else if (m_state == RoundState::Playing && m_waiting) {
+    hint = "Space stop time    R reset dummy    F1 sandbox";
+  } else if (m_state == RoundState::Playing && planning) {
+    hint = m_paused ? "Click queue cast    Space let time flow    Backspace undo    "
+                      "Enter run now"
+                    : "A/D move    W jump    Click cast    Space stop time    "
+                      "Backspace undo    (runs when the bar fills)";
+  }
+  if (hint)
+    Theme::DrawTextCentered(body, hint, x + barW * 0.5f, y, 15, hintColor);
 
   if (m_notice && m_noticeTime > 0.0f)
-    DrawText(m_notice, (int)x, (int)y + 18, 16, Color{255, 170, 90, 255});
+    Theme::DrawTextCentered(body, m_notice, x + barW * 0.5f, y + 20, 19,
+                            Theme::Rl(Tone::BrassBright));
 }
 
 void Game::DrawBanner() const {
@@ -681,18 +868,29 @@ void Game::DrawBanner() const {
     return;
 
   bool bad = m_banner[0] == 'D' || std::string_view(m_banner) == "ROUND LOST";
-  Color color = bad ? Color{230, 80, 80, 255} : Color{120, 230, 140, 255};
-  constexpr int size = 64;
-  int w = MeasureText(m_banner, size);
-  int y = WINDOW_HEIGHT / 2 - 90;
-  DrawRectangle(0, y - 16, WINDOW_WIDTH, size + 60, Color{10, 10, 15, 190});
-  DrawText(m_banner, (WINDOW_WIDTH - w) / 2, y, size, color);
+  Color color = bad ? Theme::Rl(Tone::Oxblood) : Theme::Rl(Tone::BrassBright);
+  constexpr float size = 64;
+  float y = WINDOW_HEIGHT / 2.0f - 90;
+  // A band of ink with brass rules, the banner set in the display face
+  float top = y - 22, bottom = y + size + 46;
+  DrawRectangleGradientV(0, (int)top, WINDOW_WIDTH, (int)((bottom - top) * 0.5f),
+                         Theme::Rl(Tone::Ink, 0.0f), Theme::Rl(Tone::Ink, 0.85f));
+  DrawRectangleGradientV(0, (int)((top + bottom) * 0.5f), WINDOW_WIDTH,
+                         (int)((bottom - top) * 0.5f), Theme::Rl(Tone::Ink, 0.85f),
+                         Theme::Rl(Tone::Ink, 0.0f));
+  float cx = WINDOW_WIDTH * 0.5f;
+  DrawLineEx({cx - 260, top + 10}, {cx + 260, top + 10}, 1.0f, Theme::Rl(Tone::BrassDim));
+  DrawLineEx({cx - 260, bottom - 10}, {cx + 260, bottom - 10}, 1.0f,
+             Theme::Rl(Tone::BrassDim));
+  Theme::DrawTextCentered(Theme::RlHeading(), m_banner, cx, y + 2, size,
+                          Theme::Rl(Tone::Ink));
+  Theme::DrawTextCentered(Theme::RlHeading(), m_banner, cx, y, size, color);
 
   const char *sub =
       m_bannerSub ? m_bannerSub
                   : TextFormat("Round %d of %d  (%d - %d)", m_match.round + 2,
                                Match::ROUNDS, m_roundsWon[Local()],
                                m_roundsWon[Opponent()]);
-  int sw = MeasureText(sub, 20);
-  DrawText(sub, (WINDOW_WIDTH - sw) / 2, y + size + 8, 20, RAYWHITE);
+  Theme::DrawTextCentered(Theme::RlBody(), sub, cx, y + size + 4, 24,
+                          Theme::Rl(Tone::Parchment));
 }

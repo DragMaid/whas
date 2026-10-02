@@ -65,6 +65,7 @@ void Simulation::Update(float dt, bool isPainting) {
     m_syncBarrier.arrive_and_wait();
   }
   FlushWorkerSpawns();
+  SkyRain();
 
   // Damage check: release bodies whose pixels were erased, painted over,
   // broken by last frame's projectiles or changed by this frame's elements
@@ -179,6 +180,26 @@ void Simulation::UpdateChunk(int chunkIdx, const ElementContext &base) {
 
 void Simulation::UpdateElements() {}
 
+void Simulation::SkyRain() {
+  // Whole drops per tick plus a chance at one more; the stream is only
+  // touched when it rains, so worlds without sky rain don't change
+  float rate = m_frameConfig.cloud.skyRain;
+  if (rate <= 0.0f)
+    return;
+  int drops = static_cast<int>(rate);
+  if (m_rng.Unit() < rate - static_cast<float>(drops))
+    ++drops;
+  for (int i = 0; i < drops; ++i) {
+    int x = static_cast<int>(m_rng.Below(GRID_W));
+    if (m_grid.Get(x, 0).element != Element::AIR)
+      continue;
+    Cell rain = ElementFactory::Create(Element::WATER, m_frameConfig);
+    rain.vy = m_frameConfig.cloud.rainVelocity;
+    m_grid.Get(x, 0) = rain;
+    m_chunks.WakeChunkAt(x, 0, m_frameCounter, false);
+  }
+}
+
 void Simulation::FlushWorkerSpawns() {
   for (auto &spawns : m_chunkSpawns) {
     for (const PendingSpawn &s : spawns)
@@ -280,6 +301,8 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   if (stats.collectMax > 0)
     effect.bonusParticles = Collect(stats, origin);
   m_activeSpellEffects.push_back(effect);
+  if (effect.stats.kind == SpellKind::Element)
+    m_particles.Note({ParticleNoise::Cast, effect.stats.element, origin});
 }
 
 namespace {
@@ -321,7 +344,7 @@ int Simulation::Collect(const SpellStats &stats, Vector2 origin) {
       if (!Collectable(stats.element, c))
         continue;
       bool wasStatic =
-          m_config.elements[static_cast<size_t>(c.element)].staticTerrain;
+          IsStaticCell(c, m_config.elements[static_cast<size_t>(c.element)]);
       c = ElementFactory::Create(Element::AIR, m_config);
       m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
       taken++;
@@ -346,6 +369,16 @@ void Simulation::Paint(int cx, int cy, Element element, int brushRadius) {
   }
 }
 
+void Simulation::Anchor(int x, int y) {
+  if (!m_grid.InBounds(x, y))
+    return;
+  Cell &c = m_grid.Get(x, y);
+  if (!m_config.elements[static_cast<size_t>(c.element)].rigidBodyCandidate)
+    return;
+  c.flags |= CELL_ANCHORED;
+  m_chunks.WakeChunkAt(x, y, m_frameCounter, true);
+}
+
 void Simulation::Erase(int cx, int cy, int brushRadius) {
   for (int dy = -brushRadius; dy <= brushRadius; ++dy) {
     for (int dx = -brushRadius; dx <= brushRadius; ++dx) {
@@ -356,7 +389,7 @@ void Simulation::Erase(int cx, int cy, int brushRadius) {
         continue;
       const Cell &c = m_grid.Get(x, y);
       const auto &props = m_config.elements[static_cast<size_t>(c.element)];
-      bool wasStatic = props.staticTerrain;
+      bool wasStatic = IsStaticCell(c, props);
       m_grid.Get(x, y) = ElementFactory::Create(Element::AIR, m_config);
       m_chunks.WakeChunkAt(x, y, m_frameCounter, wasStatic);
     }

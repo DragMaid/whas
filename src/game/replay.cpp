@@ -1,5 +1,7 @@
 #include "whas/game/replay.h"
 #include "whas/engine/simulation.h"
+#include "whas/game/rts.h"
+#include <algorithm>
 
 using json = nlohmann::json;
 
@@ -8,9 +10,15 @@ bool ReplayPlayer::Load(const json &replay, std::string &error) {
     m_matchId = replay.value("matchId", int64_t{0});
     m_seed = std::stoull(replay.at("seed").get<std::string>());
     m_buildId = replay.value("buildId", "");
+    if (!OptionsFromJson(replay.value("options", json()), m_options, error))
+      return false;
 
     // Both players' six cards for each round
-    std::array<std::vector<RoundCards>, 2> cards;
+    std::array<std::vector<RoundCards>, 2> &cards = m_cards;
+    cards = {};
+    m_localSlot = -1;
+    if (replay.contains("local"))
+      m_localSlot = std::clamp(replay["local"].value("slot", -1), -1, 1);
     for (const json &p : replay.at("players")) {
       int slot = p.at("slot").get<int>();
       if (slot < 0 || slot > 1)
@@ -59,21 +67,29 @@ int ReplayPlayer::Turn() const {
 }
 
 void ReplayPlayer::Start(Simulation &sim) {
-  sim.GetConfig() = SimulationConfig{};
   m_index = 0;
   m_tick = 0;
   m_checked = 0;
   m_mismatches = 0;
   m_report.clear();
   m_state = Match::BeginRound(sim, m_seed,
-                              m_turns.empty() ? 0 : m_turns.front().round);
+                              m_turns.empty() ? 0 : m_turns.front().round,
+                              &m_options);
+}
+
+int ReplayPlayer::TicksPerRecord() const {
+  return m_options.rts ? Rts::BATCH_TICKS : TurnController::TURN_TICKS;
 }
 
 bool ReplayPlayer::Step(Simulation &sim, int ticks) {
   while (ticks-- > 0 && !Finished()) {
     const TurnRecord &t = m_turns[m_index];
-    Match::ExecuteTick(sim, m_state, {&t.plans[0], &t.plans[1]}, m_tick++);
-    if (m_tick == TurnController::TURN_TICKS)
+    if (m_options.rts)
+      Rts::ExecuteTick(sim, m_state, {&t.plans[0], &t.plans[1]}, m_tick,
+                       t.turn * Rts::BATCH_TICKS + m_tick);
+    else
+      Match::ExecuteTick(sim, m_state, {&t.plans[0], &t.plans[1]}, m_tick);
+    if (++m_tick == TicksPerRecord())
       FinishTurn(sim);
   }
   return !Finished();
@@ -81,7 +97,8 @@ bool ReplayPlayer::Step(Simulation &sim, int ticks) {
 
 void ReplayPlayer::FinishTurn(Simulation &sim) {
   const TurnRecord &t = m_turns[m_index];
-  Match::EndTurn(m_state);
+  if (!m_options.rts) // real time cools burns as it goes
+    Match::EndTurn(m_state);
   uint64_t hash = Match::Hash(sim, m_state);
   for (int s = 0; s < 2; ++s) {
     if (!t.hashes[s])
@@ -100,12 +117,13 @@ void ReplayPlayer::FinishTurn(Simulation &sim) {
   ++m_index;
   // The next round starts from a fresh arena
   if (!Finished() && m_turns[m_index].round != t.round)
-    m_state = Match::BeginRound(sim, m_seed, m_turns[m_index].round);
+    m_state = Match::BeginRound(sim, m_seed, m_turns[m_index].round,
+                                &m_options);
 }
 
 int ReplayPlayer::VerifyAll(Simulation &sim, std::vector<std::string> *report) {
   Start(sim);
-  while (Step(sim, TurnController::TURN_TICKS))
+  while (Step(sim, TicksPerRecord()))
     ;
   if (report)
     *report = m_report;

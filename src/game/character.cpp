@@ -12,6 +12,8 @@ struct CharacterTuning {
   float groundFriction = 8.0f; // push velocity lost per second, grounded
   float airDrag = 0.6f;        // push velocity lost per second, airborne
   float maxFallSpeed = 70.0f;
+  float diveGravity = 2.5f;  // gravity while holding down in the air
+  float diveTopSpeed = 1.5f; // of maxFallSpeed
   float liquidSlowdown = 0.5f;
   float maxSubstep = 0.5f; // cells per collision substep
 };
@@ -82,12 +84,19 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   if (std::abs(pushX) < 0.1f)
     pushX = 0.0f;
   vel.x = dir * kTuning.walkSpeed * speedScale + pushX;
+  // The sprite turns with any sideways motion, launches and pushes included
+  if (vel.x != 0.0f)
+    look = vel.x > 0.0f ? 1 : -1;
 
   if (input.jump && grounded)
     vel.y = -kTuning.jumpSpeed * speedScale;
 
-  vel.y += GRAVITY * sim.GetConfig().world.gravity * dt;
-  vel.y = std::min(vel.y, kTuning.maxFallSpeed * speedScale);
+  // Holding down in the air dives: stronger gravity, a higher top speed
+  bool diving = input.down && !grounded;
+  float fall = diving ? kTuning.diveGravity : 1.0f;
+  vel.y += GRAVITY * fall * sim.GetConfig().world.gravity * dt;
+  vel.y = std::min(vel.y, kTuning.maxFallSpeed * (diving ? kTuning.diveTopSpeed : 1.0f) *
+                              speedScale);
 
   // Horizontal: substep, stepping up one-cell ledges so sand bumps are walkable
   float dx = vel.x * dt;
@@ -128,6 +137,8 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   }
 
   grounded = Collides(sim, {pos.x, pos.y + 0.05f});
+  if (grounded)
+    flying = false;
 }
 
 void Character::Launch(Vector2 velocity) {

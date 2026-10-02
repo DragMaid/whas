@@ -38,9 +38,13 @@ struct UIState {
   float clockProgress = 0.0f; // 0..1 of the turn used or played out
   int ticksFree = 180;        // channel time left, for greying out slots
   int matchRound = -1;        // >= 0 in a match: that round's deck is locked
+  // Real-time matches: how much of each slot's cooldown is left (0..1)
+  std::array<float, DECK_SLOTS> cooldowns{};
 
   // Online matches play by the default rules: tuning sliders are hidden
   bool configLocked = false;
+  // The map editor has the screen: no action bar
+  bool hideActionBar = false;
 
   // Requests from the bar, handled by main
   bool menuRequested = false;
@@ -64,6 +68,7 @@ public:
   bool IsBlockingWorldInput() const;
 
   void OpenSpellLibrary() { m_spellEditor.OpenLibrary(); }
+  void OpenSpellEditor() { m_spellEditor.Open(); }
 
   // Game mode hands the mouse to the character instead of the sandbox tools
   void SetGameMode(bool enabled);
@@ -86,6 +91,7 @@ public:
   void SetOverlay(std::function<void()> draw) { m_overlay = std::move(draw); }
 
   SpellLibrary &Library() { return m_library; }
+  SpellThumbnails &Thumbnails() { return *m_thumbnails; }
   DeckBook &Decks() { return m_decks; }
   // Beam preview plus aim-vs-cast arrows, origin in (fractional) cells.
   // worldGravity is the config's world gravity, for the falling arcs.

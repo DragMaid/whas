@@ -5,7 +5,8 @@ namespace PlanCodec {
 namespace {
 
 int InputBits(const CharacterInput &in) {
-  return (in.left ? 1 : 0) | (in.right ? 2 : 0) | (in.jump ? 4 : 0);
+  return (in.left ? 1 : 0) | (in.right ? 2 : 0) | (in.jump ? 4 : 0) |
+         (in.down ? 8 : 0);
 }
 
 CharacterInput InputFromBits(int bits) {
@@ -13,6 +14,7 @@ CharacterInput InputFromBits(int bits) {
   in.left = bits & 1;
   in.right = bits & 2;
   in.jump = bits & 4;
+  in.down = bits & 8;
   return in;
 }
 
@@ -57,7 +59,7 @@ bool Decode(const nlohmann::json &j, const SpellResolver &resolve,
     for (const auto &run : j.at("runs")) {
       int n = run.at("n").get<int>();
       int bits = run.at("in").get<int>();
-      if (n < 1 || bits < 0 || bits > 7 ||
+      if (n < 1 || bits < 0 || bits > 15 ||
           plan.steps.size() + n > TurnController::TURN_TICKS) {
         error = "bad run";
         return false;

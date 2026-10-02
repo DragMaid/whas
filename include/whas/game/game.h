@@ -1,6 +1,8 @@
 #pragma once
 #include "whas/game/character.h"
+#include "whas/game/flight_trail.h"
 #include "whas/game/match.h"
+#include "whas/game/rts.h"
 #include "whas/game/turn_controller.h"
 #include <array>
 #include <cstdint>
@@ -21,8 +23,13 @@ public:
   bool IsActive() const { return m_active; }
   void SetActive(bool active, Simulation &sim, UI &ui);
 
-  // Start a fresh match (new arena from the seed, round 1)
-  void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0);
+  // Start a fresh match (round 1 on the options' first map, or a new arena
+  // from the seed)
+  void StartMatch(Simulation &sim, uint64_t seed, int localSlot = 0,
+                  MatchOptions options = {});
+  const MatchOptions &Options() const { return m_options; }
+  // Real time instead of planned turns
+  bool IsRts() const;
 
   // Online: the client runs the turn flow (the server's clock, both plans,
   // hashes); the game lets the local player plan in between and shows it
@@ -77,6 +84,14 @@ private:
   void UpdatePlanning(Simulation &sim, UI &ui);
   void UpdateExecuting(Simulation &sim);
   void FinishTurn(Simulation &sim);
+  // winner: a slot, Match::PLAYERS for a double KO or a draw
+  void EndRound(int winner);
+  void UpdateRts(Simulation &sim, UI &ui);
+  void UpdateOnlineRts(Simulation &sim, UI &ui);
+  // Real time: clicks become casts on the next tick
+  void QueueRtsCast(UI &ui, int tick);
+  CharacterInput RtsInput() const;
+  void DrawRtsHud() const;
   void Notify(const char *text, float seconds);
 
   void DrawCharacter(const Character &c, Color color, bool drawHp) const;
@@ -90,10 +105,16 @@ private:
   bool m_arenaReady = false;
   int m_local = 0;
   Match::State m_match;
+  MatchOptions m_options; // offline; online uses the client's
   std::array<Slot, Match::PLAYERS> m_slots{};
   std::array<int, Match::PLAYERS> m_roundsWon{};
   std::array<Vector2, Match::PLAYERS> m_spawns{};
   TurnController m_turn;
+  Rts::Controller m_rts;
+  int m_rtsTick = 0; // ticks played this round
+  float m_rtsAccumulator = 0.0f;
+  int m_rtsRound = -1; // online: the round the controller was reset for
+  FlightTrail m_trail;
   RoundState m_state = RoundState::Playing;
   // Between turns: the world is frozen until Space stops time to plan
   bool m_waiting = true;

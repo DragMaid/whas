@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/replay.h"
+#include "whas/game/flight_trail.h"
 #include <string>
 
 class Simulation;
@@ -19,11 +20,16 @@ public:
   void DrawControls(Simulation &sim); // ImGui window
 
   const std::string &Error() const { return m_error; }
+  const ReplayPlayer &Player() const { return m_player; }
+  // The "Spells" toggle: show the players' decks beside the replay
+  bool ShowSpells() const { return m_showSpells; }
 
 private:
   ReplayPlayer m_player;
+  FlightTrail m_trail;
   bool m_active = false;
   bool m_playing = true;
   int m_speed = 1;
+  bool m_showSpells = false;
   std::string m_error;
 };

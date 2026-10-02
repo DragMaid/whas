@@ -47,6 +47,8 @@ public:
 
   void Paint(int cx, int cy, Element element, int brushRadius);
   void Erase(int cx, int cy, int brushRadius);
+  // Hold a rigid cell (rock, ice) in place as terrain; see CELL_ANCHORED
+  void Anchor(int x, int y);
   // Empty the world: every cell, particle and in-flight spell
   void Reset();
   // A brand-new world regardless of history: frame counter, chunks, rigid
@@ -55,6 +57,8 @@ public:
   void Restart(uint64_t seed);
 
   const Cell &GetCell(int x, int y) const { return m_grid.Get(x, y); }
+  // Ticks since the last Restart; tells observers whether the world moved
+  uint32_t GetFrame() const { return m_frameCounter; }
 
   int GetActiveChunks() const { return m_chunks.GetActiveChunksCount(); }
   int GetParticleCount() const { return m_particleCount; }
@@ -66,6 +70,7 @@ public:
   const SimulationConfig &GetConfig() const { return m_config; }
   RigidBodySystem &GetRigidBodySystem() { return m_rigidBodies; }
   ParticleSystem &GetParticleSystem() { return m_particles; }
+  const ParticleSystem &GetParticleSystem() const { return m_particles; }
   const std::vector<SpellEffect> &GetActiveSpellEffects() const {
     return m_activeSpellEffects;
   }
@@ -102,6 +107,8 @@ private:
   float m_avgTemp = 0.0f;
 
   void UpdateElements();
+  // Raindrops from the top row (CloudConfig::skyRain)
+  void SkyRain();
   void UpdatePhysics(float dt, bool isPainting);
   void CollectStatistics();
 

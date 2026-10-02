@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/match.h"
+#include "whas/game/rts.h"
 #include "whas/net/net_client.h"
 #include "whas/net/plan_codec.h"
 #include "whas/spell/deck.h"
@@ -48,6 +49,7 @@ public:
     Executing, // plans in: step the turn with StepExecution
     Reporting, // hash sent
     Resync,    // waiting for the reference snapshot
+    Realtime,  // a real-time round: stream input batches (RtsStep)
     MatchOver,
   };
 
@@ -79,7 +81,8 @@ public:
 
   void SetLibrary(Library library) { m_library = std::move(library); }
   void QuickMatch();
-  void CreateLobby();
+  // The room plays by these options (map pool, modes)
+  void CreateLobby(const MatchOptions &options = {});
   void JoinLobby(const std::string &code);
   void Rejoin();
   void CancelWaiting();
@@ -101,6 +104,7 @@ public:
   int Turn() const { return m_turn; }
   int ExecutedTicks() const { return m_execTick; }
   uint64_t Seed() const { return m_seed; }
+  const MatchOptions &Options() const { return m_options; }
   int64_t MatchId() const { return m_matchId; }
   int64_t PlayerId() const { return m_playerId; }
   const std::string &Token() const { return m_token; }
@@ -111,6 +115,10 @@ public:
   bool OpponentCommitted() const { return m_opponentCommitted; }
   bool OpponentConnected() const { return m_opponentConnected; }
   const RoundCards &Cards(int slot) const { return m_cards[slot]; }
+  // Every round's cards so far, per slot
+  const std::array<std::vector<RoundCards>, 2> &AllCards() const {
+    return m_roundCards;
+  }
   const std::array<TurnPlan, 2> &Plans() const { return m_plans; }
   const std::array<int, 2> &RoundsWon() const { return m_roundsWon; }
   int LastRoundWinner() const { return m_lastRoundWinner; }
@@ -118,6 +126,18 @@ public:
   int MatchWinner() const { return m_matchWinner; }
   const std::string &MatchEndReason() const { return m_matchEndReason; }
   int Desyncs() const { return m_desyncs; }
+
+  // Real-time rounds. Input recorded now is played INPUT_DELAY batches
+  // later, once the server has relayed both players' batches.
+  // A tick can be played: its batch has arrived and the round isn't decided
+  bool RtsReady() const;
+  // Play one tick with both players' input, and record ours for later
+  void RtsStep(Simulation &sim, Match::State &state, PlanStep local);
+  // The round tick our next recorded input will be played at (cooldowns
+  // count from it)
+  int RtsInputTick() const;
+  // Ticks played this round
+  int RtsTick() const { return m_rtsBatch * Rts::BATCH_TICKS + m_rtsStep; }
 
   // Things worth telling the player ("opponent disconnected", errors...)
   std::vector<std::string> TakeNotices();
@@ -133,6 +153,9 @@ private:
                   Match::State &state);
   bool DecodePlan(const std::string &text, int slot, TurnPlan &plan);
   void ReportHash(Simulation &sim, Match::State &state);
+  void ReadOptions(const nlohmann::json &msg);
+  void BeginRts(int fromBatch);
+  void SendInputs(int batch, const TurnPlan &plan);
   void CatchUp(const nlohmann::json &msg, Simulation &sim, Match::State &state);
   void Notice(std::string text);
   void LoadIdentity();
@@ -166,6 +189,8 @@ private:
   std::string m_lobbyCode;
   int64_t m_matchId = 0;
   uint64_t m_seed = 0;
+  MatchOptions m_options;      // of the running match
+  MatchOptions m_lobbyOptions; // sent with createLobby
   int m_slot = -1;
   int m_round = 0;
   int m_turn = 0;
@@ -186,5 +211,13 @@ private:
   int m_matchWinner = -1;
   std::string m_matchEndReason;
   int m_desyncs = 0;
+
+  // Real time: relayed batches by number, the batch and tick being played,
+  // and our input being recorded for batch m_rtsBatch + INPUT_DELAY
+  std::map<int, std::array<TurnPlan, 2>> m_rtsFrames;
+  int m_rtsBatch = 0;
+  int m_rtsStep = 0;
+  TurnPlan m_rtsRecording;
+  bool m_rtsDecided = false; // someone fell: reported, waiting for roundEnd
   std::vector<std::string> m_notices;
 };

@@ -3,6 +3,9 @@
 #include "whas/spell/spell_editor.h"
 #include "whas/spell/spell_quant.h"
 #include "whas/ui/spell_thumbnails.h"
+#include "whas/ui/widgets.h"
+#include "whas/spell/spell_rules.h"
+#include "whas/ui/theme.h"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -10,6 +13,8 @@
 // The editor's "Library & decks" tab: a filterable grid of saved spells on
 // the left, decks and the per-round match decks on the right. Cards drag
 // into deck slots.
+
+using Theme::Tone;
 
 namespace {
 
@@ -62,6 +67,12 @@ ImU32 ToU32(Color c, unsigned char a = 255) {
   return IM_COL32(c.r, c.g, c.b, a);
 }
 
+// Marks a spell over the sign limit (it only plays solo or in chaos rooms)
+void DrawChaosBadge(ImDrawList *dl, ImVec2 c) {
+  Theme::Diamond(dl, c, Px(6), Theme::U32(Tone::Oxblood));
+  Theme::Diamond(dl, c, Px(2.5f), Theme::U32(Tone::Ink));
+}
+
 } // namespace
 
 void SpellEditor::DrawLibraryTab() {
@@ -91,11 +102,8 @@ void SpellEditor::DrawSpellGrid(float width) {
   for (int i = 0; i < (int)std::size(kFilters); ++i) {
     ImGui::SameLine();
     bool on = m_filter == i;
-    ImGui::PushStyleColor(ImGuiCol_Button, on ? ImVec4(0.30f, 0.45f, 0.85f, 1)
-                                              : ImVec4(0.16f, 0.16f, 0.22f, 1));
-    if (ImGui::SmallButton(kFilters[i].label))
+    if (Widgets::SmallButton(kFilters[i].label, on))
       m_filter = i;
-    ImGui::PopStyleColor();
   }
   ImGui::TextDisabled(
       "Drag a card onto a deck slot. Right-click for more. Double-click to edit.");
@@ -127,8 +135,10 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
   ImVec2 p1{p0.x + size.x, p0.y + size.y};
   ImGui::InvisibleButton("##card", size);
   bool hovered = ImGui::IsItemHovered();
-  if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+  if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    Widgets::Click();
     OpenSpell(spell);
+  }
 
   if (ImGui::BeginDragDropSource()) {
     ImGui::SetDragDropPayload(SPELL_PAYLOAD, ref.c_str(), ref.size() + 1);
@@ -179,13 +189,16 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
     ImGui::Text("%s", spell.name.c_str());
     ImGui::Separator();
     DrawStats(stats);
+    if (!SpellRules::WithinLimits(spell))
+      ImGui::TextColored(Theme::Vec(Tone::Oxblood),
+                         "Over the limit: solo and chaos rooms only");
     ImGui::EndTooltip();
   }
 
   ImDrawList *dl = ImGui::GetWindowDrawList();
   Color tint = SpellThumbnails::Tint(spell);
-  dl->AddRectFilled(p0, p1, hovered ? IM_COL32(40, 42, 58, 255)
-                                    : IM_COL32(26, 26, 36, 255),
+  dl->AddRectFilled(p0, p1, hovered ? Theme::U32(Tone::UmberHi)
+                                    : Theme::U32(Tone::Soot),
                     8.0f);
   dl->AddRect(p0, p1, ToU32(tint, hovered ? 220 : 90), 8.0f, 0, 1.5f);
   float thumb = size.x - 14;
@@ -194,7 +207,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
     m_thumbnails->Draw(dl, spell, t0, {t0.x + thumb, t0.y + thumb});
 
   ImGui::PushClipRect(p0, {p1.x - 4, p1.y}, true);
-  dl->AddText({p0.x + 8, t0.y + thumb + 4}, IM_COL32(235, 235, 245, 255),
+  dl->AddText({p0.x + 8, t0.y + thumb + 4}, Theme::U32(Tone::Parchment),
               spell.name.c_str());
   ImGui::PopClipRect();
   const char *kind = !stats.valid                         ? "invalid"
@@ -206,25 +219,29 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
                                                           : SigilOf(spell.glyphs);
   int ticks = stats.valid ? TurnController::CastTicks(stats) : 0;
   dl->AddText(ImGui::GetFont(), Px(12), {p0.x + 8, t0.y + thumb + Px(20)},
-              stats.valid ? ToU32(tint, 200) : IM_COL32(230, 90, 90, 255),
+              stats.valid ? ToU32(tint, 200) : Theme::U32(Tone::Oxblood),
               TextFormat("%s  %.2fs", kind, ticks * TurnController::TICK_DT));
+  if (!SpellRules::WithinLimits(spell))
+    DrawChaosBadge(dl, {p1.x - Px(8), p0.y + Px(8)});
   ImGui::PopID();
 }
 
 void SpellEditor::DrawDeckPanel() {
-  ImGui::Text("Decks");
+  ImGui::PushFont(Theme::Heading(), 0.0f);
+  ImGui::TextColored(Theme::Vec(Tone::Brass), "Decks");
+  ImGui::PopFont();
   ImGui::SameLine(DeckPanelW() - Px(250));
-  if (ImGui::SmallButton("New")) {
+  if (Widgets::SmallButton("New")) {
     m_selectedDeck = m_decks->Create("New deck").id;
   }
   ImGui::SameLine();
-  if (ImGui::SmallButton("Duplicate")) {
+  if (Widgets::SmallButton("Duplicate")) {
     std::string id = m_decks->Duplicate(m_selectedDeck);
     if (!id.empty())
       m_selectedDeck = id;
   }
   ImGui::SameLine();
-  if (ImGui::SmallButton("Rename")) {
+  if (Widgets::SmallButton("Rename")) {
     if (const Deck *d = m_decks->Find(m_selectedDeck)) {
       m_popupDeck = d->id;
       std::strncpy(m_renameBuffer, d->name.c_str(), SPELL_NAME_MAX_LEN);
@@ -234,7 +251,7 @@ void SpellEditor::DrawDeckPanel() {
   }
   ImGui::SameLine();
   ImGui::BeginDisabled(m_decks->Decks().size() <= 1);
-  if (ImGui::SmallButton("Delete")) {
+  if (Widgets::SmallButton("Delete")) {
     m_popupDeck = m_selectedDeck;
     m_openPopup = "Delete deck?";
   }
@@ -255,7 +272,7 @@ void SpellEditor::DrawDeckPanel() {
     DrawDeckSlots(*deck);
     bool active = deck->id == m_decks->ActiveId();
     ImGui::BeginDisabled(active);
-    if (ImGui::Button(active ? "In use in the sandbox" : "Use in the sandbox"))
+    if (Widgets::Button(active ? "In use in the sandbox" : "Use in the sandbox"))
       m_decks->SetActive(deck->id);
     ImGui::EndDisabled();
   }
@@ -280,8 +297,10 @@ void SpellEditor::DrawDeckSlots(const Deck &deck) {
       ImGui::EndDragDropTarget();
     }
     const Spell *spell = m_spells->Find(deck.slots[i]);
-    if (ImGui::IsItemClicked(ImGuiMouseButton_Right))
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+      Widgets::Click();
       m_decks->SetSlot(deck.id, i, "");
+    }
     // Slots can be reordered by dragging one onto another
     if (spell && ImGui::BeginDragDropSource()) {
       ImGui::SetDragDropPayload(SPELL_PAYLOAD, deck.slots[i].c_str(),
@@ -292,22 +311,27 @@ void SpellEditor::DrawDeckSlots(const Deck &deck) {
 
     bool dropping = ImGui::GetDragDropPayload() &&
                     ImGui::GetDragDropPayload()->IsDataType(SPELL_PAYLOAD);
-    dl->AddRectFilled(p0, p1, IM_COL32(24, 24, 33, 255), 6.0f);
+    dl->AddRectFilled(p0, p1, Theme::U32(Tone::Soot), 6.0f);
     dl->AddRect(p0, p1,
-                dropping && hovered ? IM_COL32(130, 200, 255, 255)
-                : dropping          ? IM_COL32(90, 120, 170, 255)
-                                    : IM_COL32(60, 60, 78, 255),
+                dropping && hovered ? Theme::U32(Tone::BrassBright)
+                : dropping          ? Theme::U32(Tone::Brass)
+                                    : Theme::U32(Tone::BrassDim),
                 6.0f, 0, dropping ? 2.0f : 1.0f);
     if (spell && m_thumbnails)
       m_thumbnails->Draw(dl, *spell, {p0.x + 3, p0.y + 3},
                          {p1.x - 3, p1.y - 3});
     else if (!deck.slots[i].empty())
-      dl->AddText({p0.x + 6, p0.y + 24}, IM_COL32(230, 90, 90, 255),
+      dl->AddText({p0.x + 6, p0.y + 24}, Theme::U32(Tone::Oxblood),
                   "missing");
-    dl->AddText({p0.x + 4, p0.y + 2}, IM_COL32(220, 220, 235, 255),
+    dl->AddText({p0.x + 4, p0.y + 2}, Theme::U32(Tone::Parchment),
                 TextFormat("%d", i + 1));
+    if (spell && !SpellRules::WithinLimits(*spell))
+      DrawChaosBadge(dl, {p1.x - Px(7), p0.y + Px(7)});
     if (hovered && spell)
-      ImGui::SetTooltip("%s\nRight-click to clear", spell->name.c_str());
+      ImGui::SetTooltip("%s%s\nRight-click to clear", spell->name.c_str(),
+                        SpellRules::WithinLimits(*spell)
+                            ? ""
+                            : "\nOver the limit: solo and chaos rooms only");
     else if (hovered)
       ImGui::SetTooltip("Drop a spell here");
     ImGui::PopID();
@@ -315,7 +339,7 @@ void SpellEditor::DrawDeckSlots(const Deck &deck) {
 }
 
 void SpellEditor::DrawRoundDecks() {
-  ImGui::Text("Match decks");
+  Widgets::SectionHeader("Match decks");
   ImGui::TextDisabled("The deck you bring to each round of a best-of-3.");
   const MatchDecks &match = m_decks->Match();
   for (int r = 0; r < MATCH_ROUNDS; ++r) {
@@ -323,8 +347,8 @@ void SpellEditor::DrawRoundDecks() {
     const Deck *deck = m_decks->Find(match.deckIds[r]);
     ImGui::AlignTextToFramePadding();
     ImGui::Text("Round %d", r + 1);
-    ImGui::SameLine(70);
-    ImGui::SetNextItemWidth(150);
+    ImGui::SameLine(80 * View::UiScale());
+    ImGui::SetNextItemWidth(150 * View::UiScale());
     if (ImGui::BeginCombo("##round", deck ? deck->name.c_str() : "-")) {
       for (const Deck &d : m_decks->Decks())
         if (ImGui::Selectable(d.name.c_str(), deck && d.id == deck->id))
@@ -332,7 +356,7 @@ void SpellEditor::DrawRoundDecks() {
       ImGui::EndCombo();
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("Copy from..."))
+    if (Widgets::SmallButton("Copy from..."))
       ImGui::OpenPopup("copyfrom");
     if (ImGui::BeginPopup("copyfrom")) {
       for (int o = 0; o < MATCH_ROUNDS; ++o) {
@@ -346,7 +370,7 @@ void SpellEditor::DrawRoundDecks() {
       ImGui::EndPopup();
     }
     ImGui::SameLine();
-    if (ImGui::SmallButton("Edit copy")) {
+    if (Widgets::SmallButton("Edit copy")) {
       // Branch this round off into its own deck and select it for editing
       std::string id = m_decks->Duplicate(match.deckIds[r]);
       if (!id.empty()) {
@@ -368,7 +392,7 @@ void SpellEditor::DrawRoundDecks() {
       for (int i = 0; i < DECK_SLOTS; ++i) {
         ImVec2 q0{p.x + i * 30.0f, p.y};
         dl->AddRectFilled(q0, {q0.x + 26, q0.y + 26},
-                          IM_COL32(24, 24, 33, 255), 4.0f);
+                          Theme::U32(Tone::Soot), 4.0f);
         if (const Spell *s = m_spells->Find(deck->slots[i]))
           m_thumbnails->Draw(dl, *s, {q0.x + 1, q0.y + 1},
                              {q0.x + 25, q0.y + 25});
@@ -392,7 +416,7 @@ void SpellEditor::DrawLibraryPopups() {
     bool enter = ImGui::InputText("##name", m_renameBuffer,
                                   SPELL_NAME_MAX_LEN + 1,
                                   ImGuiInputTextFlags_EnterReturnsTrue);
-    if (ImGui::Button("Rename") || enter) {
+    if (Widgets::Button("Rename") || enter) {
       std::string newRef, err;
       if (m_spells->Rename(m_popupRef, m_renameBuffer, newRef, err)) {
         m_decks->ReplaceRef(m_popupRef, newRef);
@@ -403,7 +427,7 @@ void SpellEditor::DrawLibraryPopups() {
       }
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     if (!m_statusMessage.empty())
       ImGui::TextDisabled("%s", m_statusMessage.c_str());
@@ -415,7 +439,7 @@ void SpellEditor::DrawLibraryPopups() {
     const Spell *spell = m_spells->Find(m_popupRef);
     ImGui::Text("Delete \"%s\"? It is also removed from every deck.",
                 spell ? spell->name.c_str() : m_popupRef.c_str());
-    if (ImGui::Button("Delete")) {
+    if (Widgets::Button("Delete")) {
       std::string err;
       if (m_spells->Remove(m_popupRef, err))
         m_decks->RemoveRef(m_popupRef);
@@ -423,7 +447,7 @@ void SpellEditor::DrawLibraryPopups() {
       close();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     ImGui::EndPopup();
   }
@@ -434,12 +458,12 @@ void SpellEditor::DrawLibraryPopups() {
     bool enter = ImGui::InputText("##deckname", m_renameBuffer,
                                   SPELL_NAME_MAX_LEN + 1,
                                   ImGuiInputTextFlags_EnterReturnsTrue);
-    if ((ImGui::Button("Rename") || enter) && m_renameBuffer[0]) {
+    if ((Widgets::Button("Rename") || enter) && m_renameBuffer[0]) {
       m_decks->Rename(m_popupDeck, m_renameBuffer);
       close();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     ImGui::EndPopup();
   }
@@ -449,13 +473,13 @@ void SpellEditor::DrawLibraryPopups() {
     const Deck *deck = m_decks->Find(m_popupDeck);
     ImGui::Text("Delete the deck \"%s\"? Its spells are kept.",
                 deck ? deck->name.c_str() : "?");
-    if (ImGui::Button("Delete")) {
+    if (Widgets::Button("Delete")) {
       m_decks->Remove(m_popupDeck);
       m_selectedDeck = m_decks->ActiveId();
       close();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Cancel"))
+    if (Widgets::Button("Cancel"))
       close();
     ImGui::EndPopup();
   }
@@ -466,8 +490,8 @@ void SpellEditor::DrawPreviewStrip(ImVec2 size) {
   ImDrawList *dl = ImGui::GetWindowDrawList();
   ImVec2 p0 = ImGui::GetCursorScreenPos();
   ImVec2 p1{p0.x + std::min(size.x, 320.0f), p0.y + size.y};
-  dl->AddRectFilled(p0, p1, IM_COL32(24, 24, 33, 255), 6.0f);
-  dl->AddRect(p0, p1, IM_COL32(130, 170, 255, 255), 6.0f, 0, 2.0f);
+  dl->AddRectFilled(p0, p1, Theme::U32(Tone::Soot), 6.0f);
+  dl->AddRect(p0, p1, Theme::U32(Tone::BrassBright), 6.0f, 0, 2.0f);
 
   float thumb = size.y - 8;
   if (m_thumbnails)
@@ -481,17 +505,17 @@ void SpellEditor::DrawPreviewStrip(ImVec2 size) {
   SpellStats stats = SpellQuant::Canonical(m_currentSpell);
   float barW = p1.x - tx - 10;
   ImVec2 b0{tx, p1.y - 16};
-  dl->AddRectFilled(b0, {b0.x + barW, b0.y + 6}, IM_COL32(40, 40, 55, 255),
+  dl->AddRectFilled(b0, {b0.x + barW, b0.y + 6}, Theme::U32(Tone::Ink),
                     2.0f);
   if (stats.valid) {
     int ticks = TurnController::CastTicks(stats);
     float frac = std::min(1.0f, (float)ticks / TurnController::TURN_TICKS);
     dl->AddRectFilled(b0, {b0.x + barW * frac, b0.y + 6},
-                      IM_COL32(255, 190, 70, 255), 2.0f);
+                      Theme::U32(Tone::Brass), 2.0f);
     bool tooSlow = ticks > TurnController::TURN_TICKS;
     dl->AddText(ImGui::GetFont(), Px(12), {tx, p1.y - Px(32)},
-                tooSlow ? IM_COL32(230, 90, 90, 255)
-                        : IM_COL32(170, 170, 190, 255),
+                tooSlow ? Theme::U32(Tone::Oxblood)
+                        : Theme::U32(Tone::Muted),
                 TextFormat(tooSlow ? "cast time %.2fs: longer than a %.0fs turn"
                                    : "cast time %.2fs of %.0fs",
                            ticks * TurnController::TICK_DT,
@@ -501,7 +525,7 @@ void SpellEditor::DrawPreviewStrip(ImVec2 size) {
     std::string problem = SpellSystem::Problem(m_currentSpell);
     ImGui::PushClipRect(p0, p1, true);
     dl->AddText(ImGui::GetFont(), Px(12), {tx, p1.y - Px(32)},
-                IM_COL32(230, 90, 90, 255),
+                Theme::U32(Tone::Oxblood),
                 problem.empty() ? "not a working spell yet" : problem.c_str());
     ImGui::PopClipRect();
   }

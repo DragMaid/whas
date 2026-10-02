@@ -1,4 +1,5 @@
 #pragma once
+#include "whas/core/cell.h"
 #include "whas/core/element.h"
 #include <array>
 #include <cstddef>
@@ -54,6 +55,12 @@ struct ElementProperties {
   float burnFuel = 0.0f;
   float burnTemp = 0.0f;
 };
+
+// Part of the static world mesh: static terrain, or anchored rigid material
+inline bool IsStaticCell(const Cell &cell, const ElementProperties &props) {
+  return props.staticTerrain ||
+         (props.rigidBodyCandidate && (cell.flags & CELL_ANCHORED));
+}
 
 using PropertiesArray =
     std::array<ElementProperties, static_cast<size_t>(Element::COUNT)>;
