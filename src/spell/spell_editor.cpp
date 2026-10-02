@@ -100,9 +100,7 @@ void DrawLayeredStats(const SpellStats &stats, const char *problem) {
   if (!stats.valid)
     DrawProblem(problem && *problem
                     ? problem
-                    : TextFormat("1-%d parts, each with one sigil; the ring "
-                                 "holds signs only",
-                                 LAYER_MAX_COMPONENTS));
+                    : "Each part needs one sigil; the ring holds signs only");
   ImGui::Text("Layered: %d part%s, cast together", parts,
               parts == 1 ? "" : "s");
   Color c = SpellEditor::BalanceColor(stats.imbalance);
@@ -586,8 +584,8 @@ bool SpellEditor::CanAddComponent(std::string *why) const {
   if (!m_currentSpell.Layered() && !m_currentSpell.glyphs.empty())
     return fail("Layered spells start from an empty circle: press New, "
                 "place spells, then ring signs.");
-  if ((int)m_currentSpell.components.size() >= LAYER_MAX_COMPONENTS)
-    return fail("A layered spell holds at most 5 spells.");
+  if ((int)m_currentSpell.components.size() >= LAYER_HARD_MAX_COMPONENTS)
+    return fail("A layered spell holds at most 64 spells.");
   return true;
 }
 
@@ -1332,9 +1330,10 @@ void SpellEditor::DrawOverlay() {
   ImGui::Separator();
   if (SpellRules::CountGlyphs(m_currentSpell).OverLimit())
     ImGui::TextColored(Theme::Vec(Tone::Oxblood),
-                       "Over the limit: more than %d signs in one circle. This "
-                       "spell can only be played solo or in chaos rooms.",
-                       SIGN_LIMIT);
+                       "Over the limit (more than %d signs in a circle or %d "
+                       "spells in a layered spell): this spell can only be "
+                       "played solo or in chaos rooms.",
+                       SIGN_LIMIT, LAYER_MAX_COMPONENTS);
 
   float rightW = std::max(280.0f * View::UiScale(),
                           ImGui::GetContentRegionAvail().x * 0.24f);
@@ -1384,9 +1383,12 @@ void SpellEditor::DrawOverlay() {
 void SpellEditor::DrawGlyphCounter() const {
   SpellRules::Count count = SpellRules::CountGlyphs(m_currentSpell);
   bool over = count.OverLimit();
-  char text[64];
-  std::snprintf(text, sizeof text, "Signs %d/%d    Sigils %d", count.mostSigns,
-                SIGN_LIMIT, count.sigils);
+  char text[96];
+  int n = std::snprintf(text, sizeof text, "Signs %d/%d    Sigils %d",
+                        count.mostSigns, SIGN_LIMIT, count.sigils);
+  if (count.parts > 0)
+    std::snprintf(text + n, sizeof text - n, "    Spells %d/%d", count.parts,
+                  LAYER_MAX_COMPONENTS);
   float w = ImGui::CalcTextSize(text).x;
   ImGui::SameLine(std::max(ImGui::GetCursorPosX(),
                            ImGui::GetWindowContentRegionMax().x - w -
@@ -1399,7 +1401,9 @@ void SpellEditor::DrawGlyphCounter() const {
                      "%s", text);
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
-    ImGui::Text("Ordinary matches allow %d signs per circle.", SIGN_LIMIT);
+    ImGui::Text("Ordinary matches allow %d signs per circle and %d spells "
+                "in a layered spell.",
+                SIGN_LIMIT, LAYER_MAX_COMPONENTS);
     ImGui::TextDisabled("Sigils follow the usual rules. Chaos rooms and solo "
                         "play have no limit.");
     if (count.circles.size() > 1)

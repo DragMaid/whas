@@ -144,4 +144,7 @@ TEST_CASE("signs are counted per circle against the limit", "[spell]") {
   REQUIRE(count.signs == 60);
   REQUIRE(count.mostSigns == 20);
   REQUIRE_FALSE(count.OverLimit());
+  // More than five spells in a layer is over the limit too, but still a spell
+  layered.components.assign(LAYER_MAX_COMPONENTS + 1, part);
+  REQUIRE(SpellRules::CountGlyphs(layered).OverLimit());
 }

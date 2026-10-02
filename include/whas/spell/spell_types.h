@@ -20,7 +20,10 @@ constexpr int SIGN_LIMIT = 32;
 constexpr float LAYER_CORE_RADIUS = 175.0f;
 constexpr float LAYER_RING_INNER = 183.0f;
 constexpr float LAYER_RING_OUTER = SPELL_OUTER_RADIUS - 4.0f;
+// Parts of a layered spell in an ordinary match; chaos rooms take more, up
+// to the hard ceiling (which keeps spells a sane size on the wire)
 constexpr int LAYER_MAX_COMPONENTS = 5;
+constexpr int LAYER_HARD_MAX_COMPONENTS = 64;
 // Component scale is its radius as a share of a full circle's
 constexpr float COMPONENT_SCALE_MIN = 0.2f;
 constexpr float COMPONENT_SCALE_MAX = LAYER_CORE_RADIUS / SPELL_OUTER_RADIUS;

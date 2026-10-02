@@ -19,6 +19,7 @@ Count CountGlyphs(const Spell &spell) {
   count.circles.push_back(CountCircle(spell.glyphs));
   for (const SpellComponent &component : spell.components)
     count.circles.push_back(CountCircle(component.glyphs));
+  count.parts = static_cast<int>(spell.components.size());
   for (const Circle &c : count.circles) {
     count.mostSigns = std::max(count.mostSigns, c.signs);
     count.signs += c.signs;

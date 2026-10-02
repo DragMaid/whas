@@ -2,9 +2,10 @@
 #include "whas/spell/spell_types.h"
 #include <vector>
 
-// How many signs and sigils a spell uses, circle by circle, against the
-// limit ordinary matches play by. Spells over it still work solo and in
-// chaos rooms, where nothing is counted.
+// How many signs and sigils a spell uses, circle by circle, and how many
+// spells a layered spell holds, against the limits ordinary matches play
+// by. Spells over them still work solo and in chaos rooms, where nothing is
+// counted.
 namespace SpellRules {
 
 struct Circle {
@@ -20,7 +21,11 @@ struct Count {
   int signs = 0;     // in all
   int sigils = 0;
 
-  bool OverLimit() const { return mostSigns > SIGN_LIMIT; }
+  int parts = 0;     // spells in a layered spell
+
+  bool OverLimit() const {
+    return mostSigns > SIGN_LIMIT || parts > LAYER_MAX_COMPONENTS;
+  }
 };
 
 Count CountGlyphs(const Spell &spell);

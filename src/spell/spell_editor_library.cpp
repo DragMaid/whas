@@ -191,8 +191,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
     DrawStats(stats);
     if (!SpellRules::WithinLimits(spell))
       ImGui::TextColored(Theme::Vec(Tone::Oxblood),
-                         "More than %d signs in a circle: solo and chaos rooms only",
-                         SIGN_LIMIT);
+                         "Over the limit: solo and chaos rooms only");
     ImGui::EndTooltip();
   }
 
@@ -332,7 +331,7 @@ void SpellEditor::DrawDeckSlots(const Deck &deck) {
       ImGui::SetTooltip("%s%s\nRight-click to clear", spell->name.c_str(),
                         SpellRules::WithinLimits(*spell)
                             ? ""
-                            : "\nOver the sign limit: solo and chaos rooms only");
+                            : "\nOver the limit: solo and chaos rooms only");
     else if (hovered)
       ImGui::SetTooltip("Drop a spell here");
     ImGui::PopID();

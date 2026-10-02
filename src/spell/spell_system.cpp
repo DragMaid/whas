@@ -544,7 +544,7 @@ SpellStats EvaluateLayered(const Spell &spell) {
 
   int count = static_cast<int>(spell.components.size());
   s.valid = outer.allSigils == 0 && outer.shapeSigils == 0 && count >= 1 &&
-            count <= LAYER_MAX_COMPONENTS;
+            count <= LAYER_HARD_MAX_COMPONENTS;
   for (const SpellComponent &component : spell.components) {
     Circle inner = ReadCircle(component.glyphs);
     SpellStats part =
@@ -610,8 +610,8 @@ std::string SpellSystem::Problem(const Spell &spell) {
   for (const PlacedGlyph &g : spell.glyphs)
     if (g.kind == GlyphKind::Sigil)
       return "The outer ring holds signs only.";
-  if ((int)spell.components.size() > LAYER_MAX_COMPONENTS)
-    return "A layered spell holds at most 5 spells.";
+  if ((int)spell.components.size() > LAYER_HARD_MAX_COMPONENTS)
+    return "A layered spell holds at most 64 spells.";
   for (const SpellComponent &c : spell.components) {
     // Ring signs count too (a ring pulling sign makes every part a field)
     std::vector<PlacedGlyph> glyphs = c.glyphs;
