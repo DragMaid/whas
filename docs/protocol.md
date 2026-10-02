@@ -68,13 +68,22 @@ and `pulling` may set it.
   files are marked `"format": 2` from then on.
 - Uploads are rejected unless the evaluator makes a valid spell of them.
 
-A layered spell also has `components`: 1 to 5 entries of
+A layered spell also has `components`: 1 to 64 entries of
 `{source, x, y, scale (0.2-0.7), rotation, glyphs[]}`.
 
 - Each entry is a plain spell.
 - The top-level `glyphs` are the outer ring and must all be signs.
 - Plain spells leave out `components`, which keeps their upload hash
   unchanged.
+
+**Limits.** Ordinary matches allow at most 32 signs in any one circle and
+at most 5 spells in a layered spell. The sigil rules above apply everywhere.
+
+- Spells over the limits are still accepted.
+- In a room with `chaos: true` they play like any other spell.
+- In every other match the server leaves them out of the locked decks, as
+  empty slots. A round whose deck would be left empty is rejected.
+- A circle never holds more than 256 glyphs, chaos or not.
 
 A `SpellCard` is `{id, name, glyphs, stats, components?}`, where `stats` is
 the quantized `SpellQuant::Stats`:

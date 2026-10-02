@@ -310,6 +310,44 @@ public class MatchFlowTests(ServerFixture server)
     }
 
     [Fact]
+    public async Task SpellsOverTheLimitOnlyPlayInChaosRooms()
+    {
+        foreach (bool chaos in new[] { false, true })
+        {
+            string build = "chaos-" + Guid.NewGuid();
+            var host = await NewPlayerAsync(build);
+            var friend = await NewPlayerAsync(build);
+
+            // 33 signs: accepted, but over the ordinary limit
+            var signs = Enumerable.Repeat<object>(
+                new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 0.1f, rotation = 0f }, 33);
+            object[] glyphs = [new { assetId = "water", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
+                               .. signs];
+            await host.Client.SendAsync(new { type = "uploadSpell", @ref = "big", name = "Deluge", glyphs });
+            long big = (await host.Client.ExpectAsync("spellAccepted")).GetProperty("spellId").GetInt64();
+            await host.Client.SendAsync(new
+            {
+                type = "upsertDeck", @ref = "c", name = "Chaos",
+                spellIds = new[] { big, host.WaterId, 0, 0, 0, 0 },
+            });
+            long deck = (await host.Client.ExpectAsync("deckAccepted")).GetProperty("deckId").GetInt64();
+
+            await host.Client.SendAsync(new { type = "createLobby", options = new { chaos } });
+            string code = (await host.Client.ExpectAsync("lobbyCreated")).GetProperty("code").GetString()!;
+            await friend.Client.SendAsync(new { type = "joinLobby", code });
+            await host.Client.ExpectAsync("matchFound");
+            await friend.Client.ExpectAsync("matchFound");
+
+            await host.Client.SendAsync(new { type = "matchDecks", deckIds = new[] { deck, deck, deck } });
+            var locked = await host.Client.ExpectAsync("decksLocked");
+            var round = locked.GetProperty("rounds")[0];
+            Assert.Equal(chaos ? JsonValueKind.Object : JsonValueKind.Null, round[0].ValueKind);
+            Assert.Equal(JsonValueKind.Object, round[1].ValueKind);
+            await host.Client.SendAsync(new { type = "leave" });
+        }
+    }
+
+    [Fact]
     public async Task UploadsAreValidatedAndStatsComeFromTheServer()
     {
         var c = await TestClient.ConnectAsync(server, "b");

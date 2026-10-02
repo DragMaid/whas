@@ -273,7 +273,8 @@ public sealed class MatchActor
             if (msg.Type != "matchDecks" || _decks[msg.Slot] is not null)
                 continue;
             long[] ids = msg.Body.GetProperty("deckIds").Deserialize<long[]>() ?? [];
-            var (rounds, error) = await _spells.LoadRoundDecksAsync(_playerIds[msg.Slot], ids, ct);
+            var (rounds, error) = await _spells.LoadRoundDecksAsync(_playerIds[msg.Slot], ids,
+                                                                    Room.Chaos, ct);
             if (rounds is null)
             {
                 SendTo(msg.Slot, "decksRejected", new { reason = error });

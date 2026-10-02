@@ -132,8 +132,9 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
     // The cards of the player's decks for rounds 1-3, each six long (null =
     // empty slot). Stats are re-evaluated if the evaluator changed since the
     // upload, so every match plays by the current rules.
+    // Outside chaos rooms, spells over the ordinary limits are left out.
     public async Task<(List<SpellCard?[]>? Rounds, string? Error)> LoadRoundDecksAsync(
-        long ownerId, long[] deckIds, CancellationToken ct = default)
+        long ownerId, long[] deckIds, bool chaos = false, CancellationToken ct = default)
     {
         if (deckIds.Length != 3)
             return (null, "pick a deck for each of the 3 rounds");
@@ -159,10 +160,14 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
             var deck = decks[deckId];
             var cards = new SpellCard?[DeckSlots];
             for (int i = 0; i < DeckSlots && i < deck.SpellIds.Length; ++i)
-                if (spells.TryGetValue(deck.SpellIds[i], out var s))
-                    cards[i] = ToCard(s);
+                if (spells.TryGetValue(deck.SpellIds[i], out var s) &&
+                    ToCard(s) is var card &&
+                    (chaos || !SpellValidator.OverLimit(card.Glyphs, card.Components)))
+                    cards[i] = card;
             if (cards.All(c => c is null))
-                return (null, $"deck \"{deck.Name}\" is empty");
+                return (null, chaos ? $"deck \"{deck.Name}\" is empty"
+                                    : $"deck \"{deck.Name}\" has no spells within the limits " +
+                                      "(the rest only play in chaos rooms)");
             rounds.Add(cards);
         }
         return (rounds, null);

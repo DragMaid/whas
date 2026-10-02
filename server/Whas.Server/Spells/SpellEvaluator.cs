@@ -77,7 +77,9 @@ public static class SpellEvaluator
     const float ComponentFullScale = 0.7f;
     const float ComponentMinEffect = 0.5f;
     const float ComponentMaxEffect = 1.0f;
-    public const int MaxComponents = 5;
+    // Hard ceiling on a layered spell's parts (chaos rooms); ordinary
+    // matches allow SpellValidator.MaxParts
+    public const int MaxComponents = 64;
 
     // raylib's DEG2RAD, in float as the C++ side computes it
     const float Deg2Rad = MathF.PI / 180.0f;

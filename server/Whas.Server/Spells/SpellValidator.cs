@@ -4,8 +4,11 @@ namespace Whas.Server.Spells;
 // glyphs needs the SVG shapes and is only checked by the client editor.)
 public static class SpellValidator
 {
-    // Signs in one circle (spell_types.h SIGN_LIMIT); sigils have their own rules
+    // Ordinary matches (spell_types.h SIGN_LIMIT, LAYER_MAX_COMPONENTS): signs
+    // in one circle and spells in a layered spell. Spells over them are kept
+    // but only play in chaos rooms. Sigils have their own rules everywhere.
     public const int MaxSigns = 32;
+    public const int MaxParts = 5;
     // Glyphs in one circle, whatever kind: just a bound on message size
     public const int MaxGlyphs = 256;
     public const int MaxNameLength = 32;
@@ -35,13 +38,11 @@ public static class SpellValidator
 
         // Layered: the outer ring holds signs only, the core 1-5 plain spells
         if (components.Count > SpellEvaluator.MaxComponents)
-            return $"a layered spell holds 1-{SpellEvaluator.MaxComponents} spells";
+            return $"a layered spell holds at most {SpellEvaluator.MaxComponents} spells";
         if (glyphs.Count > MaxGlyphs)
             return $"a ring has at most {MaxGlyphs} glyphs";
-        if (CheckGlyphs(glyphs, out int sigils, out _, out int ringSigns) is { } bad)
+        if (CheckGlyphs(glyphs, out int sigils, out _, out _) is { } bad)
             return bad;
-        if (ringSigns > MaxSigns)
-            return $"a circle has at most {MaxSigns} signs";
         if (sigils > 0)
             return "the outer ring holds signs only";
         foreach (var c in components)
@@ -65,6 +66,15 @@ public static class SpellValidator
         return null;
     }
 
+    // Too many signs in a circle or spells in a layer for an ordinary match
+    public static bool OverLimit(IReadOnlyList<Glyph> glyphs, IReadOnlyList<Component>? components)
+    {
+        static int Signs(IReadOnlyList<Glyph> g) => g.Count(x => !x.IsSigil);
+        components ??= [];
+        return components.Count > MaxParts || Signs(glyphs) > MaxSigns ||
+               components.Any(c => c.Glyphs is not null && Signs(c.Glyphs) > MaxSigns);
+    }
+
     // A plain circle: one sigil (plus at most one dragon, and guidance with
     // its target) and some signs, that the evaluator can make a spell of
     static string? CheckCircle(IReadOnlyList<Glyph> glyphs)
@@ -73,8 +83,6 @@ public static class SpellValidator
             return $"a spell has 1-{MaxGlyphs} glyphs";
         if (CheckGlyphs(glyphs, out int sigils, out int shapes, out int signs) is { } bad)
             return bad;
-        if (signs > MaxSigns)
-            return $"a circle has at most {MaxSigns} signs";
         if (sigils < 1 || sigils > 4)
             return "a spell needs one sigil to fire (plus guidance and its target)";
         if (shapes > 1)
