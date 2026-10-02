@@ -1,0 +1,110 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: macos-latest
+            name: macos
+          - os: windows-latest
+            name: windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Only release tags that point at a commit on main
+      - name: Check tag is on main
+        shell: bash
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - uses: lukka/get-cmake@latest
+
+      - name: Install deps (linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev libx11-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev \
+            wayland-protocols libasound2-dev
+
+      - name: Install deps (macos)
+        if: runner.os == 'macOS'
+        run: |
+          brew install openssl@3
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      - name: Install deps (windows)
+        if: runner.os == 'Windows'
+        run: |
+          vcpkg install openssl:x64-windows
+          echo "CMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT\scripts\buildsystems\vcpkg.cmake" >> $env:GITHUB_ENV
+
+      - name: Configure
+        shell: bash
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWHAS_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --target whasg --parallel
+
+      - name: Package
+        shell: bash
+        run: |
+          pkg="whas-${GITHUB_REF_NAME}-${{ matrix.name }}"
+          mkdir -p "$pkg"
+          cp -r assets "$pkg/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp build/Release/whasg.exe build/Release/*.dll "$pkg/" 2>/dev/null || cp build/Release/whasg.exe "$pkg/"
+            7z a "$pkg.zip" "$pkg"
+          else
+            cp build/whasg "$pkg/"
+            tar czf "$pkg.tar.gz" "$pkg"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            whas-*.zip
+            whas-*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Release notes are the commit subjects since the previous tag
+      - name: Write release notes
+        run: |
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          range="${prev:+$prev..}${GITHUB_REF_NAME}"
+          {
+            echo "## Changes${prev:+ since $prev}"
+            echo
+            git log --no-merges --pretty='- %s (%h)' "$range"
+          } > notes.md
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: whas-*
