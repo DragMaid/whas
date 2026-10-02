@@ -28,7 +28,7 @@ void ReplayView::Update(Simulation &sim, UIState &state) {
   state.matchRound = -1;
   state.clock = m_playing ? ClockLook::Executing : ClockLook::Stopped;
   state.clockProgress =
-      static_cast<float>(m_player.Tick()) / TurnController::TURN_TICKS;
+      static_cast<float>(m_player.Tick()) / m_player.TicksPerRecord();
   state.timeToggleRequested = false;
   if (!ImGui::GetIO().WantCaptureKeyboard && IsKeyPressed(KEY_SPACE))
     m_playing = !m_playing;
@@ -63,7 +63,7 @@ void ReplayView::DrawControls(Simulation &sim) {
     m_playing = !m_playing;
   ImGui::SameLine();
   if (Widgets::Button("Next turn")) {
-    int left = TurnController::TURN_TICKS - m_player.Tick();
+    int left = m_player.TicksPerRecord() - m_player.Tick();
     m_player.Step(sim, left);
   }
   ImGui::SameLine();

@@ -1,5 +1,6 @@
 #include "whas/game/replay.h"
 #include "whas/engine/simulation.h"
+#include "whas/game/rts.h"
 #include <algorithm>
 
 using json = nlohmann::json;
@@ -76,11 +77,19 @@ void ReplayPlayer::Start(Simulation &sim) {
                               &m_options);
 }
 
+int ReplayPlayer::TicksPerRecord() const {
+  return m_options.rts ? Rts::BATCH_TICKS : TurnController::TURN_TICKS;
+}
+
 bool ReplayPlayer::Step(Simulation &sim, int ticks) {
   while (ticks-- > 0 && !Finished()) {
     const TurnRecord &t = m_turns[m_index];
-    Match::ExecuteTick(sim, m_state, {&t.plans[0], &t.plans[1]}, m_tick++);
-    if (m_tick == TurnController::TURN_TICKS)
+    if (m_options.rts)
+      Rts::ExecuteTick(sim, m_state, {&t.plans[0], &t.plans[1]}, m_tick,
+                       t.turn * Rts::BATCH_TICKS + m_tick);
+    else
+      Match::ExecuteTick(sim, m_state, {&t.plans[0], &t.plans[1]}, m_tick);
+    if (++m_tick == TicksPerRecord())
       FinishTurn(sim);
   }
   return !Finished();
@@ -88,7 +97,8 @@ bool ReplayPlayer::Step(Simulation &sim, int ticks) {
 
 void ReplayPlayer::FinishTurn(Simulation &sim) {
   const TurnRecord &t = m_turns[m_index];
-  Match::EndTurn(m_state);
+  if (!m_options.rts) // real time cools burns as it goes
+    Match::EndTurn(m_state);
   uint64_t hash = Match::Hash(sim, m_state);
   for (int s = 0; s < 2; ++s) {
     if (!t.hashes[s])
@@ -113,7 +123,7 @@ void ReplayPlayer::FinishTurn(Simulation &sim) {
 
 int ReplayPlayer::VerifyAll(Simulation &sim, std::vector<std::string> *report) {
   Start(sim);
-  while (Step(sim, TurnController::TURN_TICKS))
+  while (Step(sim, TicksPerRecord()))
     ;
   if (report)
     *report = m_report;

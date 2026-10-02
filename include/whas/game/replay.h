@@ -31,6 +31,8 @@ public:
   int Round() const { return m_state.round; }
   int Turn() const;
   int Tick() const { return m_tick; }
+  // Ticks in one stored turn: a planned turn, or a real-time batch
+  int TicksPerRecord() const;
   bool Finished() const { return m_index >= TurnCount(); }
   int Checked() const { return m_checked; }
   int Mismatches() const { return m_mismatches; }
