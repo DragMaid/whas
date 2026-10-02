@@ -1,6 +1,8 @@
 #include "whas/constants.h"
 #include "whas/core/sha256.h"
 #include "whas/engine/simulation.h"
+#include "whas/game/arena_gen.h"
+#include "whas/game/map.h"
 #include "whas/game/rts.h"
 #include "whas/net/lockstep_client.h"
 #include "whas/net/net_client.h"
@@ -212,8 +214,21 @@ TEST_CASE("two clients play a real-time match through the server", "[.e2e]") {
     return a.client.GetPhase() == Phase::Ready && b.client.GetPhase() == Phase::Ready;
   }, 10));
 
+  // A player-made map with endless rain, then a generated arena
   MatchOptions options;
   options.rts = true;
+  {
+    Simulation scratch;
+    MapDef map;
+    map.id = "e2e";
+    map.name = "Rainy";
+    map.spawns = ArenaGen::Generate(scratch, 77).spawns;
+    for (int x = 100; x < 220; ++x)
+      scratch.Paint(x, 60, Element::ROCK, 0);
+    map.cells = Maps::CaptureCells(scratch);
+    map.settings = {{"Weather", {{"infiniteRain", true}, {"skyRain", 1.0}}}};
+    options.pool = {MapSpec{map}, MapSpec{}};
+  }
   a.client.CreateLobby(options);
   REQUIRE(Until(a, b, [&] { return a.client.GetPhase() == Phase::Hosting; }, 10));
   b.client.JoinLobby(a.client.LobbyCode());
@@ -226,6 +241,8 @@ TEST_CASE("two clients play a real-time match through the server", "[.e2e]") {
   for (auto &n : b.client.TakeNotices())
     UNSCOPED_INFO("b: " << n);
   REQUIRE(a.client.Options().rts);
+  REQUIRE(b.client.Options().pool.size() == 2);
+  REQUIRE(b.client.Options().pool[0].custom);
   REQUIRE(a.client.MatchEndReason() == "rounds");
   REQUIRE(a.client.MatchWinner() == b.client.MatchWinner());
   REQUIRE(a.client.RoundsWon() == b.client.RoundsWon());

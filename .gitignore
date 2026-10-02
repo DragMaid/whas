@@ -1,4 +1,5 @@
 build
+build-release
 .vscode
 .aider*
 data/spells/
