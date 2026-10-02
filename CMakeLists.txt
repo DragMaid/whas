@@ -210,7 +210,7 @@ target_include_directories(whas
     ${RLIMGUI_DIR}
     ${nanosvg_SOURCE_DIR}/src
 )
-target_link_libraries(whas PUBLIC box2d nanosvg nlohmann_json::nlohmann_json ixwebsocket)
+target_link_libraries(whas PUBLIC raylib box2d nanosvg nlohmann_json::nlohmann_json ixwebsocket)
 
 add_executable(whasg src/main.cpp)
 # target_link_libraries(whasg PRIVATE whas)

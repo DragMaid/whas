@@ -12,3 +12,4 @@ data/*.lock
 data/guest*.json
 data/maps/
 data/replays/
+*.ini
