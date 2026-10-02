@@ -8,8 +8,9 @@ struct CharacterInput {
   bool left = false;
   bool right = false;
   bool jump = false;
+  bool down = false; // fall faster while in the air
 
-  bool Any() const { return left || right || jump; }
+  bool Any() const { return left || right || jump || down; }
   bool operator==(const CharacterInput &) const = default;
 };
 

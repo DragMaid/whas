@@ -447,6 +447,7 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
     input.left = IsKeyDown(KEY_A);
     input.right = IsKeyDown(KEY_D);
     input.jump = IsKeyDown(KEY_W);
+    input.down = IsKeyDown(KEY_S);
     // The cursor is recorded too: sights set spells follow it
     m_turn.FlowTick(sim, input, PlanCursor::FromCells(View::MouseCells()));
   }

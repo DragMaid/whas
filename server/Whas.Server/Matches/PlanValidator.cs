@@ -46,7 +46,7 @@ public static class PlanValidator
             foreach (var run in runs.EnumerateArray())
             {
                 if (!TryInt(run, "n", out int n) || n < 1 || !TryInt(run, "in", out int input) ||
-                    input < 0 || input > 7)
+                    input < 0 || input > 15)
                     return Result.Fail("bad run");
                 if (steps + n > TurnTicks)
                     return Result.Fail("plan is longer than a turn");

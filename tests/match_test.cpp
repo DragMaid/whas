@@ -285,3 +285,20 @@ TEST_CASE("a round starts identically whatever the world did before",
     REQUIRE(Match::Hash(used, a) == Match::Hash(fresh, b));
   }
 }
+
+TEST_CASE("holding down dives faster than falling", "[match]") {
+  Simulation sim;
+  Match::State state = Match::BeginRound(sim, 4242, 0);
+  Character fall = state.characters[0], dive = state.characters[0];
+  fall.pos.y = dive.pos.y = 5;
+  fall.grounded = dive.grounded = false;
+  fall.vel = dive.vel = {0, 0};
+  for (int i = 0; i < 10; ++i) {
+    fall.Step(sim, {}, TurnController::TICK_DT);
+    CharacterInput down;
+    down.down = true;
+    dive.Step(sim, down, TurnController::TICK_DT);
+  }
+  REQUIRE(dive.pos.y > fall.pos.y);
+  REQUIRE(dive.vel.y > fall.vel.y);
+}

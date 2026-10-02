@@ -195,7 +195,7 @@ collapsed into runs, and casts carry the server spell id:
 {"v":1,"runs":[{"n":30,"in":2},{"n":1,"in":0,"casts":[{"id":7,"ax":16383,"ay":0}]},{"n":29,"in":0,"c":[1280,400]}]}
 ```
 
-`in` is a bit field: 1 = left, 2 = right, 4 = jump. `c` is where the
+`in` is a bit field: 1 = left, 2 = right, 4 = jump, 8 = down (dive while airborne). `c` is where the
 player's cursor was, in 1/8 cells, for sights set spells (two int16s); a
 run without it keeps the last one. The server rejects a plan
 (`server/Whas.Server/Matches/PlanValidator.cs`) if any of these hold:
