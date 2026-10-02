@@ -81,6 +81,7 @@ void Game::StartOnline(Simulation &sim, UI &ui, LockstepClient &client) {
   m_roundsWon = {};
   m_seenRoundEnds = client.RoundEnds();
   m_plannedTurn = -1;
+  m_rtsRound = -1;
   m_submitted = false;
   m_state = RoundState::Playing;
   m_banner = nullptr;
@@ -143,6 +144,9 @@ void Game::UpdateOnline(Simulation &sim, UI &ui) {
   }
 
   switch (client.GetPhase()) {
+  case Phase::Realtime:
+    UpdateOnlineRts(sim, ui);
+    break;
   case Phase::Planning: {
     int key = client.Round() * 1000 + client.Turn();
     if (key != m_plannedTurn) {
@@ -257,6 +261,32 @@ void Game::QueueRtsCast(UI &ui, int tick) {
     Notify("One wind underfoot cast at a time", 1.5f);
     break;
   }
+}
+
+// Online real time: ticks are played as the server's batches arrive; when
+// one is late the world waits for it rather than guessing
+void Game::UpdateOnlineRts(Simulation &sim, UI &ui) {
+  LockstepClient &client = *m_online;
+  if (m_rtsRound != client.Round()) {
+    m_rtsRound = client.Round();
+    m_rts.BeginRound();
+    m_rtsAccumulator = 0.0f;
+  }
+  m_waiting = false;
+  QueueRtsCast(ui, client.RtsInputTick());
+
+  constexpr int MAX_TICKS_PER_FRAME = 3; // a little catching up after a stall
+  m_rtsAccumulator += std::min(GetFrameTime(), 0.1f);
+  for (int steps = 0; m_rtsAccumulator >= TurnController::TICK_DT &&
+                      client.RtsReady() && steps < MAX_TICKS_PER_FRAME;
+       ++steps) {
+    m_rtsAccumulator -= TurnController::TICK_DT;
+    client.RtsStep(sim, m_match,
+                   m_rts.TakeStep(RtsInput(),
+                                  PlanCursor::FromCells(View::MouseCells())));
+  }
+  m_rtsAccumulator = std::min(m_rtsAccumulator, 2 * TurnController::TICK_DT);
+  m_rtsTick = client.RtsTick();
 }
 
 // Offline real time: the world runs at 60 ticks a second and the dummy
@@ -443,7 +473,7 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
   state.matchRound = m_match.round;
   state.cooldowns = {};
   if (IsRts()) {
-    int tick = m_rtsTick;
+    int tick = m_online ? m_online->RtsInputTick() : m_rtsTick;
     for (int i = 0; i < DECK_SLOTS; ++i) {
       int64_t key = -(i + 1);
       if (m_online)

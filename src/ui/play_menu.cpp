@@ -371,11 +371,13 @@ void PlayMenu::DrawRoomSetup() {
   ImGui::Indent();
   m_maps.DrawPoolPicker(m_roomPool);
   Widgets::Toggle("Chaos: no limit on signs or layered spells", &m_roomChaos);
+  Widgets::Toggle("Real time: no planning, spells cool down", &m_roomRts);
   ImGui::Unindent();
   if (Widgets::Button("Open the room", {-1, 0}, true)) {
     SyncLibrary();
     MatchOptions options = m_maps.BuildOptions(m_roomPool);
     options.chaos = m_roomChaos;
+    options.rts = m_roomRts;
     m_client.CreateLobby(options);
     m_roomSetup = false;
   }

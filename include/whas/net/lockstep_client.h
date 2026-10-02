@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/match.h"
+#include "whas/game/rts.h"
 #include "whas/net/net_client.h"
 #include "whas/net/plan_codec.h"
 #include "whas/spell/deck.h"
@@ -48,6 +49,7 @@ public:
     Executing, // plans in: step the turn with StepExecution
     Reporting, // hash sent
     Resync,    // waiting for the reference snapshot
+    Realtime,  // a real-time round: stream input batches (RtsStep)
     MatchOver,
   };
 
@@ -125,6 +127,18 @@ public:
   const std::string &MatchEndReason() const { return m_matchEndReason; }
   int Desyncs() const { return m_desyncs; }
 
+  // Real-time rounds. Input recorded now is played INPUT_DELAY batches
+  // later, once the server has relayed both players' batches.
+  // A tick can be played: its batch has arrived and the round isn't decided
+  bool RtsReady() const;
+  // Play one tick with both players' input, and record ours for later
+  void RtsStep(Simulation &sim, Match::State &state, PlanStep local);
+  // The round tick our next recorded input will be played at (cooldowns
+  // count from it)
+  int RtsInputTick() const;
+  // Ticks played this round
+  int RtsTick() const { return m_rtsBatch * Rts::BATCH_TICKS + m_rtsStep; }
+
   // Things worth telling the player ("opponent disconnected", errors...)
   std::vector<std::string> TakeNotices();
 
@@ -140,6 +154,8 @@ private:
   bool DecodePlan(const std::string &text, int slot, TurnPlan &plan);
   void ReportHash(Simulation &sim, Match::State &state);
   void ReadOptions(const nlohmann::json &msg);
+  void BeginRts(int fromBatch);
+  void SendInputs(int batch, const TurnPlan &plan);
   void CatchUp(const nlohmann::json &msg, Simulation &sim, Match::State &state);
   void Notice(std::string text);
   void LoadIdentity();
@@ -195,5 +211,13 @@ private:
   int m_matchWinner = -1;
   std::string m_matchEndReason;
   int m_desyncs = 0;
+
+  // Real time: relayed batches by number, the batch and tick being played,
+  // and our input being recorded for batch m_rtsBatch + INPUT_DELAY
+  std::map<int, std::array<TurnPlan, 2>> m_rtsFrames;
+  int m_rtsBatch = 0;
+  int m_rtsStep = 0;
+  TurnPlan m_rtsRecording;
+  bool m_rtsDecided = false; // someone fell: reported, waiting for roundEnd
   std::vector<std::string> m_notices;
 };

@@ -172,6 +172,48 @@ MapEntry = {"kind": "random"} | {"kind": "custom", "map": MapFile}
 5. `roundEnd {round, winner, roundsWon}`, and finally
    `matchEnd {winner, reason, status, roundsWon}`.
 
+### Real-time rounds (`options.rts`)
+
+In a real-time room there is no planning: both players act at once
+(`include/whas/game/rts.h`). A spell can't be cast again until its cast time
+(`CastTicks`) has passed since its last cast. Nobody is held still while
+casting.
+
+**Constants**
+
+| Name | Value |
+|---|---|
+| Batch | 6 ticks (0.1 s) |
+| Input delay | 2 batches |
+| Hash report | every 10 batches |
+| Round | 1800 batches (3 minutes), then a draw |
+
+**Flow**
+
+1. After `roundStart`, each client sends `inputs {round, batch, plan}` for
+   batches 0 and 1 with an empty plan. The plan is the usual plan format,
+   holding at most 6 steps.
+2. The server relays a batch as `frames {round, batch, plans[2],
+   substituted[2]}` once both players' parts are in. If a part is still
+   missing after 2 s, or its player has disconnected, it becomes an empty
+   plan.
+3. A plan that fails validation also becomes an empty plan, and its sender
+   gets `planRejected`. Validation checks the deck, the aim, one wind
+   underfoot cast per tick, and cooldowns tracked per spell id.
+4. While a client plays batch `b`, it records its input for batch `b + 2`,
+   and sends it when `b` is done. A client that hasn't received batch `b`
+   yet waits for it.
+5. After batch `b` a client sends `stateHash {round, turn: b, hash, winner}`
+   when `(b + 1) % 10 == 0`, or as soon as someone has fallen.
+   - Matching reports with a winner end the round (`roundEnd`).
+   - Reports that differ void the match. Unlike planned turns, there is no
+     snapshot resync.
+6. Each batch is stored as one turn record, with `turn` set to the batch
+   number. A replay of a real-time match plays each record for 6 ticks.
+7. `catchUp` has `current.phase = "rts"` and `current.turn` set to the next
+   batch. A returning client re-simulates the batches so far and carries on
+   from there.
+
 ### Disconnects
 
 - **Leaving on purpose.** `leave {}` forfeits.

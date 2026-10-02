@@ -107,6 +107,7 @@ bool LockstepClient::InMatch() const {
   case Phase::Executing:
   case Phase::Reporting:
   case Phase::Resync:
+  case Phase::Realtime:
     return true;
   default:
     return false;
@@ -312,6 +313,67 @@ void LockstepClient::BeginRound(int round, const json &decks, Simulation &sim,
   m_round = round;
   state = Match::BeginRound(sim, m_seed, round, &m_options);
   m_phase = Phase::Waiting;
+  if (m_options.rts)
+    BeginRts(0);
+}
+
+// ---- Real time --------------------------------------------------------------
+
+void LockstepClient::BeginRts(int fromBatch) {
+  m_rtsFrames.clear();
+  m_rtsBatch = fromBatch;
+  m_rtsStep = 0;
+  m_rtsRecording = {};
+  m_rtsDecided = false;
+  m_phase = Phase::Realtime;
+  // Nothing was recorded for the first batches: stand still in them
+  for (int b = fromBatch; b < fromBatch + Rts::INPUT_DELAY; ++b)
+    SendInputs(b, {});
+}
+
+void LockstepClient::SendInputs(int batch, const TurnPlan &plan) {
+  m_net.Send({{"type", "inputs"},
+              {"round", m_round},
+              {"batch", batch},
+              {"plan", PlanCodec::Encode(plan).dump()}});
+}
+
+bool LockstepClient::RtsReady() const {
+  return m_phase == Phase::Realtime && !m_rtsDecided &&
+         m_rtsBatch < Rts::ROUND_BATCHES && m_rtsFrames.count(m_rtsBatch);
+}
+
+int LockstepClient::RtsInputTick() const {
+  return (m_rtsBatch + Rts::INPUT_DELAY) * Rts::BATCH_TICKS + m_rtsStep;
+}
+
+void LockstepClient::RtsStep(Simulation &sim, Match::State &state,
+                             PlanStep local) {
+  if (!RtsReady())
+    return;
+  const auto &plans = m_rtsFrames.at(m_rtsBatch);
+  Rts::ExecuteTick(sim, state, {&plans[0], &plans[1]}, m_rtsStep, RtsTick());
+  m_rtsRecording.steps.push_back(std::move(local));
+  if (++m_rtsStep < Rts::BATCH_TICKS)
+    return;
+
+  // The batch is played: send what we recorded during it, report the state
+  // every few batches and as soon as the round is decided
+  int played = m_rtsBatch;
+  SendInputs(played + Rts::INPUT_DELAY, m_rtsRecording);
+  m_rtsRecording = {};
+  m_rtsFrames.erase(played);
+  m_rtsStep = 0;
+  ++m_rtsBatch;
+  int winner = Match::RoundWinner(state);
+  if (winner >= 0 || (played + 1) % Rts::HASH_EVERY == 0) {
+    m_net.Send({{"type", "stateHash"},
+                {"round", m_round},
+                {"turn", played},
+                {"hash", std::to_string(Match::Hash(sim, state))},
+                {"winner", winner}});
+    m_rtsDecided = winner >= 0;
+  }
 }
 
 bool LockstepClient::DecodePlan(const std::string &text, int slot,
@@ -395,7 +457,14 @@ void LockstepClient::CatchUp(const json &msg, Simulation &sim,
       m_turn = t.at("turn").get<int>();
       for (int s = 0; s < 2; ++s)
         DecodePlan(t.at("plans")[s].get<std::string>(), s, m_plans[s]);
-      Match::ExecuteTurn(sim, state, {&m_plans[0], &m_plans[1]});
+      if (m_options.rts) {
+        // A batch: its ticks continue the round's clock
+        for (int step = 0; step < Rts::BATCH_TICKS; ++step)
+          Rts::ExecuteTick(sim, state, {&m_plans[0], &m_plans[1]}, step,
+                           m_turn * Rts::BATCH_TICKS + step);
+      } else {
+        Match::ExecuteTurn(sim, state, {&m_plans[0], &m_plans[1]});
+      }
     }
   }
   for (int s = 0; s < 2; ++s)
@@ -409,6 +478,9 @@ void LockstepClient::CatchUp(const json &msg, Simulation &sim,
   if (phase == "decks") {
     m_phase = Phase::Decks;
     SendMatchDecks();
+  } else if (phase == "rts") {
+    // Carry on from the batch the server is waiting for
+    BeginRts(m_turn);
   } else if (phase == "commit" && !current.value("committed", false)) {
     m_phase = Phase::Planning;
   } else if (phase == "hash") {
@@ -538,6 +610,13 @@ void LockstepClient::Handle(const json &msg, Simulation &sim,
       DecodePlan(plans[s].get<std::string>(), s, m_plans[s]);
     m_execTick = 0;
     m_phase = Phase::Executing;
+  } else if (type == "frames") {
+    if (msg.at("round").get<int>() == m_round && m_phase == Phase::Realtime) {
+      int batch = msg.at("batch").get<int>();
+      auto &plans = m_rtsFrames[batch];
+      for (int s = 0; s < 2; ++s)
+        DecodePlan(msg.at("plans")[s].get<std::string>(), s, plans[s]);
+    }
   } else if (type == "desync") {
     ++m_desyncs;
     int reference = msg.at("referenceSlot").get<int>();

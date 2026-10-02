@@ -57,6 +57,7 @@ private:
   MapGallery::Pool m_roomPool{MapGallery::RANDOM};
   bool m_roomChaos = false;
   bool m_soloRts = false;
+  bool m_roomRts = false;
   bool m_sandbox = false;
   char m_url[128] = "ws://localhost:8080/ws";
   char m_code[8]{};

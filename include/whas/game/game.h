@@ -87,6 +87,7 @@ private:
   // winner: a slot, Match::PLAYERS for a double KO or a draw
   void EndRound(int winner);
   void UpdateRts(Simulation &sim, UI &ui);
+  void UpdateOnlineRts(Simulation &sim, UI &ui);
   // Real time: clicks become casts on the next tick
   void QueueRtsCast(UI &ui, int tick);
   CharacterInput RtsInput() const;
@@ -112,6 +113,7 @@ private:
   Rts::Controller m_rts;
   int m_rtsTick = 0; // ticks played this round
   float m_rtsAccumulator = 0.0f;
+  int m_rtsRound = -1; // online: the round the controller was reset for
   FlightTrail m_trail;
   RoundState m_state = RoundState::Playing;
   // Between turns: the world is frozen until Space stops time to plan

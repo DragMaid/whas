@@ -1,6 +1,7 @@
 #include "whas/constants.h"
 #include "whas/core/sha256.h"
 #include "whas/engine/simulation.h"
+#include "whas/game/rts.h"
 #include "whas/net/lockstep_client.h"
 #include "whas/net/net_client.h"
 #include <ixwebsocket/IXHttpServer.h>
@@ -105,8 +106,40 @@ struct Bot {
     return plan;
   }
 
+  // Real time: walk at the opponent and fire whatever has cooled down
+  Rts::Controller rts;
+  int rtsRound = -1;
+  void TickRts() {
+    if (client.Round() != rtsRound) {
+      rtsRound = client.Round();
+      rts.BeginRound();
+    }
+    while (client.RtsReady()) {
+      const Character &me = state.characters[client.Slot()];
+      const Character &them = state.characters[1 - client.Slot()];
+      Vector2 aim{them.Center().x - me.Center().x,
+                  them.Center().y - 3.0f - me.Center().y};
+      float len = std::max(0.001f, std::hypot(aim.x, aim.y));
+      aim = {aim.x / len, aim.y / len};
+      for (const auto &card : client.Cards(client.Slot())) {
+        if (!card || !card->stats.valid)
+          continue;
+        PlannedCast c = PlannedCast::Local(card->spell, aim);
+        c.stats = card->stats;
+        c.spellId = card->id;
+        rts.QueueCast(c, card->id, client.RtsInputTick());
+      }
+      CharacterInput input;
+      input.right = them.pos.x > me.pos.x + 30;
+      input.left = them.pos.x < me.pos.x - 30;
+      client.RtsStep(sim, state, rts.TakeStep(input, {}));
+    }
+  }
+
   void Tick() {
     client.Update(sim, state);
+    if (client.GetPhase() == LockstepClient::Phase::Realtime)
+      TickRts();
     if (client.GetPhase() == LockstepClient::Phase::Planning)
       client.SubmitPlan(Plan());
     if (client.GetPhase() == LockstepClient::Phase::Executing)
@@ -161,6 +194,41 @@ TEST_CASE("two clients play a whole match through the server", "[.e2e]") {
   REQUIRE(a.client.RoundsWon() == b.client.RoundsWon());
   REQUIRE(a.client.MatchEndReason() == "rounds");
   // Both clients ended in the same world
+  REQUIRE(Match::Hash(a.sim, a.state) == Match::Hash(b.sim, b.state));
+}
+
+TEST_CASE("two clients play a real-time match through the server", "[.e2e]") {
+  const char *url = std::getenv("WHAS_SERVER");
+  REQUIRE(url);
+  using Phase = LockstepClient::Phase;
+  std::string dir = std::string(WHAS_SOURCE_DIR) + "/build/e2e";
+  std::filesystem::create_directories(dir);
+  std::filesystem::remove(dir + "/rts-a.json");
+  std::filesystem::remove(dir + "/rts-b.json");
+  Bot a(dir + "/rts-a.json"), b(dir + "/rts-b.json");
+  a.client.Connect(url);
+  b.client.Connect(url);
+  REQUIRE(Until(a, b, [&] {
+    return a.client.GetPhase() == Phase::Ready && b.client.GetPhase() == Phase::Ready;
+  }, 10));
+
+  MatchOptions options;
+  options.rts = true;
+  a.client.CreateLobby(options);
+  REQUIRE(Until(a, b, [&] { return a.client.GetPhase() == Phase::Hosting; }, 10));
+  b.client.JoinLobby(a.client.LobbyCode());
+  REQUIRE(Until(a, b, [&] {
+    return a.client.GetPhase() == Phase::MatchOver && b.client.GetPhase() == Phase::MatchOver;
+  }, 900));
+
+  for (auto &n : a.client.TakeNotices())
+    UNSCOPED_INFO("a: " << n);
+  for (auto &n : b.client.TakeNotices())
+    UNSCOPED_INFO("b: " << n);
+  REQUIRE(a.client.Options().rts);
+  REQUIRE(a.client.MatchEndReason() == "rounds");
+  REQUIRE(a.client.MatchWinner() == b.client.MatchWinner());
+  REQUIRE(a.client.RoundsWon() == b.client.RoundsWon());
   REQUIRE(Match::Hash(a.sim, a.state) == Match::Hash(b.sim, b.state));
 }
 
