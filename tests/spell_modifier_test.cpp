@@ -965,3 +965,29 @@ TEST_CASE("a small water spell is taken into a big water ball", "[spell]") {
   // The ball is whole (drops it took in fly with it), not chipped away
   REQUIRE(flying(1) >= before);
 }
+
+TEST_CASE("convergence makes spells faster, tighter and smaller", "[spell]") {
+  SpellStats plain = SpellSystem::Evaluate(Make("fire"));
+  SpellStats tight = SpellSystem::Evaluate(Make("fire", {Sign("convergence", 1.0f)}));
+  REQUIRE(tight.valid);
+  REQUIRE(tight.speed > plain.speed);
+  REQUIRE(tight.range > plain.range);
+  REQUIRE(tight.density > plain.density);
+  REQUIRE(tight.diameter < plain.diameter);
+  REQUIRE(tight.particleCount < plain.particleCount);
+
+  // Wind underfoot throws harder, so further and higher
+  SpellStats hop = SpellSystem::Evaluate(Make("wind_underfoot"));
+  SpellStats jet = SpellSystem::Evaluate(
+      Make("wind_underfoot", {Sign("convergence", 1.0f)}));
+  REQUIRE(jet.valid);
+  REQUIRE(jet.launchSpeed > hop.launchSpeed);
+
+  // A field becomes a narrower, stronger jet
+  SpellStats gust = SpellSystem::Evaluate(Make("wind", {Sign("pulling", 1.0f)}));
+  SpellStats blast = SpellSystem::Evaluate(
+      Make("wind", {Sign("pulling", 1.0f), Sign("convergence", 1.0f)}));
+  REQUIRE(blast.valid);
+  REQUIRE(blast.force > gust.force);
+  REQUIRE(blast.diameter < gust.diameter);
+}

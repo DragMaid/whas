@@ -40,7 +40,7 @@ struct SpellTuning {
   // Flight: caster speed = spell speed * (base + perSigil * sigil scale)
   float launchBase = 0.35f;
   float launchPerSigil = 0.35f;
-  float maxLaunchSpeed = 120.0f;
+  float maxLaunchSpeed = 160.0f;
 
   // Field (pulling sign): force = speed * (0.5 + sigil) * |pull| * this.
   // Four balanced signs, a full-size sigil and one pulling sign give ~90:
@@ -59,7 +59,11 @@ struct SpellTuning {
   // Modifier signs; each scales with the summed scale of its signs
   float convergenceDensity = 0.5f; // denser...
   float convergenceNarrow = 0.4f;  // ...narrower...
-  float convergenceHardness = 0.25f; // ...and a little harder when it lands
+  float convergenceHardness = 0.25f; // ...a little harder when it lands...
+  float convergenceSpeed = 0.25f;    // ...faster (so it reaches further)...
+  float convergenceParticles = 0.3f; // ...and less of it
+  float convergenceLaunch = 0.3f;    // wind underfoot throws harder
+  float convergenceForce = 0.5f;     // a field pushes harder, narrower
   float expansionDiameter = 0.4f;
   float maxExpandedDiameter = 20.0f;
   float strengthHardness = 0.6f;
@@ -431,6 +435,10 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
       s.density *= 1.0f + kTuning.convergenceDensity * mods.convergence;
       s.diameter /= 1.0f + kTuning.convergenceNarrow * mods.convergence;
       s.hardnessScale *= 1.0f + kTuning.convergenceHardness * mods.convergence;
+      s.speed *= 1.0f + kTuning.convergenceSpeed * mods.convergence;
+      s.range = s.speed * kTuning.flightTime;
+      count = static_cast<int>(
+          count / (1.0f + kTuning.convergenceParticles * mods.convergence));
     }
     if (mods.expansion != 0.0f) {
       // Grows (or shrinks) both ways: the width, and the material with the
@@ -511,7 +519,7 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
     s.launchSpeed = std::min(
         kTuning.maxLaunchSpeed,
         s.speed * (kTuning.launchBase + kTuning.launchPerSigil * sigilScale) *
-            effect);
+            effect * (1.0f + kTuning.convergenceLaunch * mods.convergence));
     break;
   case SpellKind::Field: {
     float pull = std::clamp(std::abs(mods.pull), kTuning.minPull,
@@ -522,6 +530,10 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
     s.duration =
         kTuning.gustBaseDuration + kTuning.gustDurationPerSigil * sigilScale;
     s.diameter = Expand(s.diameter * kTuning.gustWidthScale, mods.expansion);
+    if (mods.convergence > 0.0f) {
+      s.diameter /= 1.0f + kTuning.convergenceNarrow * mods.convergence;
+      s.force *= 1.0f + kTuning.convergenceForce * mods.convergence;
+    }
     break;
   }
   default:

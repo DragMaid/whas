@@ -54,8 +54,10 @@ constexpr Entry kEntries[] = {
                 "columns fly faster and further; unbalanced ones bend it "
                 "sideways."}},
     {"convergence",
-     {"Convergence", "Packs the element tighter: denser, narrower, and a "
-                     "little harder where it lands."}},
+     {"Convergence", "Packs the spell tighter: faster and further, denser "
+                     "and narrower, with less material, and a little harder "
+                     "where it lands. Wind underfoot throws you harder; a "
+                     "wind field becomes a narrower, stronger jet."}},
     {"crushing",
      {"Crushing", "Grinds what it hits: earth and rock turn to sand. Inverted "
                   "(F), it packs sand back into earth."}},
