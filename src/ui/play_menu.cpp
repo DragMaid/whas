@@ -54,10 +54,10 @@ std::string PlayMenu::ApiBase() const {
 void PlayMenu::SyncLibrary() {
   LockstepClient::Library lib;
   SpellLibrary &spells = m_ui.Library();
-  // Spells over the sign limit stay home: ordinary matches can't use them
+  // All of them: the server leaves spells over the limits out of decks
+  // unless the room is a chaos room
   for (const Spell &s : spells.All())
-    if (SpellRules::WithinLimits(s))
-      lib.spells.push_back({spells.RefOf(s), s});
+    lib.spells.push_back({spells.RefOf(s), s});
   lib.decks = m_ui.Decks().Decks();
   lib.match = m_ui.Decks().Match();
   m_client.SetLibrary(std::move(lib));
@@ -314,7 +314,8 @@ void PlayMenu::DrawOnline() {
         ++over;
     if (over > 0)
       ImGui::TextColored(Theme::Vec(Tone::Oxblood),
-                         "Round %d: %d spell%s over the sign limit will be left out",
+                         "Round %d: %d spell%s over the limit, left out unless "
+                         "the room is a chaos room",
                          r + 1, over, over == 1 ? "" : "s");
   }
 
@@ -366,10 +367,13 @@ void PlayMenu::DrawSoloSetup() {
 void PlayMenu::DrawRoomSetup() {
   ImGui::Indent();
   m_maps.DrawPoolPicker(m_roomPool);
+  Widgets::Toggle("Chaos: no limit on signs or layered spells", &m_roomChaos);
   ImGui::Unindent();
   if (Widgets::Button("Open the room", {-1, 0}, true)) {
     SyncLibrary();
-    m_client.CreateLobby(m_maps.BuildOptions(m_roomPool));
+    MatchOptions options = m_maps.BuildOptions(m_roomPool);
+    options.chaos = m_roomChaos;
+    m_client.CreateLobby(options);
     m_roomSetup = false;
   }
 }
