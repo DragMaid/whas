@@ -115,7 +115,13 @@ private:
   // Parallel Workers
   int m_numThreads;
   std::vector<std::jthread> m_workers;
-  std::barrier<std::function<void()>> m_syncBarrier;
+  // std::barrier requires a noexcept completion step (MSVC enforces it),
+  // which std::function can't promise
+  struct PassAdvance {
+    std::atomic<int>* pass;
+    void operator()() noexcept { ++*pass; }
+  };
+  std::barrier<PassAdvance> m_syncBarrier;
   std::atomic<bool> m_running{true};
   std::atomic<int> m_currentPass{0};
   float m_lastDt = 0.0f;

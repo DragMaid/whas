@@ -15,7 +15,7 @@ Simulation::Simulation(int workerThreads)
     : m_config(), m_frameConfig(), m_rng(m_seed),
       m_chunkSpawns(CHUNK_COLS * CHUNK_ROWS), m_grid(m_config), m_particles(),
       m_numThreads(std::max(1, workerThreads)),
-      m_syncBarrier(m_numThreads + 1, [this]() { m_currentPass++; }) {
+      m_syncBarrier(m_numThreads + 1, PassAdvance{&m_currentPass}) {
 
   for (int i = 0; i < m_numThreads; ++i) {
     m_workers.emplace_back(

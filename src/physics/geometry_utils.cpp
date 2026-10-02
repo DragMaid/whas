@@ -48,7 +48,7 @@ std::vector<std::vector<Point>> MarchingSquares(const std::vector<bool>& mask, i
     // Vertices are at (x, y) corners of pixels. Grid is (W+1) x (H+1).
     // Pixels are at (x+0.5, y+0.5).
     
-    auto get = [&](int x, int y) {
+    auto get = [&](int x, int y) -> bool {
         if (x < 0 || x >= width || y < 0 || y >= height) return false;
         return mask[y * width + x];
     };
