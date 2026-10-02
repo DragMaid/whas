@@ -11,7 +11,7 @@ public sealed class SessionHandler(PlayerService players, SpellService spells,
                                    MatchmakingService matchmaking)
 {
     static readonly HashSet<string> MatchTypes =
-        ["matchDecks", "commit", "reveal", "stateHash", "snapshot", "leave"];
+        ["matchDecks", "commit", "reveal", "stateHash", "snapshot", "leave", "inputs"];
 
     public async Task HandleAsync(ClientSession session, JsonElement msg)
     {

@@ -102,6 +102,84 @@ public static class PlanValidator
         }
     }
 
+    // Real time (rts.h): a batch of at most BatchTicks steps starting at the
+    // round's tick `start`. Nobody is held still while casting, but a spell
+    // can't be cast again until its cast time has passed since the last cast.
+    // readyAt (spell id -> first tick it may be cast) is only updated when
+    // the whole batch is accepted.
+    public const int BatchTicks = 6;
+
+    public static Result ValidateBatch(string planJson,
+                                       IReadOnlyDictionary<long, QuantizedStats> deck,
+                                       int start, Dictionary<long, int> readyAt)
+    {
+        JsonDocument doc;
+        try { doc = JsonDocument.Parse(planJson); }
+        catch (JsonException) { return Result.Fail("plan is not JSON"); }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("v", out var v) || v.ValueKind != JsonValueKind.Number ||
+                v.GetInt32() != PlanVersion)
+                return Result.Fail("unsupported plan version");
+            if (!root.TryGetProperty("runs", out var runs) || runs.ValueKind != JsonValueKind.Array)
+                return Result.Fail("plan has no runs");
+
+            var casts = new List<long>();
+            var used = new Dictionary<long, int>();
+            int steps = 0;
+            foreach (var run in runs.EnumerateArray())
+            {
+                if (!TryInt(run, "n", out int n) || n < 1 || !TryInt(run, "in", out int input) ||
+                    input < 0 || input > 15)
+                    return Result.Fail("bad run");
+                if (steps + n > BatchTicks)
+                    return Result.Fail("batch is too long");
+                if (run.TryGetProperty("c", out var cursor) &&
+                    (cursor.ValueKind != JsonValueKind.Array || cursor.GetArrayLength() != 2 ||
+                     cursor.EnumerateArray().Any(c => c.ValueKind != JsonValueKind.Number ||
+                                                      !c.TryGetInt16(out _))))
+                    return Result.Fail("bad cursor");
+                if (run.TryGetProperty("casts", out var castList))
+                {
+                    if (n != 1 || castList.ValueKind != JsonValueKind.Array)
+                        return Result.Fail("casts on a multi-step run");
+                    int tick = start + steps;
+                    int count = 0, flights = 0;
+                    foreach (var cast in castList.EnumerateArray())
+                    {
+                        if (++count > MaxCastsPerStep)
+                            return Result.Fail("too many casts in one step");
+                        if (!TryLong(cast, "id", out long id) || !deck.TryGetValue(id, out var stats))
+                            return Result.Fail("cast of a spell not in this round's deck");
+                        if (!stats.Valid)
+                            return Result.Fail("cast of an invalid spell");
+                        if (!TryInt(cast, "ax", out int ax) || !TryInt(cast, "ay", out int ay) ||
+                            ax < short.MinValue || ax > short.MaxValue ||
+                            ay < short.MinValue || ay > short.MaxValue)
+                            return Result.Fail("bad aim");
+                        double len = Math.Sqrt((double)ax * ax + (double)ay * ay) / AimScale;
+                        if (Math.Abs(len - 1.0) > AimTolerance)
+                            return Result.Fail("aim is not a unit vector");
+                        if (stats.HasFlight && ++flights > 1)
+                            return Result.Fail("more than one wind underfoot cast per tick");
+                        int ready = used.TryGetValue(id, out int u) ? u : readyAt.GetValueOrDefault(id);
+                        if (tick < ready)
+                            return Result.Fail("spell is cooling down");
+                        used[id] = tick + Math.Max(1, SpellEvaluator.CastTicks(stats));
+                        casts.Add(id);
+                    }
+                }
+                steps += n;
+            }
+            foreach (var (id, ready) in used)
+                readyAt[id] = ready;
+            return new Result(true, null, casts);
+        }
+    }
+
     static bool TryInt(JsonElement e, string name, out int value)
     {
         value = 0;
