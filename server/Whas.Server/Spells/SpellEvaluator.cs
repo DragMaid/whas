@@ -8,7 +8,7 @@ namespace Whas.Server.Spells;
 public static class SpellEvaluator
 {
     // Bump together with SpellQuant::EVALUATOR_VERSION
-    public const int Version = 5;
+    public const int Version = 6;
 
     public const int StatScale = 1024;
     public const int AngleScale = 65536;
@@ -34,7 +34,7 @@ public static class SpellEvaluator
     const float FireTempPerSigil = 800.0f;
     const float LaunchBase = 0.35f;
     const float LaunchPerSigil = 0.35f;
-    const float MaxLaunchSpeed = 120.0f;
+    const float MaxLaunchSpeed = 160.0f;
     const float GustForcePerSpeed = 0.6f;
     const float LightSpeedScale = 2.5f;
     const float LightParticleScale = 0.25f;
@@ -63,6 +63,10 @@ public static class SpellEvaluator
     const float ConvergenceDensity = 0.5f;
     const float ConvergenceNarrow = 0.4f;
     const float ConvergenceHardness = 0.25f;
+    const float ConvergenceSpeed = 0.25f;
+    const float ConvergenceParticles = 0.3f;
+    const float ConvergenceLaunch = 0.3f;
+    const float ConvergenceForce = 0.5f;
     const float ExpansionDiameter = 0.4f;
     const float MaxExpandedDiameter = 20.0f;
     const float StrengthHardness = 0.6f;
@@ -369,6 +373,9 @@ public static class SpellEvaluator
                     s.Density *= 1.0f + ConvergenceDensity * mods.Convergence;
                     s.Diameter /= 1.0f + ConvergenceNarrow * mods.Convergence;
                     s.HardnessScale *= 1.0f + ConvergenceHardness * mods.Convergence;
+                    s.Speed *= 1.0f + ConvergenceSpeed * mods.Convergence;
+                    s.Range = s.Speed * FlightTime;
+                    count = (int)(count / (1.0f + ConvergenceParticles * mods.Convergence));
                 }
                 if (mods.Expansion != 0.0f)
                 {
@@ -441,7 +448,8 @@ public static class SpellEvaluator
             }
             case SpellKind.Flight:
                 s.LaunchSpeed = MathF.Min(MaxLaunchSpeed,
-                    s.Speed * (LaunchBase + LaunchPerSigil * sigilScale) * effect);
+                    s.Speed * (LaunchBase + LaunchPerSigil * sigilScale) * effect *
+                    (1.0f + ConvergenceLaunch * mods.Convergence));
                 break;
             case SpellKind.Field:
             {
@@ -450,6 +458,11 @@ public static class SpellEvaluator
                 s.Force = s.Speed * (0.5f + sigilScale) * pull * GustForcePerSpeed * effect;
                 s.Duration = GustBaseDuration + GustDurationPerSigil * sigilScale;
                 s.Diameter = Expand(s.Diameter * GustWidthScale, mods.Expansion);
+                if (mods.Convergence > 0.0f)
+                {
+                    s.Diameter /= 1.0f + ConvergenceNarrow * mods.Convergence;
+                    s.Force *= 1.0f + ConvergenceForce * mods.Convergence;
+                }
                 break;
             }
         }
