@@ -86,7 +86,6 @@ private:
   Character m_player;
   std::vector<Enemies::Enemy> m_enemies;
   FlightTrail m_trail;
-  CastTargeting m_targeting;
   Rts::Cooldowns m_cooldowns;
   int m_tick = 0;
   int m_slot = 0;

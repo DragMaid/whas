@@ -94,7 +94,7 @@ cmake --build build --target whas_tests  # the tests only
 | `F4` | Simulation settings |
 | `F11` | Borderless window |
 | `1`-`6` | Pick a hotbar spell |
-| `Q` | Cast from yourself, or place the spell on the ground or a wall (press on a surface, drag to aim) |
+| Right click | Cast from the ground or wall nearest the cursor (a ring marks the spot). In the sandbox, Shift + right click moves the dummy. |
 
 **Planned duel**
 

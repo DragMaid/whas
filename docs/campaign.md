@@ -15,7 +15,7 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 | `A` / `D`, `W` or `Space`, `S` | Walk, jump, dive |
 | Click | Cast the selected spell |
 | `1`-`3` | Select a slot |
-| `Q` | Cast from yourself / place on a surface |
+| Right click | Cast from the ground or wall nearest the cursor |
 | `E` | Use what you're standing at: a workbench, a gate |
 | `B` | Backpack: put your spells in the three slots |
 | `Esc` | Close a panel, or leave (progress is saved) |

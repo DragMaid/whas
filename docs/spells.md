@@ -39,7 +39,7 @@ width), and holds it for `holdTime` seconds (more and bigger column signs
 hold longer).
 
 - **No levitation**: the block forms in front of the caster (7 cells out,
-  clear of the body) or, when drawn on a surface with Q, right there.
+  clear of the body) or, when cast from a surface (right click), right there.
 - **With levitation**: the block flies as one piece for the spell's range
   and is held where it lands. Whatever it lost on the way stays lost.
 - **Shapes** (orb, dragon) are scaled down to fit the block; whatever
@@ -54,13 +54,14 @@ hold longer).
 Code: `FormBlock`, `LandBlock`, `HoldBlock` and `ReleaseBlock` in
 `spell/spell_system.cpp`.
 
-## Placed casts (Q)
+## Placed casts (right click)
 
-Q switches casting between "from the body" and "on a surface". Placing:
-press on ground or a wall within `Placement::REACH` (48) cells, drag to aim
-(or let go to fire straight out of the surface). The spot travels in the
-plan as an offset from the caster (`px`, `py` in 1/8 cells), so online
-peers agree. Wind underfoot always leaves the body.
+Left click casts from the body. Right click draws the spell on the ground
+or wall nearest the cursor (within `Placement::REACH`, 48 cells, of the
+caster; a ring marks the spot) and fires it from there, the way you're
+aiming, or straight out of the surface when that way leads into it. The
+spot travels in the plan as an offset from the caster (`px`, `py` in 1/8
+cells), so online peers agree. Wind underfoot always leaves the body.
 
 ## Status effects
 

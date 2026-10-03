@@ -122,8 +122,6 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
   state.matchRound = -1;
 
   bool keyboardFree = !ImGui::GetIO().WantCaptureKeyboard;
-  if (keyboardFree && IsKeyPressed(KEY_Q))
-    m_targeting.Toggle();
   if (state.timeToggleRequested || (keyboardFree && IsKeyPressed(KEY_SPACE)))
     ToggleTime();
   state.timeToggleRequested = false;
@@ -191,8 +189,10 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   if (ui.IsBlockingWorldInput())
     return;
 
-  // Right click while placing lets go of the spot instead
-  if (!m_targeting.Placing() && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+  // Shift + right click moves the dummy (right click alone casts from a
+  // surface)
+  bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+  if (shift && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
     PlaceAvatar(sim, mouse);
     return;
   }
@@ -203,7 +203,7 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   grab.y -= 1;
   grab.width += 2;
   grab.height += 2;
-  if (!m_targeting.Placing() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
       Contains(grab, mouse)) {
     m_dragging = true;
     m_dragOffset = {mouse.x - m_avatar.pos.x, mouse.y - m_avatar.pos.y};
@@ -211,7 +211,7 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   }
 
   const char *blocked = nullptr;
-  auto target = m_targeting.Update(sim, m_avatar.Center(), mouse, true,
+  auto target = CastTargeting::Update(sim, m_avatar.Center(), mouse, true,
                                    m_avatar.facing, &blocked);
   const Spell *spell = ui.GetSelectedSpell();
   if (!target || !spell || !SpellSystem::Evaluate(*spell).valid)
@@ -283,9 +283,8 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                     Theme::Rl(Tone::Brass, 0.85f));
     return;
   }
-  if (m_targeting.Placing())
-    m_targeting.DrawWorld(sim, m_avatar.Center(), MouseCell());
-  else if (const Spell *spell = ui.GetSelectedSpell())
+  CastTargeting::DrawWorld(sim, m_avatar.Center(), MouseCell());
+  if (const Spell *spell = ui.GetSelectedSpell())
     ui.DrawAimIndicator(*spell, m_avatar.Center(), AimAtMouse(), gravity);
   if (m_stopped)
     Theme::DrawText(Theme::RlHeading(),

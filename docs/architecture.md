@@ -59,7 +59,8 @@ checked against `tests/fixtures/spells.json`. See [spells.md](spells.md).
 `main.cpp` owns one of each and decides which one updates and draws.
 
 Casting goes through `CastTargeting` (`game/placement.cpp`), shared by every
-mode: a click casts from the body, or with Q on, from a spot on a surface.
+mode: left click casts from the body, right click from the ground or wall
+nearest the cursor.
 
 ## Networking
 
