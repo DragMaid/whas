@@ -38,6 +38,20 @@ bool Solid(const Simulation &sim, int x, int y) {
   return props.solid && !props.passable;
 }
 
+// Whether a body centred on a can slide straight to b
+bool BodyClear(const Simulation &sim, Vector2 a, Vector2 b) {
+  Vector2 d = Sub(b, a);
+  int steps = std::max(1, static_cast<int>(std::ceil(Len(d))));
+  for (int i = 0; i <= steps; ++i) {
+    float t = static_cast<float>(i) / steps;
+    Vector2 c{a.x + d.x * t, a.y + d.y * t};
+    if (!Character::Fits(sim, {c.x - Character::WIDTH * 0.5f,
+                               c.y - Character::HEIGHT * 0.5f}))
+      return false;
+  }
+  return true;
+}
+
 // An enemy's speed (cells/s) as a share of the player's walk
 float WalkScale(float speed) { return std::clamp(speed / 30.0f, 0.1f, 3.0f); }
 
@@ -156,7 +170,7 @@ void TickFlyer(Enemy &e, Simulation &sim, const Character &player,
   b.pushX = 0.0f;
 
   Vector2 target = player.Center();
-  bool direct = LineOfSight(sim, b.Center(), target);
+  bool direct = BodyClear(sim, b.Center(), target);
   e.repathIn -= dt;
   if (!direct && (e.repathIn <= 0.0f || e.path.empty())) {
     e.path = FindPath(sim, b.Center(), target);
@@ -346,7 +360,7 @@ std::vector<Vector2> FindPath(const Simulation &sim, Vector2 from, Vector2 to) {
   Vector2 at = from;
   for (size_t i = 0; i < path.size(); ++i) {
     bool last = i + 1 == path.size();
-    if (last || !LineOfSight(sim, at, path[i + 1])) {
+    if (last || !BodyClear(sim, at, path[i + 1])) {
       smooth.push_back(path[i]);
       at = path[i];
     }

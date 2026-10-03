@@ -1,6 +1,9 @@
+#include "imgui.h"
 #include "raylib.h"
 #include "whas/audio/audio_manager.h"
 #include "whas/audio/audio_observer.h"
+#include "whas/campaign/campaign_editor.h"
+#include "whas/campaign/campaign_play.h"
 #include "whas/constants.h"
 #include "whas/engine/renderer.h"
 #include "whas/engine/simulation.h"
@@ -91,6 +94,9 @@ int main(int argc, char **argv) {
     client.SetIdentityFile(identity);
   MapGallery maps;
   MapEditor mapEditor(maps.Thumbnails());
+  CampaignEditor campaignEditor;
+  CampaignPlay campaign;
+  std::string campaignError;
   PlayMenu menu(client, ui, maps);
   GrimoirePanel grimoire(ui);
   if (const char *server = Arg(argc, argv, "--server")) {
@@ -101,6 +107,20 @@ int main(int argc, char **argv) {
     menu.Draw();
     maps.Draw();
     mapEditor.DrawPanel(sim);
+    if (!campaign.Active())
+      campaignEditor.DrawPanel(sim, ui);
+    campaign.DrawPanels(ui);
+    if (!campaignError.empty()) {
+      ImGui::OpenPopup("Campaign");
+      if (ImGui::BeginPopupModal("Campaign", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("%s", campaignError.c_str());
+        if (ImGui::Button("OK")) {
+          campaignError.clear();
+          ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+      }
+    }
     if (replay.Active())
       replay.DrawControls(sim);
     // The decks the players brought: after an online match, or beside a
@@ -114,7 +134,8 @@ int main(int argc, char **argv) {
       grimoire.Reset();
   });
 
-  // --open sandbox|duel|rts|spells|spell-editor|maps|map-editor starts on that screen
+  // --open sandbox|duel|rts|spells|spell-editor|maps|map-editor|campaigns|campaign:<id>
+  // starts on that screen
   bool startDuel = false, startRts = false;
   if (const char *screen = Arg(argc, argv, "--open")) {
     if (std::strcmp(screen, "sandbox") == 0) {
@@ -136,6 +157,15 @@ int main(int argc, char **argv) {
     } else if (std::strcmp(screen, "map-editor") == 0) {
       menu.Close();
       mapEditor.Open(sim);
+    } else if (std::strcmp(screen, "campaigns") == 0) {
+      menu.Close();
+      campaignEditor.OpenHub();
+    } else if (std::strncmp(screen, "campaign:", 9) == 0) {
+      // campaign:<id> carries on that campaign
+      menu.Close();
+      for (const Campaign::CampaignDef &def : Campaign::LoadAll())
+        if (def.id == screen + 9)
+          campaign.Start(sim, ui, def, false, campaignError);
     }
   }
 
@@ -165,8 +195,47 @@ int main(int argc, char **argv) {
       uiState.menuRequested = false;
       menu.Toggle();
     }
+    // Campaigns: the list, the editor, playing one
+    auto leaveOtherModes = [&] {
+      replay.Close();
+      mapEditor.Close();
+      maps.Close();
+      menu.Close();
+      if (game.IsActive() && !game.IsOnline())
+        game.SetActive(false, sim, ui);
+    };
+    if (menu.TakeCampaignRequest() && !game.IsOnline()) {
+      leaveOtherModes();
+      campaign.Stop();
+      campaignEditor.OpenHub();
+    }
+    if (auto play = campaignEditor.TakePlay()) {
+      leaveOtherModes();
+      campaignEditor.CloseHub();
+      if (!campaign.Start(sim, ui, play->def, play->newGame, campaignError))
+        campaignEditor.OpenHub();
+    }
+    if (auto test = campaignEditor.TakeTest()) {
+      if (!campaign.StartTest(sim, ui, test->def, test->room, test->at, campaignError))
+        campaignEditor.Resume(sim);
+    }
+    if (campaign.TakeExit()) {
+      bool testing = campaign.Testing();
+      campaign.Stop();
+      if (testing)
+        campaignEditor.Resume(sim);
+      else
+        campaignEditor.OpenHub();
+    }
+    bool campaigning = campaign.Active() || campaignEditor.Editing();
+
     if (menu.TakeSandboxRequest() || uiState.sandboxRequested) {
       uiState.sandboxRequested = false;
+      campaign.Stop();
+      if (campaignEditor.Editing())
+        campaignEditor.Close(sim);
+      campaignEditor.CloseHub();
+      campaigning = false;
       replay.Close();
       if (game.IsOnline())
         client.Leave();
@@ -208,18 +277,23 @@ int main(int argc, char **argv) {
     if (wasEditing && !editing && !game.IsActive())
       maps.Open();
     wasEditing = editing;
-    uiState.hideActionBar = editing || menu.IsOpen();
+    uiState.hideActionBar = editing || menu.IsOpen() || campaigning ||
+                             campaignEditor.HubOpen();
     if (auto stored = menu.TakeReplay(); stored && !game.IsOnline()) {
       if (game.IsActive())
         game.SetActive(false, sim, ui);
       replay.Open(*stored, sim);
     }
     if (IsKeyPressed(KEY_F1) && !game.IsOnline() && !replay.Active() &&
-        !mapEditor.IsOpen())
+        !mapEditor.IsOpen() && !campaigning)
       game.SetActive(!game.IsActive(), sim, ui);
 
     // Online: a match found (or rejoined) takes over the screen
     if (client.InMatch() && !game.IsOnline()) {
+      campaign.Stop();
+      if (campaignEditor.Editing())
+        campaignEditor.Close(sim);
+      campaignEditor.CloseHub();
       replay.Close();
       mapEditor.Close();
       maps.Close();
@@ -232,6 +306,12 @@ int main(int argc, char **argv) {
     // from its recording
     if (replay.Active()) {
       replay.Update(sim, uiState);
+    } else if (campaign.Active()) {
+      client.Update(sim, game.NetState());
+      campaign.Update(sim, ui, uiState);
+    } else if (campaignEditor.Editing()) {
+      client.Update(sim, game.NetState());
+      campaignEditor.Update(sim);
     } else if (game.IsActive()) {
       game.Update(sim, ui, uiState);
       if (game.TakeExitRequest()) {
@@ -255,10 +335,18 @@ int main(int argc, char **argv) {
     BeginMode2D(View::Camera());
     DrawRectangle(0, 0, GRID_W * CELL_SIZE, GRID_H * CELL_SIZE,
                   Color{15, 15, 20, 255});
+    if (campaign.Active())
+      campaign.DrawBackground();
+    else if (campaignEditor.Editing())
+      campaignEditor.DrawBackground();
     renderer.DrawWorld(sim);
 
     if (replay.Active())
       replay.Draw();
+    else if (campaign.Active())
+      campaign.DrawWorld(sim, ui);
+    else if (campaignEditor.Editing())
+      campaignEditor.DrawWorld(ui);
     else if (game.IsActive())
       game.Draw(sim, ui);
     else if (mapEditor.IsOpen())
@@ -279,6 +367,9 @@ int main(int argc, char **argv) {
     }
   }
 
+  campaign.Stop();
+  if (campaignEditor.Editing())
+    campaignEditor.Close(sim);
   client.Leave();
   UnloadCharacterSprites();
   audio.Shutdown();
