@@ -47,6 +47,9 @@ struct UIState {
   bool configLocked = false;
   // The map editor has the screen: no action bar
   bool hideActionBar = false;
+  // A campaign (playing or editing) has the keys: no hotbar, editor or menu
+  // shortcuts
+  bool keysTaken = false;
 
   // Requests from the bar, handled by main
   bool menuRequested = false;
@@ -94,6 +97,7 @@ public:
 
   SpellLibrary &Library() { return m_library; }
   SpellThumbnails &Thumbnails() { return *m_thumbnails; }
+  const SvgLibrary &Glyphs() const { return m_spellEditor.Glyphs(); }
   DeckBook &Decks() { return m_decks; }
   // Beam preview plus aim-vs-cast arrows, origin in (fractional) cells.
   // worldGravity is the config's world gravity, for the falling arcs.

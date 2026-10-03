@@ -95,7 +95,7 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   pushX *= std::max(0.0f, 1.0f - drag * dt);
   if (std::abs(pushX) < 0.1f)
     pushX = 0.0f;
-  vel.x = dir * kTuning.walkSpeed * speedScale + pushX;
+  vel.x = dir * kTuning.walkSpeed * input.walk * speedScale + pushX;
   // The sprite turns with any sideways motion, launches and pushes included
   if (vel.x != 0.0f)
     look = vel.x > 0.0f ? 1 : -1;
@@ -177,6 +177,10 @@ void Character::Unbury(Simulation &sim) {
                                      -22.0f - 8.0f * depth},
                                     e);
     }
+}
+
+bool Character::Fits(const Simulation &sim, Vector2 pos) {
+  return !Collides(sim, pos);
 }
 
 void Character::PlaceClear(const Simulation &sim) {

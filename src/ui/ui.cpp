@@ -80,6 +80,8 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
     state.debugOverlay = !state.debugOverlay;
   if (IsKeyPressed(KEY_F4))
     state.showConfigEditor = !state.showConfigEditor;
+  if (state.keysTaken)
+    return;
   if (IsKeyPressed(KEY_E))
     m_spellEditor.Open();
   if (IsKeyPressed(KEY_M))

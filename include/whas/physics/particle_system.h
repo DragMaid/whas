@@ -8,6 +8,8 @@
 struct Hurtbox {
     int id;
     Rectangle bounds; // cells
+    // Spells never hit their caster's own side; -1 is a side of one
+    int team = -1;
 };
 
 // A light mote bursting: everyone within `radius` cells is blinded for

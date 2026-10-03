@@ -934,6 +934,8 @@ void SpellEditor::DrawGlyphGrid(GlyphKind kind) {
   int columns = std::max(1, (int)(ImGui::GetContentRegionAvail().x / cell));
   ImGui::Columns(columns, nullptr, false);
   for (const SvgAsset *asset : assets) {
+    if (m_allowGlyph && !m_allowGlyph(asset->id))
+      continue;
     DrawAssetThumbnail(*asset, m_isPlacing && m_paletteAssetId == asset->id);
     ImGui::NextColumn();
   }

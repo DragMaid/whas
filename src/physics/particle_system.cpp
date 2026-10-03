@@ -774,8 +774,13 @@ void ParticleSystem::Burst(Particle &p) {
 }
 
 bool ParticleSystem::HitHurtbox(Particle &p) {
+  int side = -1;
+  for (const Hurtbox &box : m_hurtboxes)
+    if (box.id == p.owner)
+      side = box.team;
   for (const Hurtbox &box : m_hurtboxes) {
     if (box.id == p.owner || box.id == p.lastHit ||
+        (side >= 0 && box.team == side) ||
         !CheckCollisionPointRec(p.pos, box.bounds))
       continue;
     m_hits.push_back({box.id, p.owner, p.power, p.element});
