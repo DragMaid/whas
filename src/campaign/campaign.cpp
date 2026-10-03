@@ -80,6 +80,28 @@ const char *ObjectName(ObjectKind kind) {
   return "?";
 }
 
+const char *ConditionName(ConditionKind kind) {
+  switch (kind) {
+  case ConditionKind::Defeat:
+    return "Defeat enemies";
+  case ConditionKind::Break:
+    return "Break blocks in a region";
+  case ConditionKind::Fill:
+    return "Fill a region";
+  case ConditionKind::Talk:
+    return "Talk to someone";
+  case ConditionKind::TakeShrine:
+    return "Take the shrine";
+  default:
+    return "?";
+  }
+}
+
+std::string TalkKey(RoomPos room, const std::string &npc, int node) {
+  return std::to_string(room.x) + "_" + std::to_string(room.y) + "/" + npc +
+         "/" + std::to_string(node);
+}
+
 bool CampaignDef::HasRoom(RoomPos p) const {
   return std::find(rooms.begin(), rooms.end(), p) != rooms.end();
 }
@@ -135,6 +157,7 @@ json ToJson(const RoomDef &r) {
   json enemies = json::array();
   for (const EnemyDef &e : r.enemies) {
     json ej{{"kind", static_cast<int>(e.kind)},
+            {"tag", e.tag},
             {"pos", Vec(e.pos)},
             {"hp", e.hp},
             {"speed", e.speed},
@@ -150,11 +173,40 @@ json ToJson(const RoomDef &r) {
     }
     enemies.push_back(std::move(ej));
   }
+  json npcs = json::array();
+  for (const NpcDef &n : r.npcs) {
+    json nodes = json::array();
+    for (const DialogueNode &d : n.dialogue) {
+      json replies = json::array();
+      for (const DialogueReply &rep : d.replies)
+        replies.push_back({{"text", rep.text}, {"next", rep.next}});
+      nodes.push_back({{"text", d.text},
+                       {"replies", replies},
+                       {"teach", d.teach},
+                       {"teachSigil", d.teachSigil}});
+    }
+    npcs.push_back({{"name", n.name}, {"tag", n.tag}, {"pos", Vec(n.pos)},
+                    {"dialogue", nodes}});
+  }
+  json conditions = json::array();
+  for (const ConditionDef &c : r.conditions)
+    conditions.push_back(
+        {{"kind", static_cast<int>(c.kind)},
+         {"tag", c.tag},
+         {"region", {c.region.x, c.region.y, c.region.width, c.region.height}},
+         {"share", c.share},
+         {"element", static_cast<int>(c.element)},
+         {"amount", c.amount},
+         {"node", c.node},
+         {"hint", c.hint}});
   return {{"pos", Pos(r.pos)},
           {"terrain", Maps::ToJson(r.terrain)},
           {"background", r.background},
           {"objects", objects},
-          {"enemies", enemies}};
+          {"enemies", enemies},
+          {"npcs", npcs},
+          {"conditions", conditions},
+          {"sealed", r.sealed}};
 }
 
 bool FromJson(const json &j, RoomDef &r, std::string &error) {
@@ -181,6 +233,7 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       e.speed = ej.value("speed", e.speed);
       e.damage = ej.value("damage", e.damage);
       e.castEvery = ej.value("castEvery", e.castEvery);
+      e.tag = ej.value("tag", "");
       for (const json &sj : ej.value("spells", json::array())) {
         Spell s;
         s.name = sj.value("name", "");
@@ -191,6 +244,46 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       }
       r.enemies.push_back(std::move(e));
     }
+    r.npcs.clear();
+    for (const json &nj : j.value("npcs", json::array())) {
+      NpcDef n;
+      n.name = nj.value("name", n.name);
+      n.tag = nj.value("tag", "");
+      n.pos = Vec(nj.at("pos"));
+      n.dialogue.clear();
+      for (const json &dj : nj.value("dialogue", json::array())) {
+        DialogueNode d;
+        d.text = dj.value("text", "");
+        d.teach = dj.value("teach", "");
+        d.teachSigil = dj.value("teachSigil", false);
+        for (const json &rj : dj.value("replies", json::array()))
+          if (d.replies.size() < MAX_REPLIES)
+            d.replies.push_back({rj.value("text", ""), rj.value("next", -1)});
+        n.dialogue.push_back(std::move(d));
+      }
+      if (n.dialogue.empty())
+        n.dialogue.push_back({});
+      r.npcs.push_back(std::move(n));
+    }
+    r.conditions.clear();
+    for (const json &cj : j.value("conditions", json::array())) {
+      ConditionDef c;
+      c.kind = static_cast<ConditionKind>(std::clamp(
+          cj.value("kind", 0), 0, static_cast<int>(ConditionKind::Count) - 1));
+      c.tag = cj.value("tag", "");
+      if (auto rg = cj.find("region"); rg != cj.end() && rg->size() == 4)
+        c.region = {(*rg)[0].get<float>(), (*rg)[1].get<float>(),
+                    (*rg)[2].get<float>(), (*rg)[3].get<float>()};
+      c.share = std::clamp(cj.value("share", c.share), 0.05f, 1.0f);
+      c.element = static_cast<Element>(std::clamp(
+          cj.value("element", static_cast<int>(c.element)), 0,
+          static_cast<int>(Element::COUNT) - 1));
+      c.amount = std::max(1, cj.value("amount", c.amount));
+      c.node = cj.value("node", -1);
+      c.hint = cj.value("hint", "");
+      r.conditions.push_back(std::move(c));
+    }
+    r.sealed = j.value("sealed", std::array<bool, EDGES>{});
     return true;
   } catch (const std::exception &e) {
     error = std::string("bad room: ") + e.what();
@@ -212,7 +305,12 @@ json ToJson(const Save &s) {
          {"visited", visited},
          {"gates", gates},
          {"shrines", shrines},
-         {"slots", s.slots}};
+         {"slots", s.slots},
+         {"talked", s.talked}};
+  json cleared = json::array();
+  for (RoomPos p : s.cleared)
+    cleared.push_back(Pos(p));
+  j["cleared"] = cleared;
   if (s.respawn)
     j["respawn"] = {Pos(s.respawn->first), s.respawn->second};
   return j;
@@ -231,6 +329,9 @@ void FromJson(const json &j, Save &s) {
     if (j.contains("respawn"))
       s.respawn = {{Pos(j["respawn"].at(0)), j["respawn"].at(1).get<int>()}};
     s.slots = j.value("slots", std::array<std::string, SLOTS>{});
+    s.talked = j.value("talked", std::set<std::string>{});
+    for (const json &p : j.value("cleared", json::array()))
+      s.cleared.insert(Pos(p));
   } catch (const std::exception &) {
     // A damaged save starts over rather than crashing the game
     s = {};

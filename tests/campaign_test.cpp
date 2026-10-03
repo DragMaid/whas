@@ -78,6 +78,53 @@ TEST_CASE("rooms and saves survive a round trip", "[campaign]") {
   REQUIRE(loaded.slots == save.slots);
 }
 
+TEST_CASE("NPCs, conditions and seals survive a round trip", "[campaign]") {
+  RoomDef room = BlankRoom({0, 1});
+  NpcDef npc;
+  npc.name = "Qifrey";
+  npc.tag = "teacher";
+  npc.pos = {60, 200};
+  npc.dialogue = {{"Shall we begin?", {{"Yes", 1}, {"Not yet", -1}}, "", false},
+                  {"Then watch closely.", {}, "column", false}};
+  room.npcs = {npc};
+  ConditionDef fill;
+  fill.kind = ConditionKind::Fill;
+  fill.region = {100, 180, 30, 20};
+  fill.element = Element::WATER;
+  fill.amount = 300;
+  fill.hint = "Flood the basin";
+  ConditionDef talk;
+  talk.kind = ConditionKind::Talk;
+  talk.tag = "teacher";
+  talk.node = 1;
+  room.conditions = {fill, talk};
+  room.sealed[EdgeRight] = true;
+  room.enemies = {EnemyDef{}};
+  room.enemies[0].tag = "boss";
+
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.npcs.size() == 1);
+  REQUIRE(back.npcs[0].dialogue[0].replies[0].next == 1);
+  REQUIRE(back.npcs[0].dialogue[1].teach == "column");
+  REQUIRE(back.conditions[0].kind == ConditionKind::Fill);
+  REQUIRE(back.conditions[0].region.width == 30);
+  REQUIRE(back.conditions[0].element == Element::WATER);
+  REQUIRE(back.conditions[1].node == 1);
+  REQUIRE(back.sealed[EdgeRight]);
+  REQUIRE_FALSE(back.sealed[EdgeLeft]);
+  REQUIRE(back.enemies[0].tag == "boss");
+
+  Save save;
+  save.cleared = {{0, 1}};
+  save.talked = {TalkKey({0, 1}, "teacher", 1)};
+  Save loaded;
+  FromJson(ToJson(save), loaded);
+  REQUIRE(loaded.cleared == save.cleared);
+  REQUIRE(loaded.talked == save.talked);
+}
+
 TEST_CASE("a flyer finds its way around a wall to the player",
           "[campaign]") {
   Simulation sim;

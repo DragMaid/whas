@@ -154,6 +154,8 @@ set(SOURCES
     src/game/sandbox.cpp
     src/game/placement.cpp
     src/campaign/campaign.cpp
+    src/ui/terrain_brush.cpp
+    src/ui/editor_icons.cpp
     src/campaign/enemies.cpp
     src/campaign/campaign_play.cpp
     src/campaign/campaign_editor.cpp
@@ -177,8 +179,9 @@ add_library(imgui STATIC
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
-target_include_directories(imgui PUBLIC ${IMGUI_DIR})
+target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/misc/cpp)
 
 add_library(rlimgui STATIC ${RLIMGUI_DIR}/rlImGui.cpp)
 target_include_directories(rlimgui PUBLIC ${RLIMGUI_DIR})
@@ -212,6 +215,7 @@ target_include_directories(whas
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
     ${IMGUI_DIR}
+    ${IMGUI_DIR}/misc/cpp
     ${RLIMGUI_DIR}
     ${nanosvg_SOURCE_DIR}/src
 )

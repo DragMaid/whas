@@ -115,11 +115,12 @@ cmake --build build --target whas_tests  # the tests only
 
 **Campaign**: see [docs/campaign.md](docs/campaign.md) (`B` backpack, `E` use, `1`-`3` slots)
 
-**Map editor**
+**Map editor** (the campaign editor paints the same way)
 
-- Left click: paint
-- Right click: erase
-- Mouse wheel: brush size
+- Left click: paint, right click: erase
+- `1`-`9`: pick an element (the swatches along the top show their colours), `E`: eraser
+- `[` `]` or the mouse wheel: brush size
+- `Ctrl+Z`: undo a stroke
 - Drag the I and II markers: move the spawns
 - `Tab`: hide the panel
 

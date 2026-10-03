@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/game/map.h"
+#include "whas/ui/terrain_brush.h"
 #include <optional>
 #include <string>
 #include <utility>
@@ -37,7 +38,7 @@ private:
   void ApplySettings(Simulation &sim);
   bool Save(Simulation &sim, bool asCopy);
   void DrawGenerate(Simulation &sim);
-  void DrawBrush();
+  void DrawToolbar(Simulation &sim, float panelWidth);
   void DrawSettings(Simulation &sim);
   int SpawnAt(Vector2 cell) const;
 
@@ -49,8 +50,7 @@ private:
   bool m_running = false; // let the world settle
   bool m_panelHidden = false;
   float m_accumulator = 0.0f;
-  Element m_brushElement = Element::EARTH;
-  int m_brush = 3;
+  TerrainBrush m_brush;
   int m_dragging = -1; // spawn being dragged
   Vector2 m_dragOffset{};
   bool m_saved = false;

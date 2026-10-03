@@ -1,5 +1,6 @@
 #pragma once
 #include "whas/campaign/campaign.h"
+#include "whas/ui/terrain_brush.h"
 #include <optional>
 #include <raylib.h>
 #include <string>
@@ -47,16 +48,18 @@ private:
   enum class Tool {
     Paint,
     Select,
+    Start,
     Gate,
     Workbench,
     Shrine,
-    Start,
+    Npc,
     Mage,
     Undead,
     Flyer,
+    Region, // drawing a condition's region
   };
   struct Selection {
-    enum Kind { None, Object, Enemy, Start } kind = None;
+    enum Kind { None, Object, Enemy, Npc, Start } kind = None;
     int index = -1;
   };
 
@@ -70,14 +73,17 @@ private:
   Selection HitTest(Vector2 cell) const;
   void Place(const Simulation &sim, Vector2 cell);
   void RemoveSelected();
+  Vector2 &SelectedPos();
+  void HandleShortcuts(Simulation &sim);
 
   void DrawHub();
+  void DrawToolbar(Simulation &sim, float panelWidth);
   void DrawRoomMap(Simulation &sim);
-  void DrawTools();
-  void DrawPaint(Simulation &sim);
   void DrawSelected(UI &ui);
-  void DrawRoomSettings();
-  void DrawStartingKit(UI &ui);
+  void DrawNpc(Campaign::NpcDef &npc, UI &ui);
+  void DrawRoomTab(Simulation &sim);
+  void DrawConditions();
+  void DrawCampaignTab(UI &ui);
 
   bool m_hub = false;
   bool m_editing = false;
@@ -95,10 +101,12 @@ private:
 
   Tool m_tool = Tool::Paint;
   Selection m_selected;
+  Selection m_shown; // what the panel last showed
   bool m_dragging = false;
   Vector2 m_dragOffset{0, 0};
-  Element m_brushElement = Element::EARTH;
-  int m_brush = 3;
+  TerrainBrush m_brush;
+  int m_regionFor = -1; // condition whose region the Region tool draws
+  std::optional<Vector2> m_regionStart;
   bool m_running = false;
   float m_accumulator = 0.0f;
   std::vector<MapDef> m_maps; // 1v1 maps to copy terrain from

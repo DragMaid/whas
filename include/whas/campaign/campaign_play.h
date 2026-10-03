@@ -67,8 +67,20 @@ private:
   void SaveProgress();
   void Notify(std::string text, float seconds = 2.5f);
   const Spell *SlotSpell(int slot) const;
-  bool PanelOpen() const { return m_backpack || m_warp || m_bench.IsOpen(); }
+  bool PanelOpen() const {
+    return m_backpack || m_warp || m_bench.IsOpen() || m_talking >= 0;
+  }
   int NearObject(Campaign::ObjectKind kind) const;
+  int NearNpc() const;
+  std::string NpcKey(int npc) const;
+  // Conditions: whether the room's seals are open, and each condition
+  bool RoomOpen() const;
+  bool ConditionMet(const Simulation &sim, int index) const;
+  std::string Hint(const Campaign::ConditionDef &c) const;
+  void CheckConditions(const Simulation &sim);
+  void ReachNode(int node);
+  void DrawDialogue();
+  void DrawSeals() const;
 
   void DrawHud(UI &ui);
   void DrawBackpack(UI &ui);
@@ -98,6 +110,11 @@ private:
   bool m_benchWasOpen = false;
   bool m_backpack = false;
   bool m_warp = false;
+  int m_talking = -1; // NPC being talked to
+  int m_node = 0;
+  bool m_talkFresh = false;
+  std::vector<int> m_breakStart; // solid cells each Break region began with
+  std::vector<bool> m_met;       // conditions met, last checked
   Simulation *m_warpSim = nullptr;
 
   std::string m_notice;
