@@ -73,63 +73,35 @@ std::optional<CastTargeting::Target>
 CastTargeting::Update(const Simulation &sim, Vector2 caster, Vector2 mouse,
                       bool worldInput, int facing, const char **blocked) {
   *blocked = nullptr;
-  auto toward = [facing](Vector2 from, Vector2 to, Vector2 fallback) {
-    Vector2 d{to.x - from.x, to.y - from.y};
-    float len = std::hypot(d.x, d.y);
-    if (len > 1.0f)
-      return Vector2{d.x / len, d.y / len};
-    return fallback.x == 0.0f && fallback.y == 0.0f
-               ? Vector2{static_cast<float>(facing), 0.0f}
-               : fallback;
-  };
-
-  if (!m_placing) {
-    if (!worldInput || !IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-      return std::nullopt;
-    return Target{toward(caster, mouse, {}), std::nullopt};
-  }
-
-  if (m_held) {
-    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-      m_held.reset(); // changed their mind
-      return std::nullopt;
-    }
-    if (!IsMouseButtonReleased(MOUSE_BUTTON_LEFT))
-      return std::nullopt;
-    Placement::Spot spot = *m_held;
-    m_held.reset();
-    return Target{toward(spot.pos, mouse, spot.normal), spot.pos};
-  }
-  if (!worldInput || !IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+  bool left = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+  bool right = IsMouseButtonPressed(MOUSE_BUTTON_RIGHT);
+  if (!worldInput || (!left && !right))
     return std::nullopt;
-  m_held = Placement::FindSurface(sim, mouse, caster);
-  if (!m_held)
-    *blocked = "No ground or wall within reach to draw on";
-  return std::nullopt;
+  Vector2 d{mouse.x - caster.x, mouse.y - caster.y};
+  float len = std::hypot(d.x, d.y);
+  Vector2 aim = len > 0.5f ? Vector2{d.x / len, d.y / len}
+                           : Vector2{static_cast<float>(facing), 0.0f};
+  if (left)
+    return Target{aim, std::nullopt};
+  std::optional<Placement::Spot> spot = Placement::FindSurface(sim, mouse, caster);
+  if (!spot) {
+    *blocked = "No ground or wall within reach of the cursor to draw on";
+    return std::nullopt;
+  }
+  if (aim.x * spot->normal.x + aim.y * spot->normal.y < 0.0f)
+    aim = spot->normal;
+  return Target{aim, spot->pos};
 }
 
 void CastTargeting::DrawWorld(const Simulation &sim, Vector2 caster,
-                              Vector2 mouse) const {
-  if (!m_placing)
-    return;
-  auto px = [](Vector2 v) { return Vector2{v.x * CELL_SIZE, v.y * CELL_SIZE}; };
-  DrawCircleLinesV(px(caster), Placement::REACH * CELL_SIZE,
-                   Color{214, 180, 110, 60});
-  std::optional<Placement::Spot> spot =
-      m_held ? m_held : Placement::FindSurface(sim, mouse, caster);
+                              Vector2 mouse) {
+  std::optional<Placement::Spot> spot = Placement::FindSurface(sim, mouse, caster);
   if (!spot)
     return;
-  Vector2 at = px(spot->pos);
-  Color ink{214, 180, 110, 220};
-  DrawCircleLinesV(at, 3.0f * CELL_SIZE, ink);
-  DrawCircleLinesV(at, 2.2f * CELL_SIZE, ink);
-  Vector2 dir = spot->normal;
-  if (m_held) {
-    Vector2 d{mouse.x - spot->pos.x, mouse.y - spot->pos.y};
-    float len = std::hypot(d.x, d.y);
-    if (len > 1.0f)
-      dir = {d.x / len, d.y / len};
-  }
-  DrawLineEx(at, {at.x + dir.x * 8.0f * CELL_SIZE, at.y + dir.y * 8.0f * CELL_SIZE},
-             2.0f, ink);
+  Vector2 at{spot->pos.x * CELL_SIZE, spot->pos.y * CELL_SIZE};
+  Color ink{214, 180, 110, 150};
+  DrawCircleLinesV(at, 2.6f * CELL_SIZE, ink);
+  DrawCircleLinesV(at, 1.8f * CELL_SIZE, ink);
+  DrawText("R", static_cast<int>(at.x + 3.2f * CELL_SIZE),
+           static_cast<int>(at.y - 3.2f * CELL_SIZE), 10, ink);
 }

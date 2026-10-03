@@ -4,7 +4,7 @@
 
 class Simulation;
 
-// Placed casts (Q): the spell is drawn on the ground or a wall near the
+// Placed casts (right click): the spell is drawn on the ground or a wall near the
 // caster and fires from there instead of from the body
 namespace Placement {
 
@@ -22,10 +22,10 @@ std::optional<Spot> FindSurface(const Simulation &sim, Vector2 cursor,
 
 } // namespace Placement
 
-// Mouse handling for casting, shared by every mode that casts. Normally a
-// press fires at the cursor from the body. With placement on (Q), a press
-// picks a surface spot, dragging sets the aim (no drag: straight out of the
-// surface) and the release fires.
+// Mouse handling for casting, shared by every mode that casts. Left click
+// fires from the body at the cursor; right click draws the spell on the
+// ground or wall nearest the cursor and fires it from there, the same way
+// (or straight out of the surface when that way leads into it).
 class CastTargeting {
 public:
   struct Target {
@@ -33,19 +33,11 @@ public:
     std::optional<Vector2> at; // placed: where the spell is drawn (cells)
   };
 
-  void Toggle() { m_placing = !m_placing, m_held.reset(); }
-  bool Placing() const { return m_placing; }
-  void Cancel() { m_held.reset(); }
-
   // Mouse in cells; worldInput is false while a panel has the mouse. A
   // target when a cast should fire this frame; `blocked` explains a miss.
-  std::optional<Target> Update(const Simulation &sim, Vector2 caster,
-                               Vector2 mouse, bool worldInput, int facing,
-                               const char **blocked);
-  // Reach, the surface spot under the cursor and the aim being dragged
-  void DrawWorld(const Simulation &sim, Vector2 caster, Vector2 mouse) const;
-
-private:
-  bool m_placing = false;
-  std::optional<Placement::Spot> m_held;
+  static std::optional<Target> Update(const Simulation &sim, Vector2 caster,
+                                      Vector2 mouse, bool worldInput,
+                                      int facing, const char **blocked);
+  // The spot a right click would draw on, if there's one in reach
+  static void DrawWorld(const Simulation &sim, Vector2 caster, Vector2 mouse);
 };

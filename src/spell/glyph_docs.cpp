@@ -55,7 +55,7 @@ constexpr Entry kEntries[] = {
                     "sideways."}},
     {"column",
      {"Column", "Holds the element as a block: a pillar in front of you, or "
-                "where it's drawn (Q). Levitation launches the block whole. "
+                "where it's drawn (right click). Levitation launches the block whole. "
                 "Shapes are fitted inside it. Bigger signs hold longer; when "
                 "it lets go the material is left to the world. Repetition "
                 "keeps it as cast and mends it; without, damage stays."}},

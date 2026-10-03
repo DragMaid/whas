@@ -210,7 +210,6 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   }
   m_player.Step(sim, {}, 0.0f);
   m_trail.Clear();
-  m_targeting.Cancel();
   m_save.visited.insert(pos);
 
   // Only this room and its neighbours stay read
@@ -303,12 +302,6 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
     for (int i = 0; i < SLOTS; ++i)
       if (IsKeyPressed(KEY_ONE + i))
         m_slot = i;
-    if (IsKeyPressed(KEY_Q)) {
-      m_targeting.Toggle();
-      Notify(m_targeting.Placing() ? "Placing: press on ground or a wall, drag to aim"
-                                   : "Casting from yourself",
-             1.5f);
-    }
     if (IsKeyPressed(KEY_E))
       Interact(sim);
   }
@@ -337,7 +330,7 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
 
 void CampaignPlay::Cast(Simulation &sim, UI &ui) {
   const char *blocked = nullptr;
-  auto target = m_targeting.Update(sim, m_player.Center(), View::MouseCells(),
+  auto target = CastTargeting::Update(sim, m_player.Center(), View::MouseCells(),
                                    !ui.IsBlockingWorldInput() &&
                                        !ImGui::GetIO().WantCaptureMouse,
                                    m_player.facing, &blocked);
@@ -514,9 +507,9 @@ void CampaignPlay::DrawWorld(const Simulation &sim, const UI &ui) const {
   for (const Enemies::Enemy &e : m_enemies)
     Enemies::Draw(e);
   DrawCharacterBody(m_player, m_player.Alive() ? Color{230, 230, 240, 255} : GRAY, false);
-  if (m_targeting.Placing())
-    m_targeting.DrawWorld(sim, m_player.Center(), View::MouseCells());
-  else if (const Spell *spell = SlotSpell(m_slot); spell && m_player.Alive()) {
+  if (m_player.Alive() && !PanelOpen())
+    CastTargeting::DrawWorld(sim, m_player.Center(), View::MouseCells());
+  if (const Spell *spell = SlotSpell(m_slot); spell && m_player.Alive()) {
     Vector2 o = m_player.Center(), m = View::MouseCells();
     Vector2 aim{m.x - o.x, m.y - o.y};
     float len = std::hypot(aim.x, aim.y);
@@ -572,9 +565,8 @@ void CampaignPlay::DrawHud(UI &ui) {
   }
   at.y += slot + 6 * s;
   dl->AddText(at, Theme::U32(Tone::Faint),
-              TextFormat("%d glyphs known   B backpack   Q %s   E use",
-                         (int)m_save.glyphs.size(),
-                         m_targeting.Placing() ? "cast from self" : "place on surface"));
+              TextFormat("%d glyphs known   B backpack   E use   right click: cast from a surface",
+                         (int)m_save.glyphs.size()));
   if (m_testing)
     dl->AddText({at.x, at.y + 18 * s}, Theme::U32(Tone::Brass),
                 "Testing from the editor: Esc to go back");

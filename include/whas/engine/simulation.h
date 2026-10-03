@@ -79,7 +79,7 @@ public:
   void CastSpell(const Spell &spell, Vector2 origin, Vector2 aimDirection,
                  int owner = -1);
   // Cast with stats handed in (lockstep play uses the server's stats).
-  // placed: drawn on a surface (Q), so a column forms right there.
+  // placed: drawn on a surface (right click), so a column forms right there.
   void CastSpell(const SpellStats &stats, Vector2 origin, Vector2 aimDirection,
                  int owner = -1, bool placed = false);
 

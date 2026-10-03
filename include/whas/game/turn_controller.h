@@ -13,7 +13,7 @@ struct PlannedCast {
   int64_t spellId = 0; // server spell definition (0 offline)
   SpellQuant::Aim aimQ; // aim as sent over the wire
   Vector2 aim;       // DequantizeAim(aimQ): what the simulation uses
-  // Placed (Q): drawn on a surface instead of the body, this far from the
+  // Placed (right click): drawn on a surface instead of the body, this far from the
   // caster's centre in 1/PLACE_SCALE cells. Flights always leave the body.
   static constexpr int PLACE_SCALE = 8;
   bool placed = false;

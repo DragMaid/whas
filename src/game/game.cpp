@@ -230,7 +230,7 @@ std::optional<PlannedCast> Game::TakeCast(const Simulation &sim, UI &ui,
                                           const Character &from) {
   const char *blocked = nullptr;
   auto target =
-      m_targeting.Update(sim, from.Center(), View::MouseCells(),
+      CastTargeting::Update(sim, from.Center(), View::MouseCells(),
                          !ui.IsBlockingWorldInput(), from.facing, &blocked);
   if (blocked)
     Notify(blocked, 1.5f);
@@ -461,12 +461,6 @@ void Game::Notify(const char *text, float seconds) {
 }
 
 void Game::Update(Simulation &sim, UI &ui, UIState &state) {
-  if (!ImGui::GetIO().WantCaptureKeyboard && IsKeyPressed(KEY_Q)) {
-    m_targeting.Toggle();
-    Notify(m_targeting.Placing() ? "Placing: press on ground or a wall, drag to aim"
-                                 : "Casting from yourself",
-           1.5f);
-  }
   if (state.timeToggleRequested)
     ToggleTime(sim);
   state.timeToggleRequested = false;
@@ -678,14 +672,11 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
 
   // Live aim from where the local player will be when this cast would fire
   bool aiming = planning || (rts && m_state == RoundState::Playing);
-  if (aiming && m_targeting.Placing()) {
-    Vector2 from = rts ? m_match.characters[Local()].Center()
-                       : m_turn.LocalPreview().end.Center();
-    m_targeting.DrawWorld(sim, from, View::MouseCells());
-  } else if (aiming && !ui.IsBlockingWorldInput()) {
+  if (aiming && !ui.IsBlockingWorldInput()) {
+    Vector2 origin = rts ? m_match.characters[Local()].Center()
+                         : m_turn.LocalPreview().end.Center();
+    CastTargeting::DrawWorld(sim, origin, View::MouseCells());
     if (const Spell *spell = ui.GetSelectedSpell()) {
-      Vector2 origin = rts ? m_match.characters[Local()].Center()
-                           : m_turn.LocalPreview().end.Center();
       Vector2 mouse = View::MouseCells();
       Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
       float len = std::hypot(aim.x, aim.y);

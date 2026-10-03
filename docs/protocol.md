@@ -245,7 +245,7 @@ collapsed into runs, and casts carry the server spell id:
 
 `in` is a bit field: 1 = left, 2 = right, 4 = jump, 8 = down (dive while airborne). `c` is where the
 player's cursor was, in 1/8 cells, for sights set spells (two int16s); a
-run without it keeps the last one. A placed cast (Q, drawn on the ground or a
+run without it keeps the last one. A placed cast (right click, drawn on the ground or a
 wall) also carries `"px","py"`: where it is drawn, from the caster's centre in
 1/8 cells, at most 48 cells away. Wind underfoot ignores it and always leaves
 the body. The server rejects a plan

@@ -121,7 +121,6 @@ private:
   float m_rtsAccumulator = 0.0f;
   int m_rtsRound = -1; // online: the round the controller was reset for
   FlightTrail m_trail;
-  CastTargeting m_targeting;
   RoundState m_state = RoundState::Playing;
   // Between turns: the world is frozen until Space stops time to plan
   bool m_waiting = true;
