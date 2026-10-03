@@ -102,6 +102,10 @@ Vector2 Sandbox::AimAtMouse() const {
 }
 
 void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
+  if (!m_avatar.CanCast(cast.stats.HasFlight()))
+    return;
+  if (cast.stats.HasFlight())
+    m_avatar.wet = 0.0f;
   sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
   if (cast.stats.HasFlight()) {
     m_avatar.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
@@ -152,6 +156,7 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
       m_stopped ? std::min(1.0f, QueuedTicks() / (float)TurnController::TURN_TICKS)
                 : 0.0f;
   state.ticksFree = TurnController::TURN_TICKS;
+  state.wet = m_avatar.wet / Character::WET_SECONDS;
 }
 
 void Sandbox::HandleDraw(Simulation &sim, UI &ui, UIState &state) {

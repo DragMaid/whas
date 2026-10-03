@@ -172,6 +172,7 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(p.pathS);
     out.Put(p.pathL);
     out.Put(p.castId);
+    out.Put(p.lastHit);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -289,6 +290,7 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.pathS = in.Get<float>();
       p.pathL = in.Get<float>();
       p.castId = in.Get<int>();
+      p.lastHit = in.Get<int>();
     }
 
     uint32_t effects = in.Get<uint32_t>();

@@ -23,6 +23,10 @@ void PlanPreview::Append(const Simulation &sim, const TurnPlan &plan,
   const PlanStep &step = plan.steps[path.size()];
   for (const PlannedCast &cast : step.casts) {
     const SpellStats &stats = cast.stats;
+    if (!end.CanCast(stats.HasFlight()))
+      continue;
+    if (stats.HasFlight())
+      end.wet = 0.0f;
     Vector2 dir = SpellSystem::ResolveDirection(stats, cast.aim);
     casts.push_back({cast.spell, end.Center(), dir, stats});
     if (stats.HasFlight())
@@ -191,6 +195,11 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
     for (const PlannedCast &cast : step.casts) {
       if (!character.Alive())
         break;
+      // Wet paper won't take a spell; a flight dries it off
+      if (!character.CanCast(cast.stats.HasFlight()))
+        continue;
+      if (cast.stats.HasFlight())
+        character.wet = 0.0f;
       // Cast from where the caster stands, then any flight carries them off
       sim.CastSpell(cast.stats, character.Center(), cast.aim, character.id);
       if (cast.stats.HasFlight()) {

@@ -47,6 +47,7 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.pathS = 0.0f;
       p.pathL = 0.0f;
       p.castId = -1;
+      p.lastHit = -1;
       return &p;
     }
   }
@@ -754,13 +755,16 @@ void ParticleSystem::Burst(Particle &p) {
   m_lastBurstPos = p.pos;
 }
 
-bool ParticleSystem::HitHurtbox(const Particle &p) {
+bool ParticleSystem::HitHurtbox(Particle &p) {
   for (const Hurtbox &box : m_hurtboxes) {
-    if (box.id == p.owner || !CheckCollisionPointRec(p.pos, box.bounds))
+    if (box.id == p.owner || box.id == p.lastHit ||
+        !CheckCollisionPointRec(p.pos, box.bounds))
       continue;
     m_hits.push_back({box.id, p.owner, p.power, p.element});
     Note({ParticleNoise::Impact, p.element, p.pos});
-    return true;
+    p.lastHit = box.id;
+    // Flame has no body to stop it: it sets the target alight on its way
+    return p.element != Element::FIRE;
   }
   return false;
 }

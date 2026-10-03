@@ -40,6 +40,8 @@ struct UIState {
   int matchRound = -1;        // >= 0 in a match: that round's deck is locked
   // Real-time matches: how much of each slot's cooldown is left (0..1)
   std::array<float, DECK_SLOTS> cooldowns{};
+  // Share of the wet paper's drying time left (0 = dry): only flight casts
+  float wet = 0.0f;
 
   // Online matches play by the default rules: tuning sliders are hidden
   bool configLocked = false;
