@@ -33,6 +33,12 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
   library.
 - **Casting** works like real-time duels: a spell can't be cast again until
   its cast time has passed. Wet paper, burning and the rest apply.
+- **People** (NPCs) stand where they were placed; `E` talks to them, and
+  `1`-`3` or a click picks a reply. A conversation can teach a glyph.
+  Spells, enemies and guidance pass them by.
+- **Sealed edges**: a room can seal some of its edges with a glowing
+  barrier until its conditions hold (listed top right). Once met, they stay
+  met in your save.
 - **Dying** puts you back at the last gate you touched (or the start), with
   everything you've learned.
 
@@ -54,7 +60,7 @@ does.
 Health, speed and touch damage are set per enemy in the editor; a mage's
 spells are picked from your library and copied into the room.
 
-TODO: enemies use the player's sprite, tinted, with a marker (hat, wings,
+TODO: enemies and NPCs use the player's sprite, tinted, with a marker (hat, wings,
 eyes). Gates and workbenches are drawn shapes. Swap in real art when there
 is some (`Enemies::Draw`, `DrawCampaignObject`).
 
@@ -62,20 +68,47 @@ is some (`Enemies::Draw`, `DrawCampaignObject`).
 
 From the campaign list: **Edit**, or create a new one by name.
 
+The toolbar along the top holds the tools; the panel on the right has the
+rooms map and tabs for what's selected, the room and the campaign.
+
+| Key | Tool |
+|---|---|
+| `B` | Paint terrain: `1`-`9` elements, `E` eraser, `[` `]` or wheel for size, left paints, right erases, `Ctrl+Z` undoes a stroke |
+| `V` | Select: click to select, drag to move, `Delete` removes, right click or `Esc` lets go |
+| `T` | Start: where a new game begins |
+| `G` / `W` / `H` | Gate / workbench / glyph shrine |
+| `N` | Someone to talk to |
+| `M` / `U` / `F` | Mage / undead / flyer |
+| `Ctrl+S` | Save |
+
+With a placing tool, clicking something already there selects and drags it
+instead.
+
 - **Rooms** map: click a room to edit it; `+` beside the selected room adds
   a new one on that side. The room you leave is saved.
-- **Tools**: Paint (left paints, right erases, wheel sizes the brush),
-  Select, Start (where a new game begins), Gate, Bench, Shrine, Mage,
-  Undead, Flyer. Click to place; click an existing thing to select and drag
-  it; Delete removes; right click lets go.
-- **Terrain**: paint it, let it settle (runs the world so water and sand
-  come to rest), clear it, or copy a 1v1 map in.
-- **Room**: the background. Drop a PNG on the window or type its path. It
-  is scaled to the world's size and copied into the campaign folder.
-- **Starting kit**: the glyphs a new game knows.
+- **Selected** tab: an enemy's health, speed, touch damage and tag (a
+  mage's spells from your library); a shrine's glyph; an NPC's name, tag
+  and dialogue. Dialogue is a list of nodes: node 1 starts the talk, each
+  node has a line, up to three replies (each leads to a node or ends the
+  talk) and optionally a glyph it teaches.
+- **Room** tab:
+  - *To leave this room*: tick the edges to seal and add conditions. Every
+    condition must hold to open them:
+    | Condition | Met when |
+    |---|---|
+    | Defeat enemies | every enemy with the tag (all of them when empty) is down |
+    | Break blocks in a region | that share of the solid cells that start in the region are gone |
+    | Fill a region | the region holds that many cells of the element (a rock pushed in, water poured in) |
+    | Talk to someone | the NPC with the tag was talked to (up to a node, or at all) |
+    | Take the shrine | the room's shrines are taken |
+    Regions are drawn with "Draw region": drag a rectangle in the room.
+  - *Background*: drop a PNG on the window or type its path. It's scaled
+    to the world's size and copied into the campaign folder.
+  - *Terrain*: copy a 1v1 map in, or clear to a bare floor.
+- **Campaign** tab: the starting kit, the glyphs a new game knows.
+- The wave icon lets the world settle (water and sand come to rest).
 - **Play this room** saves and starts there with every glyph unlocked,
   without touching the save. `Esc` comes back to the editor.
-- `Ctrl+S` saves.
 
 ## Files
 
@@ -83,11 +116,12 @@ From the campaign list: **Edit**, or create a new one by name.
 data/campaigns/<id>/
   campaign.json        name, room positions, start room and spot, starting kit
   rooms/<x>_<y>.json   terrain (a MapDef: run-length encoded cells, world
-                       settings), background file, objects, enemies
+                       settings), background file, objects, enemies, NPCs
+                       and their dialogue, conditions, sealed edges
   backgrounds/*.png    scaled to GRID_W*CELL_SIZE x GRID_H*CELL_SIZE
   backpack/*.json      spells drawn at workbenches (spell file format)
   save.json            glyphs known, rooms visited, gates opened, respawn,
-                       shrines taken, slots
+                       shrines taken, slots, rooms cleared, conversations had
 ```
 
 `save.json` and `backpack/` are per player and ignored by git; the rest is

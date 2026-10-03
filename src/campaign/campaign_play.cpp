@@ -14,6 +14,7 @@
 #include "whas/ui/ui.h"
 #include <algorithm>
 #include <cmath>
+#include <optional>
 
 using namespace Campaign;
 using Theme::Tone;
@@ -48,6 +49,24 @@ Vector2 FreeNear(const Simulation &sim, Vector2 at) {
           return p;
       }
   return at;
+}
+
+// Cells in a region: of one element, or every solid when none is given
+int CountIn(const Simulation &sim, Rectangle r, std::optional<Element> element) {
+  int n = 0;
+  int x0 = std::max(0, (int)r.x), y0 = std::max(0, (int)r.y);
+  int x1 = std::min(GRID_W, (int)(r.x + r.width)), y1 = std::min(GRID_H, (int)(r.y + r.height));
+  for (int y = y0; y < y1; ++y)
+    for (int x = x0; x < x1; ++x) {
+      const Cell &c = sim.GetCell(x, y);
+      if (element) {
+        n += c.element == *element;
+      } else if (c.element != Element::AIR) {
+        const auto &props = sim.GetConfig().elements[static_cast<size_t>(c.element)];
+        n += props.solid && !props.passable;
+      }
+    }
+  return n;
 }
 
 } // namespace
@@ -203,6 +222,12 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
                                          : Texture2D{};
 
   Enemies::Spawn(m_room, sim, m_enemies);
+  m_talking = -1;
+  m_breakStart.assign(m_room.conditions.size(), 0);
+  m_met.assign(m_room.conditions.size(), false);
+  for (size_t i = 0; i < m_room.conditions.size(); ++i)
+    if (m_room.conditions[i].kind == ConditionKind::Break)
+      m_breakStart[i] = CountIn(sim, m_room.conditions[i].region, std::nullopt);
   m_player.pos = FreeNear(sim, at);
   if (!keepMotion) {
     m_player.vel = {0, 0};
@@ -283,6 +308,8 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
   if (keys && IsKeyPressed(KEY_ESCAPE)) {
     if (m_bench.IsOpen())
       m_bench.Close();
+    else if (m_talking >= 0)
+      m_talking = -1;
     else if (m_backpack || m_warp)
       m_backpack = m_warp = false;
     else
@@ -435,6 +462,8 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
       Respawn(sim);
     return;
   }
+  if (m_tick % 10 == 0)
+    CheckConditions(sim);
   CheckEdges(sim, input);
 }
 
@@ -442,8 +471,10 @@ void CampaignPlay::CheckEdges(Simulation &sim, const CharacterInput &input) {
   constexpr float EDGE = 0.05f;
   Character &p = m_player;
   RoomPos at = m_room.pos;
+  bool open = RoomOpen();
   auto go = [&](int dx, int dy, Vector2 to) {
-    if (!m_def.HasRoom(at.Step(dx, dy)))
+    Edge edge = dx < 0 ? EdgeLeft : dx > 0 ? EdgeRight : dy < 0 ? EdgeUp : EdgeDown;
+    if (!m_def.HasRoom(at.Step(dx, dy)) || (!open && m_room.sealed[edge]))
       return false;
     EnterRoom(sim, at.Step(dx, dy), to, true);
     return true;
@@ -463,6 +494,12 @@ void CampaignPlay::CheckEdges(Simulation &sim, const CharacterInput &input) {
 
 void CampaignPlay::Interact(Simulation &sim) {
   m_warpSim = &sim;
+  if (int npc = NearNpc(); npc >= 0) {
+    m_talking = npc;
+    m_talkFresh = true;
+    ReachNode(0);
+    return;
+  }
   if (NearObject(ObjectKind::Workbench) >= 0) {
     m_bench.Open();
     return;
@@ -471,6 +508,111 @@ void CampaignPlay::Interact(Simulation &sim) {
     m_warp = true;
     m_backpack = false;
   }
+}
+
+int CampaignPlay::NearNpc() const {
+  for (int i = 0; i < static_cast<int>(m_room.npcs.size()); ++i) {
+    Vector2 c{m_room.npcs[i].pos.x + Character::WIDTH * 0.5f,
+              m_room.npcs[i].pos.y + Character::HEIGHT * 0.5f};
+    if (Dist(c, m_player.Center()) < REACH * 1.5f)
+      return i;
+  }
+  return -1;
+}
+
+std::string CampaignPlay::NpcKey(int npc) const {
+  const NpcDef &n = m_room.npcs[npc];
+  return n.tag.empty() ? std::to_string(npc) : n.tag;
+}
+
+void CampaignPlay::ReachNode(int node) {
+  const NpcDef &npc = m_room.npcs[m_talking];
+  if (node < 0 || node >= static_cast<int>(npc.dialogue.size())) {
+    m_talking = -1;
+    return;
+  }
+  m_node = node;
+  m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), -1));
+  m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), node));
+  const DialogueNode &d = npc.dialogue[node];
+  if (!d.teach.empty() && m_save.glyphs.insert(d.teach).second) {
+    GlyphDocs::Info info = GlyphDocs::Get(d.teach);
+    Notify(std::string("Learned the ") + (info.name ? info.name : d.teach.c_str()) +
+               (d.teachSigil ? " sigil" : " sign"),
+           4.0f);
+  }
+  SaveProgress();
+}
+
+bool CampaignPlay::RoomOpen() const {
+  return m_room.conditions.empty() || m_save.cleared.count(m_room.pos) > 0;
+}
+
+bool CampaignPlay::ConditionMet(const Simulation &sim, int index) const {
+  const ConditionDef &c = m_room.conditions[index];
+  switch (c.kind) {
+  case ConditionKind::Defeat:
+    for (const Enemies::Enemy &e : m_enemies)
+      if ((c.tag.empty() || e.def.tag == c.tag) && e.body.Alive())
+        return false;
+    return true;
+  case ConditionKind::Break: {
+    int start = m_breakStart[index];
+    return start == 0 ||
+           CountIn(sim, c.region, std::nullopt) <= start * (1.0f - c.share);
+  }
+  case ConditionKind::Fill:
+    return CountIn(sim, c.region, c.element) >= c.amount;
+  case ConditionKind::Talk:
+    for (int i = 0; i < static_cast<int>(m_room.npcs.size()); ++i)
+      if (m_room.npcs[i].tag == c.tag || (c.tag.empty() && i == 0))
+        return m_save.talked.count(TalkKey(m_room.pos, NpcKey(i), c.node)) > 0;
+    return true;
+  case ConditionKind::TakeShrine:
+    for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i)
+      if (m_room.objects[i].kind == ObjectKind::Shrine &&
+          !m_save.shrinesTaken.count({m_room.pos, i}))
+        return false;
+    return true;
+  default:
+    return true;
+  }
+}
+
+std::string CampaignPlay::Hint(const ConditionDef &c) const {
+  if (!c.hint.empty())
+    return c.hint;
+  switch (c.kind) {
+  case ConditionKind::Defeat:
+    return c.tag.empty() ? "Defeat every enemy here" : "Defeat " + c.tag;
+  case ConditionKind::Break:
+    return "Break through the marked stone";
+  case ConditionKind::Fill:
+    return std::string("Fill the marked place with ") + ElementName(c.element);
+  case ConditionKind::Talk:
+    return "Talk to " + (c.tag.empty() ? std::string("the one waiting here") : c.tag);
+  case ConditionKind::TakeShrine:
+    return "Take the shrine's glyph";
+  default:
+    return "";
+  }
+}
+
+void CampaignPlay::CheckConditions(const Simulation &sim) {
+  if (RoomOpen())
+    return;
+  bool all = true;
+  for (int i = 0; i < static_cast<int>(m_room.conditions.size()); ++i) {
+    m_met[i] = ConditionMet(sim, i);
+    all = all && m_met[i];
+  }
+  if (!all)
+    return;
+  m_save.cleared.insert(m_room.pos);
+  bool sealed = std::find(m_room.sealed.begin(), m_room.sealed.end(), true) !=
+                m_room.sealed.end();
+  Notify(sealed ? "The seals lift" : "Done here", 3.0f);
+  SaveProgress();
 }
 
 void CampaignPlay::DrawBackground() const {
@@ -494,10 +636,23 @@ void CampaignPlay::DrawWorld(const Simulation &sim, const UI &ui) const {
                    : !m_save.shrinesTaken.count(key);
     DrawCampaignObject(o, lit, ui.Glyphs());
   }
+  for (const NpcDef &n : m_room.npcs) {
+    Character body;
+    body.pos = n.pos;
+    body.grounded = true;
+    body.look = m_player.Center().x < n.pos.x + Character::WIDTH * 0.5f ? -1 : 1;
+    DrawCharacterBody(body, Color{235, 215, 160, 255}, false);
+    Theme::DrawText(Theme::RlBody(), n.name.c_str(),
+                    {n.pos.x * CELL_SIZE - 8, n.pos.y * CELL_SIZE - 44}, 16,
+                    Color{250, 235, 190, 255});
+  }
+  DrawSeals();
+
   // What E would do here
-  const char *prompt = NearObject(ObjectKind::Workbench) >= 0 ? "E  workbench"
-                       : NearObject(ObjectKind::Gate) >= 0  ? "E  travel"
-                                                             : nullptr;
+  const char *prompt = NearNpc() >= 0                         ? "E  talk"
+                       : NearObject(ObjectKind::Workbench) >= 0 ? "E  workbench"
+                       : NearObject(ObjectKind::Gate) >= 0      ? "E  travel"
+                                                                : nullptr;
   if (prompt && m_player.Alive())
     Theme::DrawText(Theme::RlBody(), prompt,
                     {m_player.Center().x * CELL_SIZE - 30, m_player.pos.y * CELL_SIZE - 50},
@@ -519,10 +674,81 @@ void CampaignPlay::DrawWorld(const Simulation &sim, const UI &ui) const {
   }
 }
 
+void CampaignPlay::DrawSeals() const {
+  if (RoomOpen())
+    return;
+  float t = static_cast<float>(GetTime());
+  constexpr float W = GRID_W * CELL_SIZE, H = GRID_H * CELL_SIZE;
+  Color glow{200, 150, 255, static_cast<unsigned char>(150 + 60 * std::sin(t * 3))};
+  auto wall = [&](Vector2 a, Vector2 b) {
+    DrawLineEx(a, b, 6.0f, Color{120, 80, 200, 90});
+    DrawLineEx(a, b, 2.0f, glow);
+    // Sigil marks along it
+    Vector2 d{b.x - a.x, b.y - a.y};
+    float len = std::hypot(d.x, d.y);
+    for (float s = 40; s < len; s += 80) {
+      Vector2 c{a.x + d.x / len * s, a.y + d.y / len * s};
+      DrawPoly(c, 4, 9, 45 + t * 40, Color{60, 30, 110, 200});
+      DrawPolyLines(c, 4, 9, 45 + t * 40, glow);
+    }
+  };
+  if (m_room.sealed[EdgeLeft])
+    wall({3, 0}, {3, H});
+  if (m_room.sealed[EdgeRight])
+    wall({W - 3, 0}, {W - 3, H});
+  if (m_room.sealed[EdgeUp])
+    wall({0, 3}, {W, 3});
+  if (m_room.sealed[EdgeDown])
+    wall({0, H - 3}, {W, H - 3});
+  // Regions the conditions are about
+  for (const ConditionDef &c : m_room.conditions)
+    if (c.kind == ConditionKind::Break || c.kind == ConditionKind::Fill)
+      DrawRectangleLinesEx({c.region.x * CELL_SIZE, c.region.y * CELL_SIZE,
+                            c.region.width * CELL_SIZE, c.region.height * CELL_SIZE},
+                           2.0f, Color{200, 150, 255, 120});
+}
+
+// A conversation: the NPC's line and the replies to pick from
+void CampaignPlay::DrawDialogue() {
+  const NpcDef &npc = m_room.npcs[m_talking];
+  const DialogueNode &node = npc.dialogue[m_node];
+  float s = View::UiScale();
+  ImVec2 size{std::min(ImGui::GetIO().DisplaySize.x - 40 * s, 720 * s), 0};
+  ImGui::SetNextWindowPos({ImGui::GetIO().DisplaySize.x * 0.5f,
+                           ImGui::GetIO().DisplaySize.y - 30 * s},
+                          ImGuiCond_Always, {0.5f, 1.0f});
+  ImGui::SetNextWindowSize(size);
+  ImGui::Begin("##dialogue", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_AlwaysAutoResize);
+  ImGui::TextColored(Theme::Vec(Tone::Brass), "%s", npc.name.c_str());
+  ImGui::PushTextWrapPos(0.0f);
+  ImGui::TextUnformatted(node.text.c_str());
+  ImGui::PopTextWrapPos();
+  ImGui::Spacing();
+  // The key that opened the conversation doesn't also answer it
+  bool keys = !std::exchange(m_talkFresh, false);
+  int pick = -2; // -2: nothing chosen yet
+  for (int i = 0; i < static_cast<int>(node.replies.size()); ++i) {
+    std::string label = TextFormat("%d. %s", i + 1, node.replies[i].text.c_str());
+    if (ImGui::Selectable(label.c_str()) || (keys && IsKeyPressed(KEY_ONE + i)))
+      pick = node.replies[i].next;
+  }
+  if (node.replies.empty() &&
+      (ImGui::Selectable("(Farewell)") ||
+       (keys && (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_ENTER)))))
+    pick = -1;
+  ImGui::End();
+  if (pick != -2)
+    ReachNode(pick);
+}
+
 void CampaignPlay::DrawPanels(UI &ui) {
   if (!m_active)
     return;
   DrawHud(ui);
+  if (m_talking >= 0)
+    DrawDialogue();
   if (m_backpack)
     DrawBackpack(ui);
   if (m_warp)
@@ -570,6 +796,20 @@ void CampaignPlay::DrawHud(UI &ui) {
   if (m_testing)
     dl->AddText({at.x, at.y + 18 * s}, Theme::U32(Tone::Brass),
                 "Testing from the editor: Esc to go back");
+
+  // What opens this room
+  if (!RoomOpen()) {
+    ImVec2 g{ImGui::GetIO().DisplaySize.x - 16 * s, 16 * s};
+    for (size_t i = 0; i < m_room.conditions.size(); ++i) {
+      std::string line = (m_met.size() > i && m_met[i] ? "[x] " : "[ ] ") +
+                         Hint(m_room.conditions[i]);
+      ImVec2 size = ImGui::CalcTextSize(line.c_str());
+      dl->AddRectFilled({g.x - size.x - 8, g.y - 2}, {g.x + 4, g.y + size.y + 2},
+                        Theme::U32(Tone::Ink, 0.75f));
+      dl->AddText({g.x - size.x - 4, g.y}, Theme::U32(Tone::Parchment), line.c_str());
+      g.y += size.y + 6 * s;
+    }
+  }
 
   if (m_noticeTime > 0.0f) {
     ImVec2 size = ImGui::CalcTextSize(m_notice.c_str());

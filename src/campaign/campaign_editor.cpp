@@ -1,5 +1,6 @@
 #include "whas/campaign/campaign_editor.h"
 #include "imgui.h"
+#include "imgui_stdlib.h"
 #include "whas/campaign/campaign_play.h"
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
@@ -8,6 +9,7 @@
 #include "whas/game/character_draw.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"
+#include "whas/ui/editor_icons.h"
 #include "whas/ui/theme.h"
 #include "whas/ui/ui.h"
 #include "whas/ui/widgets.h"
@@ -18,11 +20,6 @@ using namespace Campaign;
 using Theme::Tone;
 
 namespace {
-
-constexpr Element kBrushElements[] = {
-    Element::EARTH, Element::ROCK,  Element::SAND,  Element::GRASS,
-    Element::WOOD,  Element::WATER, Element::ICE,   Element::CLOUD,
-    Element::FIRE,  Element::AIR};
 
 bool Solid(const Simulation &sim, int x, int y) {
   if (y >= GRID_H)
@@ -66,6 +63,36 @@ Color EnemyTint(EnemyKind kind) {
   }
 }
 
+constexpr Color NPC_TINT{235, 215, 160, 255};
+constexpr const char *EDGE_NAMES[EDGES] = {"Left", "Right", "Up", "Down"};
+
+// A glyph picker: "" for none
+bool GlyphCombo(const char *label, std::string &glyph, bool &sigil, UI &ui,
+                bool allowNone) {
+  GlyphDocs::Info info = GlyphDocs::Get(glyph);
+  const char *shown = glyph.empty() ? "(none)" : info.name ? info.name : glyph.c_str();
+  bool changed = false;
+  if (!ImGui::BeginCombo(label, shown))
+    return false;
+  if (allowNone && ImGui::Selectable("(none)", glyph.empty())) {
+    glyph.clear();
+    changed = true;
+  }
+  for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign}) {
+    ImGui::TextDisabled(kind == GlyphKind::Sigil ? "Sigils" : "Signs");
+    for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {
+      GlyphDocs::Info gi = GlyphDocs::Get(a->id);
+      if (ImGui::Selectable(gi.name ? gi.name : a->id.c_str(), a->id == glyph)) {
+        glyph = a->id;
+        sigil = kind == GlyphKind::Sigil;
+        changed = true;
+      }
+    }
+  }
+  ImGui::EndCombo();
+  return changed;
+}
+
 } // namespace
 
 void CampaignEditor::OpenHub() {
@@ -94,6 +121,8 @@ void CampaignEditor::LoadRoomIntoWorld(Simulation &sim, RoomPos pos) {
   m_room = room ? std::move(*room) : BlankRoom(pos);
   Maps::Build(sim, m_room.terrain, 1);
   m_selected = {};
+  m_regionFor = -1;
+  m_brush.ClearHistory();
   SetBackground(m_room.background);
 }
 
@@ -158,175 +187,6 @@ void CampaignEditor::Close(Simulation &sim) {
   OpenHub();
 }
 
-void CampaignEditor::Resume(Simulation &sim) {
-  Maps::Build(sim, m_room.terrain, 1);
-}
-
-CampaignEditor::Selection CampaignEditor::HitTest(Vector2 cell) const {
-  for (int i = static_cast<int>(m_room.enemies.size()) - 1; i >= 0; --i)
-    if (CheckCollisionPointRec(cell, BodyBox(m_room.enemies[i].pos)))
-      return {Selection::Enemy, i};
-  for (int i = static_cast<int>(m_room.objects.size()) - 1; i >= 0; --i)
-    if (CheckCollisionPointRec(cell, ObjectBox(m_room.objects[i])))
-      return {Selection::Object, i};
-  if (m_room.pos == m_def.startRoom &&
-      CheckCollisionPointRec(cell, BodyBox(m_def.startPos)))
-    return {Selection::Start, 0};
-  return {};
-}
-
-void CampaignEditor::Place(const Simulation &sim, Vector2 cell) {
-  Vector2 body{cell.x - Character::WIDTH * 0.5f, cell.y - Character::HEIGHT * 0.5f};
-  auto object = [&](ObjectKind kind) {
-    ObjectDef o;
-    o.kind = kind;
-    o.pos = OnFloor(sim, cell);
-    if (kind == ObjectKind::Shrine) {
-      o.glyph = "water";
-      o.sigil = true;
-    }
-    m_room.objects.push_back(o);
-    m_selected = {Selection::Object, static_cast<int>(m_room.objects.size()) - 1};
-  };
-  auto enemy = [&](EnemyKind kind) {
-    EnemyDef e;
-    e.kind = kind;
-    e.pos = body;
-    if (kind == EnemyKind::Mage) {
-      e.hp = 30.0f;
-      e.speed = 18.0f;
-      e.damage = 4.0f;
-    } else if (kind == EnemyKind::Flyer) {
-      e.hp = 20.0f;
-      e.speed = 26.0f;
-      e.damage = 6.0f;
-    }
-    m_room.enemies.push_back(e);
-    m_selected = {Selection::Enemy, static_cast<int>(m_room.enemies.size()) - 1};
-  };
-  switch (m_tool) {
-  case Tool::Gate:
-    object(ObjectKind::Gate);
-    break;
-  case Tool::Workbench:
-    object(ObjectKind::Workbench);
-    break;
-  case Tool::Shrine:
-    object(ObjectKind::Shrine);
-    break;
-  case Tool::Start:
-    m_def.startRoom = m_room.pos;
-    m_def.startPos = body;
-    m_selected = {Selection::Start, 0};
-    break;
-  case Tool::Mage:
-    enemy(EnemyKind::Mage);
-    break;
-  case Tool::Undead:
-    enemy(EnemyKind::Undead);
-    break;
-  case Tool::Flyer:
-    enemy(EnemyKind::Flyer);
-    break;
-  default:
-    break;
-  }
-}
-
-void CampaignEditor::RemoveSelected() {
-  if (m_selected.kind == Selection::Object)
-    m_room.objects.erase(m_room.objects.begin() + m_selected.index);
-  else if (m_selected.kind == Selection::Enemy)
-    m_room.enemies.erase(m_room.enemies.begin() + m_selected.index);
-  m_selected = {};
-}
-
-void CampaignEditor::Update(Simulation &sim) {
-  if (!m_editing)
-    return;
-  // Drop a PNG on the window: this room's background
-  if (IsFileDropped()) {
-    FilePathList files = LoadDroppedFiles();
-    if (files.count > 0) {
-      std::string error;
-      if (auto file = ImportBackground(m_def.id, files.paths[0], error)) {
-        SetBackground(*file);
-        m_status = "Background set: " + *file;
-      } else {
-        m_status = error;
-      }
-    }
-    UnloadDroppedFiles(files);
-  }
-
-  bool keys = !ImGui::GetIO().WantCaptureKeyboard;
-  if (keys && IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S))
-    StoreRoom(sim);
-  if (keys && (IsKeyPressed(KEY_DELETE) || IsKeyPressed(KEY_BACKSPACE)))
-    RemoveSelected();
-
-  if (m_running) {
-    m_accumulator += std::min(GetFrameTime(), 0.1f);
-    while (m_accumulator >= TurnController::TICK_DT) {
-      m_accumulator -= TurnController::TICK_DT;
-      sim.Update(TurnController::TICK_DT);
-    }
-  }
-
-  Vector2 cell = View::MouseCells();
-  if (m_dragging) {
-    if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-      m_dragging = false;
-      if (m_selected.kind == Selection::Object)
-        m_room.objects[m_selected.index].pos =
-            OnFloor(sim, m_room.objects[m_selected.index].pos);
-      return;
-    }
-    Vector2 to{cell.x - m_dragOffset.x, cell.y - m_dragOffset.y};
-    if (m_selected.kind == Selection::Object)
-      m_room.objects[m_selected.index].pos = to;
-    else if (m_selected.kind == Selection::Enemy)
-      m_room.enemies[m_selected.index].pos = to;
-    else if (m_selected.kind == Selection::Start)
-      m_def.startPos = to;
-    return;
-  }
-  if (ImGui::GetIO().WantCaptureMouse)
-    return;
-
-  if (m_tool == Tool::Paint) {
-    int cx = static_cast<int>(cell.x), cy = static_cast<int>(cell.y);
-    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-      sim.Paint(cx, cy, m_brushElement, m_brush);
-    if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
-      sim.Erase(cx, cy, m_brush);
-    float wheel = GetMouseWheelMove();
-    if (wheel != 0)
-      m_brush = std::clamp(m_brush + static_cast<int>(wheel), 0, 20);
-    return;
-  }
-  if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
-    m_selected = {};
-    return;
-  }
-  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-    return;
-  // Anything already there is picked up and dragged, whatever the tool
-  Selection hit = HitTest(cell);
-  if (hit.kind == Selection::None && m_tool != Tool::Select) {
-    Place(sim, cell);
-    return;
-  }
-  m_selected = hit;
-  if (hit.kind == Selection::None)
-    return;
-  Vector2 at = hit.kind == Selection::Object ? m_room.objects[hit.index].pos
-               : hit.kind == Selection::Enemy ? m_room.enemies[hit.index].pos
-                                              : m_def.startPos;
-  m_dragOffset = {cell.x - at.x, cell.y - at.y};
-  m_dragging = true;
-}
-
 void CampaignEditor::DrawBackground() const {
   if (!m_editing || !m_background.id)
     return;
@@ -334,99 +194,6 @@ void CampaignEditor::DrawBackground() const {
                  {0, 0, (float)m_background.width, (float)m_background.height},
                  {0, 0, (float)(GRID_W * CELL_SIZE), (float)(GRID_H * CELL_SIZE)},
                  {0, 0}, 0.0f, WHITE);
-}
-
-void CampaignEditor::DrawWorld(const UI &ui) const {
-  if (!m_editing)
-    return;
-  auto px = [](Rectangle r) {
-    return Rectangle{r.x * CELL_SIZE, r.y * CELL_SIZE, r.width * CELL_SIZE,
-                     r.height * CELL_SIZE};
-  };
-  Color brass = Theme::Rl(Tone::BrassBright, 0.95f);
-  for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
-    DrawCampaignObject(m_room.objects[i], true, ui.Glyphs());
-    if (m_selected.kind == Selection::Object && m_selected.index == i)
-      DrawRectangleLinesEx(px(ObjectBox(m_room.objects[i])), 2, brass);
-  }
-  for (int i = 0; i < static_cast<int>(m_room.enemies.size()); ++i) {
-    const EnemyDef &e = m_room.enemies[i];
-    Character body;
-    body.pos = e.pos;
-    body.grounded = true;
-    DrawCharacterBody(body, EnemyTint(e.kind), false);
-    Rectangle r = px(BodyBox(e.pos));
-    Theme::DrawText(Theme::RlBody(), EnemyName(e.kind), {r.x - 8, r.y - 40}, 16,
-                    EnemyTint(e.kind));
-    if (m_selected.kind == Selection::Enemy && m_selected.index == i)
-      DrawRectangleLinesEx(r, 2, brass);
-  }
-  if (m_room.pos == m_def.startRoom) {
-    Rectangle r = px(BodyBox(m_def.startPos));
-    DrawRectangleLinesEx(r, 2, Color{120, 220, 160, 255});
-    Theme::DrawText(Theme::RlBody(), "START", {r.x - 10, r.y - 22}, 16,
-                    Color{120, 220, 160, 255});
-  }
-  if (m_tool == Tool::Paint && !ImGui::GetIO().WantCaptureMouse) {
-    Vector2 m = View::MouseCells();
-    DrawCircleLinesV({m.x * CELL_SIZE, m.y * CELL_SIZE},
-                     (m_brush + 0.5f) * CELL_SIZE, Theme::Rl(Tone::Parchment, 0.6f));
-  }
-}
-
-void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
-  if (m_hub && !m_editing)
-    DrawHub();
-  if (auto def = std::exchange(m_editRequest, {}))
-    Open(sim, *def);
-  if (!m_editing)
-    return;
-
-  float scale = View::UiScale();
-  ImGui::SetNextWindowPos({GetScreenWidth() - 12.0f * scale, 12.0f * scale},
-                          ImGuiCond_Always, {1.0f, 0.0f});
-  ImGui::SetNextWindowSize({360.0f * scale, GetScreenHeight() - 24.0f * scale},
-                           ImGuiCond_Always);
-  ImGui::Begin("Campaign editor", nullptr,
-               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_NoResize);
-  ImGui::SetNextItemWidth(-1);
-  ImGui::InputTextWithHint("##name", "Campaign name", m_name, sizeof m_name);
-  if (Widgets::Button("Save"))
-    StoreRoom(sim);
-  ImGui::SameLine();
-  if (Widgets::Button("Play this room")) {
-    if (StoreRoom(sim)) {
-      Vector2 at = m_room.pos == m_def.startRoom
-                       ? m_def.startPos
-                       : Vector2{GRID_W * 0.5f, GRID_H * 0.5f};
-      m_test = TestRequest{m_def, m_room.pos, at};
-    }
-  }
-  ImGui::SameLine();
-  if (Widgets::Button("Close")) {
-    Close(sim);
-    ImGui::End();
-    return;
-  }
-  if (!m_status.empty())
-    ImGui::TextWrapped("%s", m_status.c_str());
-
-  if (ImGui::CollapsingHeader("Rooms", ImGuiTreeNodeFlags_DefaultOpen))
-    DrawRoomMap(sim);
-  if (ImGui::CollapsingHeader("Tools", ImGuiTreeNodeFlags_DefaultOpen))
-    DrawTools();
-  if (m_tool == Tool::Paint) {
-    if (ImGui::CollapsingHeader("Terrain", ImGuiTreeNodeFlags_DefaultOpen))
-      DrawPaint(sim);
-  } else if (ImGui::CollapsingHeader("Selected", ImGuiTreeNodeFlags_DefaultOpen)) {
-    DrawSelected(ui);
-  }
-  if (ImGui::CollapsingHeader("Room"))
-    DrawRoomSettings();
-  if (ImGui::CollapsingHeader("Starting kit"))
-    DrawStartingKit(ui);
-  ImGui::End();
 }
 
 void CampaignEditor::DrawHub() {
@@ -564,110 +331,461 @@ void CampaignEditor::DrawRoomMap(Simulation &sim) {
     AddRoom(sim, grow->first, grow->second);
 }
 
-void CampaignEditor::DrawTools() {
+
+CampaignEditor::Selection CampaignEditor::HitTest(Vector2 cell) const {
+  for (int i = static_cast<int>(m_room.npcs.size()) - 1; i >= 0; --i)
+    if (CheckCollisionPointRec(cell, BodyBox(m_room.npcs[i].pos)))
+      return {Selection::Npc, i};
+  for (int i = static_cast<int>(m_room.enemies.size()) - 1; i >= 0; --i)
+    if (CheckCollisionPointRec(cell, BodyBox(m_room.enemies[i].pos)))
+      return {Selection::Enemy, i};
+  for (int i = static_cast<int>(m_room.objects.size()) - 1; i >= 0; --i)
+    if (CheckCollisionPointRec(cell, ObjectBox(m_room.objects[i])))
+      return {Selection::Object, i};
+  if (m_room.pos == m_def.startRoom &&
+      CheckCollisionPointRec(cell, BodyBox(m_def.startPos)))
+    return {Selection::Start, 0};
+  return {};
+}
+
+Vector2 &CampaignEditor::SelectedPos() {
+  switch (m_selected.kind) {
+  case Selection::Object:
+    return m_room.objects[m_selected.index].pos;
+  case Selection::Enemy:
+    return m_room.enemies[m_selected.index].pos;
+  case Selection::Npc:
+    return m_room.npcs[m_selected.index].pos;
+  default:
+    return m_def.startPos;
+  }
+}
+
+void CampaignEditor::Place(const Simulation &sim, Vector2 cell) {
+  Vector2 body{cell.x - Character::WIDTH * 0.5f, cell.y - Character::HEIGHT * 0.5f};
+  auto object = [&](ObjectKind kind) {
+    ObjectDef o;
+    o.kind = kind;
+    o.pos = OnFloor(sim, cell);
+    if (kind == ObjectKind::Shrine) {
+      o.glyph = "water";
+      o.sigil = true;
+    }
+    m_room.objects.push_back(o);
+    m_selected = {Selection::Object, static_cast<int>(m_room.objects.size()) - 1};
+  };
+  auto enemy = [&](EnemyKind kind) {
+    EnemyDef e;
+    e.kind = kind;
+    e.pos = body;
+    if (kind == EnemyKind::Mage) {
+      e.hp = 30.0f;
+      e.speed = 18.0f;
+      e.damage = 4.0f;
+    } else if (kind == EnemyKind::Flyer) {
+      e.hp = 20.0f;
+      e.speed = 26.0f;
+      e.damage = 6.0f;
+    }
+    m_room.enemies.push_back(e);
+    m_selected = {Selection::Enemy, static_cast<int>(m_room.enemies.size()) - 1};
+  };
+  switch (m_tool) {
+  case Tool::Gate:
+    object(ObjectKind::Gate);
+    break;
+  case Tool::Workbench:
+    object(ObjectKind::Workbench);
+    break;
+  case Tool::Shrine:
+    object(ObjectKind::Shrine);
+    break;
+  case Tool::Npc: {
+    NpcDef n;
+    Vector2 floor = OnFloor(sim, cell);
+    n.pos = {floor.x - Character::WIDTH * 0.5f, floor.y - Character::HEIGHT};
+    m_room.npcs.push_back(n);
+    m_selected = {Selection::Npc, static_cast<int>(m_room.npcs.size()) - 1};
+    break;
+  }
+  case Tool::Start:
+    m_def.startRoom = m_room.pos;
+    m_def.startPos = body;
+    m_selected = {Selection::Start, 0};
+    break;
+  case Tool::Mage:
+    enemy(EnemyKind::Mage);
+    break;
+  case Tool::Undead:
+    enemy(EnemyKind::Undead);
+    break;
+  case Tool::Flyer:
+    enemy(EnemyKind::Flyer);
+    break;
+  default:
+    break;
+  }
+}
+
+void CampaignEditor::RemoveSelected() {
+  if (m_selected.kind == Selection::Object)
+    m_room.objects.erase(m_room.objects.begin() + m_selected.index);
+  else if (m_selected.kind == Selection::Enemy)
+    m_room.enemies.erase(m_room.enemies.begin() + m_selected.index);
+  else if (m_selected.kind == Selection::Npc)
+    m_room.npcs.erase(m_room.npcs.begin() + m_selected.index);
+  m_selected = {};
+}
+
+void CampaignEditor::Resume(Simulation &sim) {
+  Maps::Build(sim, m_room.terrain, 1);
+}
+
+void CampaignEditor::HandleShortcuts(Simulation &sim) {
+  if (ImGui::GetIO().WantCaptureKeyboard)
+    return;
+  bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+  if (ctrl && IsKeyPressed(KEY_S)) {
+    StoreRoom(sim);
+    return;
+  }
+  if (m_tool == Tool::Paint)
+    m_brush.HandleKeys(sim); // 1-9, E, [ ], Ctrl+Z
+  else if (IsKeyPressed(KEY_DELETE) || IsKeyPressed(KEY_BACKSPACE))
+    RemoveSelected();
+  if (ctrl)
+    return;
+  struct Key {
+    KeyboardKey key;
+    Tool tool;
+  };
+  static const Key keys[] = {
+      {KEY_B, Tool::Paint},  {KEY_V, Tool::Select},    {KEY_T, Tool::Start},
+      {KEY_G, Tool::Gate},   {KEY_W, Tool::Workbench}, {KEY_H, Tool::Shrine},
+      {KEY_N, Tool::Npc},    {KEY_M, Tool::Mage},      {KEY_U, Tool::Undead},
+      {KEY_F, Tool::Flyer},
+  };
+  for (const Key &k : keys)
+    if (IsKeyPressed(k.key)) {
+      m_tool = k.tool;
+      m_dragging = false;
+    }
+  if (IsKeyPressed(KEY_ESCAPE))
+    m_selected = {};
+}
+
+void CampaignEditor::Update(Simulation &sim) {
+  if (!m_editing)
+    return;
+  // Drop a PNG on the window: this room's background
+  if (IsFileDropped()) {
+    FilePathList files = LoadDroppedFiles();
+    if (files.count > 0) {
+      std::string error;
+      if (auto file = ImportBackground(m_def.id, files.paths[0], error)) {
+        SetBackground(*file);
+        m_status = "Background set: " + *file;
+      } else {
+        m_status = error;
+      }
+    }
+    UnloadDroppedFiles(files);
+  }
+  HandleShortcuts(sim);
+
+  if (m_running) {
+    m_accumulator += std::min(GetFrameTime(), 0.1f);
+    while (m_accumulator >= TurnController::TICK_DT) {
+      m_accumulator -= TurnController::TICK_DT;
+      sim.Update(TurnController::TICK_DT);
+    }
+  }
+
+  Vector2 cell = View::MouseCells();
+  bool overUi = ImGui::GetIO().WantCaptureMouse;
+  if (m_tool == Tool::Paint) {
+    m_brush.Paint(sim, cell, overUi);
+    return;
+  }
+  if (m_tool == Tool::Region) {
+    if (m_regionFor < 0 || m_regionFor >= (int)m_room.conditions.size()) {
+      m_tool = Tool::Select;
+      return;
+    }
+    if (!overUi && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+      m_regionStart = cell;
+    if (m_regionStart) {
+      Vector2 a = *m_regionStart;
+      m_room.conditions[m_regionFor].region = {
+          std::floor(std::min(a.x, cell.x)), std::floor(std::min(a.y, cell.y)),
+          std::ceil(std::abs(cell.x - a.x)) + 1, std::ceil(std::abs(cell.y - a.y)) + 1};
+      if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        m_regionStart.reset();
+        m_tool = Tool::Select;
+        m_status = "Region set.";
+      }
+    }
+    return;
+  }
+
+  if (m_dragging) {
+    if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+      m_dragging = false;
+      if (m_selected.kind == Selection::Object)
+        SelectedPos() = OnFloor(sim, SelectedPos());
+      return;
+    }
+    SelectedPos() = {cell.x - m_dragOffset.x, cell.y - m_dragOffset.y};
+    return;
+  }
+  if (overUi)
+    return;
+  if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+    m_selected = {};
+    return;
+  }
+  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
+    return;
+  // Anything already there is picked up and dragged, whatever the tool
+  Selection hit = HitTest(cell);
+  if (hit.kind == Selection::None && m_tool != Tool::Select) {
+    Place(sim, cell);
+    return;
+  }
+  m_selected = hit;
+  if (hit.kind == Selection::None)
+    return;
+  Vector2 at = SelectedPos();
+  m_dragOffset = {cell.x - at.x, cell.y - at.y};
+  m_dragging = true;
+}
+
+void CampaignEditor::DrawWorld(const UI &ui) const {
+  if (!m_editing)
+    return;
+  auto px = [](Rectangle r) {
+    return Rectangle{r.x * CELL_SIZE, r.y * CELL_SIZE, r.width * CELL_SIZE,
+                     r.height * CELL_SIZE};
+  };
+  Color mark = Theme::Rl(Tone::Oxblood, 0.95f);
+  auto selected = [&](Selection::Kind kind, int i) {
+    return m_selected.kind == kind && m_selected.index == i;
+  };
+  for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
+    DrawCampaignObject(m_room.objects[i], true, ui.Glyphs());
+    if (selected(Selection::Object, i))
+      DrawRectangleLinesEx(px(ObjectBox(m_room.objects[i])), 2, mark);
+  }
+  auto body = [&](Vector2 pos, Color tint, const char *label, bool sel) {
+    Character c;
+    c.pos = pos;
+    c.grounded = true;
+    DrawCharacterBody(c, tint, false);
+    Rectangle r = px(BodyBox(pos));
+    Theme::DrawText(Theme::RlBody(), label, {r.x - 8, r.y - 40}, 16, tint);
+    if (sel)
+      DrawRectangleLinesEx(r, 2, mark);
+  };
+  for (int i = 0; i < static_cast<int>(m_room.enemies.size()); ++i) {
+    const EnemyDef &e = m_room.enemies[i];
+    std::string label = e.tag.empty() ? EnemyName(e.kind)
+                                      : std::string(EnemyName(e.kind)) + " (" + e.tag + ")";
+    body(e.pos, EnemyTint(e.kind), label.c_str(), selected(Selection::Enemy, i));
+  }
+  for (int i = 0; i < static_cast<int>(m_room.npcs.size()); ++i)
+    body(m_room.npcs[i].pos, NPC_TINT, m_room.npcs[i].name.c_str(),
+         selected(Selection::Npc, i));
+  if (m_room.pos == m_def.startRoom) {
+    Rectangle r = px(BodyBox(m_def.startPos));
+    DrawRectangleLinesEx(r, 2, Color{60, 140, 70, 255});
+    Theme::DrawText(Theme::RlBody(), "START", {r.x - 10, r.y - 22}, 16,
+                    Color{60, 140, 70, 255});
+  }
+  // Sealed edges and condition regions
+  constexpr float W = GRID_W * CELL_SIZE, H = GRID_H * CELL_SIZE;
+  Color seal{150, 90, 220, 220};
+  if (m_room.sealed[EdgeLeft])
+    DrawLineEx({3, 0}, {3, H}, 4, seal);
+  if (m_room.sealed[EdgeRight])
+    DrawLineEx({W - 3, 0}, {W - 3, H}, 4, seal);
+  if (m_room.sealed[EdgeUp])
+    DrawLineEx({0, 3}, {W, 3}, 4, seal);
+  if (m_room.sealed[EdgeDown])
+    DrawLineEx({0, H - 3}, {W, H - 3}, 4, seal);
+  for (int i = 0; i < (int)m_room.conditions.size(); ++i) {
+    const ConditionDef &c = m_room.conditions[i];
+    if (c.kind != ConditionKind::Break && c.kind != ConditionKind::Fill)
+      continue;
+    Rectangle r = px(c.region);
+    DrawRectangleRec(r, Color{150, 90, 220, 40});
+    DrawRectangleLinesEx(r, i == m_regionFor ? 3.0f : 2.0f, seal);
+    Theme::DrawText(Theme::RlBody(), TextFormat("%d: %s", i + 1, ConditionName(c.kind)),
+                    {r.x + 4, r.y + 2}, 14, seal);
+  }
+  if (m_tool == Tool::Paint && !ImGui::GetIO().WantCaptureMouse)
+    m_brush.DrawCursor(View::MouseCells());
+}
+
+void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
+  if (m_hub && !m_editing)
+    DrawHub();
+  if (auto def = std::exchange(m_editRequest, {}))
+    Open(sim, *def);
+  if (!m_editing)
+    return;
+
+  float s = View::UiScale();
+  float panelW = 380.0f * s;
+  DrawToolbar(sim, panelW);
+
+  ImGui::SetNextWindowPos({GetScreenWidth() - 8.0f * s, 8.0f * s},
+                          ImGuiCond_Always, {1.0f, 0.0f});
+  ImGui::SetNextWindowSize({panelW, GetScreenHeight() - 16.0f * s},
+                           ImGuiCond_Always);
+  ImGui::Begin("Campaign editor", nullptr,
+               ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar);
+  ImGui::SetNextItemWidth(-1);
+  ImGui::InputTextWithHint("##name", "Campaign name", m_name, sizeof m_name);
+  if (Widgets::Button("Save"))
+    StoreRoom(sim);
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Ctrl+S");
+  ImGui::SameLine();
+  if (Widgets::Button("Play this room")) {
+    if (StoreRoom(sim)) {
+      Vector2 at = m_room.pos == m_def.startRoom
+                       ? m_def.startPos
+                       : Vector2{GRID_W * 0.5f, GRID_H * 0.5f};
+      m_test = TestRequest{m_def, m_room.pos, at};
+    }
+  }
+  ImGui::SameLine();
+  if (Widgets::Button("Close")) {
+    Close(sim);
+    ImGui::End();
+    return;
+  }
+  if (!m_status.empty())
+    ImGui::TextWrapped("%s", m_status.c_str());
+
+  Widgets::SectionHeader("Rooms");
+  DrawRoomMap(sim);
+
+  if (ImGui::BeginTabBar("tabs")) {
+    // Picking something in the room brings its settings up
+    bool picked = m_selected.kind != Selection::None &&
+                  (m_selected.kind != m_shown.kind || m_selected.index != m_shown.index);
+    m_shown = m_selected;
+    if (ImGui::BeginTabItem("Selected", nullptr,
+                            picked ? ImGuiTabItemFlags_SetSelected : 0)) {
+      DrawSelected(ui);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Room")) {
+      DrawRoomTab(sim);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("Campaign")) {
+      DrawCampaignTab(ui);
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
+  }
+  ImGui::End();
+}
+
+// Tools along the top, and the paint palette when painting
+void CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
+  float s = View::UiScale();
+  ImGui::SetNextWindowPos({8 * s, 8 * s}, ImGuiCond_Always);
+  ImGui::SetNextWindowSize({GetScreenWidth() - panelWidth - 24 * s, 0}, ImGuiCond_Always);
+  ImGui::Begin("##toolbar", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_AlwaysAutoResize);
   struct Entry {
     Tool tool;
-    const char *label;
+    EditorIcon icon;
+    const char *tip;
   };
   static const Entry kTools[] = {
-      {Tool::Paint, "Paint"},   {Tool::Select, "Select"},   {Tool::Start, "Start"},
-      {Tool::Gate, "Gate"},     {Tool::Workbench, "Bench"}, {Tool::Shrine, "Shrine"},
-      {Tool::Mage, "Mage"},     {Tool::Undead, "Undead"},   {Tool::Flyer, "Flyer"},
+      {Tool::Paint, EditorIcon::Brush, "Paint terrain (B)"},
+      {Tool::Select, EditorIcon::Select, "Select and move (V)"},
+      {Tool::Start, EditorIcon::Start, "Where a new game starts (T)"},
+      {Tool::Gate, EditorIcon::Gate, "Windowway gate: checkpoint and travel (G)"},
+      {Tool::Workbench, EditorIcon::Bench, "Workbench: draw spells (W)"},
+      {Tool::Shrine, EditorIcon::Shrine, "Glyph shrine: teaches a glyph (H)"},
+      {Tool::Npc, EditorIcon::Npc, "Someone to talk to (N)"},
+      {Tool::Mage, EditorIcon::Mage, "Mage: casts its spells at you (M)"},
+      {Tool::Undead, EditorIcon::Undead, "Undead: charges and knocks back (U)"},
+      {Tool::Flyer, EditorIcon::Flyer, "Flyer: flies around walls to you (F)"},
   };
-  float w = 100.0f * View::UiScale();
   int n = 0;
   for (const Entry &e : kTools) {
-    if (Widgets::Button(e.label, {w, 0}, m_tool == e.tool)) {
+    ImGui::PushID(n++);
+    if (IconButton("##tool", e.icon, m_tool == e.tool, e.tip)) {
       m_tool = e.tool;
       m_dragging = false;
     }
-    if (++n % 3 != 0)
-      ImGui::SameLine();
-  }
-  ImGui::TextDisabled(m_tool == Tool::Paint
-                          ? "Left paints, right erases, wheel resizes."
-                          : "Click to place, drag to move, Delete removes,\n"
-                            "right click lets go.");
-}
-
-void CampaignEditor::DrawPaint(Simulation &sim) {
-  int n = 0;
-  for (Element e : kBrushElements) {
-    ImGui::PushID(static_cast<int>(e));
-    const char *label = e == Element::AIR ? "Erase" : ElementName(e);
-    if (Widgets::Button(label, {100.0f * View::UiScale(), 0}, m_brushElement == e))
-      m_brushElement = e;
     ImGui::PopID();
-    if (++n % 3 != 0)
-      ImGui::SameLine();
+    ImGui::SameLine(0, 4 * s);
   }
-  ImGui::NewLine();
-  ImGui::SliderInt("Brush", &m_brush, 0, 20);
-  if (Widgets::Button(m_running ? "Freeze the world" : "Let it settle"))
+  ImGui::SameLine(0, 14 * s);
+  if (IconButton("##settle", EditorIcon::Settle, m_running,
+                 m_running ? "Freeze the world" : "Let it settle: run the world so water and sand come to rest"))
     m_running = !m_running;
-
-  // Terrain from a 1v1 map
-  if (m_maps.empty() && Widgets::SmallButton("Copy from a 1v1 map..."))
-    m_maps = MapStore().LoadAll();
-  if (!m_maps.empty()) {
-    m_mapPick = std::clamp(m_mapPick, 0, (int)m_maps.size() - 1);
-    if (ImGui::BeginCombo("Map", m_maps[m_mapPick].name.c_str())) {
-      for (int i = 0; i < (int)m_maps.size(); ++i)
-        if (ImGui::Selectable(m_maps[i].name.c_str(), i == m_mapPick))
-          m_mapPick = i;
-      ImGui::EndCombo();
-    }
-    if (Widgets::Button("Copy it here (replaces the terrain)")) {
-      m_room.terrain.cells = m_maps[m_mapPick].cells;
-      m_room.terrain.settings = m_maps[m_mapPick].settings;
-      Maps::Build(sim, m_room.terrain, 1);
-      m_status = "Copied " + m_maps[m_mapPick].name + ".";
-    }
+  ImGui::SameLine(0, 14 * s);
+  if (m_tool == Tool::Paint) {
+    m_brush.DrawPalette();
+    ImGui::SameLine();
+    WrapToolbar(60 * s);
+    ImGui::BeginDisabled(!m_brush.CanUndo());
+    if (Widgets::SmallButton("Undo"))
+      m_brush.Undo(sim);
+    ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+      ImGui::SetTooltip("Ctrl+Z");
+    ImGui::PushStyleColor(ImGuiCol_Text, Theme::Vec(Tone::Faint));
+    ImGui::TextWrapped("Left paints, right erases, wheel or [ ] sizes, 1-9 pick, E eraser");
+    ImGui::PopStyleColor();
+  } else if (m_tool == Tool::Region) {
+    ImGui::TextColored(Theme::Vec(Tone::Oxblood),
+                       "Drag a rectangle for condition %d", m_regionFor + 1);
+  } else {
+    ImGui::TextDisabled(m_tool == Tool::Select
+                            ? "Click to select, drag to move, Delete removes"
+                            : "Click to place, click something to move it, Delete removes");
   }
-  if (Widgets::SmallButton("Clear to a bare floor")) {
-    RoomDef blank = BlankRoom(m_room.pos);
-    m_room.terrain.cells = blank.terrain.cells;
-    Maps::Build(sim, m_room.terrain, 1);
-  }
+  ImGui::End();
 }
 
 void CampaignEditor::DrawSelected(UI &ui) {
   switch (m_selected.kind) {
   case Selection::None:
-    ImGui::TextDisabled("Nothing selected.");
+    ImGui::TextDisabled("Nothing selected. Click something in the room.");
     return;
   case Selection::Start:
     ImGui::Text("Where a new game starts.");
     return;
+  case Selection::Npc:
+    DrawNpc(m_room.npcs[m_selected.index], ui);
+    break;
   case Selection::Object: {
     ObjectDef &o = m_room.objects[m_selected.index];
-    ImGui::Text("%s", ObjectName(o.kind));
+    Widgets::SectionHeader(ObjectName(o.kind));
     if (o.kind == ObjectKind::Gate)
-      ImGui::TextDisabled("A checkpoint: touching it saves the way back,\n"
-                          "and E travels between opened gates.");
+      ImGui::TextWrapped("A checkpoint: touching it saves the way back, and E "
+                         "travels between opened gates.");
     else if (o.kind == ObjectKind::Workbench)
-      ImGui::TextDisabled("E opens the spell editor (unlocked glyphs only).");
-    if (o.kind != ObjectKind::Shrine)
-      break;
-    GlyphDocs::Info info = GlyphDocs::Get(o.glyph);
-    if (ImGui::BeginCombo("Teaches", info.name ? info.name : o.glyph.c_str())) {
-      for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign}) {
-        ImGui::TextDisabled(kind == GlyphKind::Sigil ? "Sigils" : "Signs");
-        for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {
-          GlyphDocs::Info gi = GlyphDocs::Get(a->id);
-          if (ImGui::Selectable(gi.name ? gi.name : a->id.c_str(), a->id == o.glyph)) {
-            o.glyph = a->id;
-            o.sigil = kind == GlyphKind::Sigil;
-          }
-        }
-      }
-      ImGui::EndCombo();
-    }
+      ImGui::TextWrapped("E opens the spell editor (unlocked glyphs only).");
+    else
+      GlyphCombo("Teaches", o.glyph, o.sigil, ui, false);
     break;
   }
   case Selection::Enemy: {
     EnemyDef &e = m_room.enemies[m_selected.index];
-    ImGui::Text("%s", EnemyName(e.kind));
+    Widgets::SectionHeader(EnemyName(e.kind));
+    ImGui::InputTextWithHint("Tag", "for conditions, e.g. boss", &e.tag);
     ImGui::SliderFloat("Health", &e.hp, 5.0f, 300.0f, "%.0f");
     ImGui::SliderFloat("Speed", &e.speed, 5.0f, 80.0f, "%.0f cells/s");
     ImGui::SliderFloat("Touch damage", &e.damage, 0.0f, 50.0f, "%.0f");
@@ -689,16 +807,79 @@ void CampaignEditor::DrawSelected(UI &ui) {
     }
     ImGui::EndChild();
     if (e.spells.empty())
-      ImGui::TextColored(Theme::Vec(Tone::Brass), "With no spells it only walks.");
+      ImGui::TextColored(Theme::Vec(Tone::Oxblood), "With no spells it only walks.");
     break;
   }
   }
-  if (Widgets::SmallButton("Remove"))
+  ImGui::Spacing();
+  if (Widgets::SmallButton("Remove (Delete)"))
     RemoveSelected();
 }
 
-void CampaignEditor::DrawRoomSettings() {
-  ImGui::Text("Background: %s", m_room.background.empty() ? "none" : m_room.background.c_str());
+// An NPC: name, tag and the dialogue tree
+void CampaignEditor::DrawNpc(NpcDef &npc, UI &ui) {
+  Widgets::SectionHeader("Someone to talk to");
+  ImGui::InputText("Name", &npc.name);
+  ImGui::InputTextWithHint("Tag", "for \"talk to\" conditions", &npc.tag);
+  ImGui::TextDisabled("Spells and enemies pass them by. Node 1 starts the talk;\n"
+                      "a reply leads to another node or ends it.");
+  int remove = -1;
+  for (int i = 0; i < static_cast<int>(npc.dialogue.size()); ++i) {
+    DialogueNode &d = npc.dialogue[i];
+    ImGui::PushID(i);
+    std::string title = TextFormat("Node %d: %.24s", i + 1, d.text.c_str());
+    if (ImGui::CollapsingHeader(title.c_str(), i == 0 ? ImGuiTreeNodeFlags_DefaultOpen : 0)) {
+      ImGui::InputTextMultiline("##text", &d.text, {-1, 70 * View::UiScale()});
+      for (int r = 0; r < static_cast<int>(d.replies.size()); ++r) {
+        ImGui::PushID(r);
+        DialogueReply &rep = d.replies[r];
+        ImGui::SetNextItemWidth(170 * View::UiScale());
+        ImGui::InputTextWithHint("##reply", "Reply", &rep.text);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(90 * View::UiScale());
+        std::string to = rep.next < 0 ? "Ends" : TextFormat("Node %d", rep.next + 1);
+        if (ImGui::BeginCombo("##next", to.c_str())) {
+          if (ImGui::Selectable("Ends", rep.next < 0))
+            rep.next = -1;
+          for (int k = 0; k < static_cast<int>(npc.dialogue.size()); ++k)
+            if (ImGui::Selectable(TextFormat("Node %d", k + 1), rep.next == k))
+              rep.next = k;
+          ImGui::EndCombo();
+        }
+        ImGui::SameLine();
+        if (Widgets::SmallButton("x")) {
+          d.replies.erase(d.replies.begin() + r);
+          ImGui::PopID();
+          break;
+        }
+        ImGui::PopID();
+      }
+      if (d.replies.size() < MAX_REPLIES && Widgets::SmallButton("+ Reply"))
+        d.replies.push_back({"...", -1});
+      if (d.replies.empty())
+        ImGui::TextDisabled("No replies: the talk ends after this.");
+      GlyphCombo("Teaches", d.teach, d.teachSigil, ui, true);
+      if (i > 0 && Widgets::SmallButton("Delete node"))
+        remove = i;
+    }
+    ImGui::PopID();
+  }
+  if (remove > 0) {
+    npc.dialogue.erase(npc.dialogue.begin() + remove);
+    for (DialogueNode &d : npc.dialogue)
+      for (DialogueReply &r : d.replies)
+        r.next = r.next == remove ? -1 : r.next > remove ? r.next - 1 : r.next;
+  }
+  if (Widgets::SmallButton("+ Node"))
+    npc.dialogue.push_back({"...", {}, "", false});
+}
+
+void CampaignEditor::DrawRoomTab(Simulation &sim) {
+  Widgets::SectionHeader("To leave this room");
+  DrawConditions();
+
+  Widgets::SectionHeader("Background");
+  ImGui::Text("%s", m_room.background.empty() ? "None" : m_room.background.c_str());
   ImGui::TextDisabled("Drop a PNG on the window, or give its path:");
   ImGui::SetNextItemWidth(-80 * View::UiScale());
   ImGui::InputText("##bg", m_bgPath, sizeof m_bgPath);
@@ -712,7 +893,6 @@ void CampaignEditor::DrawRoomSettings() {
       m_status = error;
     }
   }
-  // Ones this campaign already has
   std::error_code ec;
   std::string dir = Dir(m_def.id) + "/backgrounds";
   if (std::filesystem::exists(dir, ec))
@@ -725,10 +905,105 @@ void CampaignEditor::DrawRoomSettings() {
   ImGui::NewLine();
   if (!m_room.background.empty() && Widgets::SmallButton("No background"))
     SetBackground("");
+
+  Widgets::SectionHeader("Terrain");
+  if (m_maps.empty() && Widgets::SmallButton("Copy from a 1v1 map..."))
+    m_maps = MapStore().LoadAll();
+  if (!m_maps.empty()) {
+    m_mapPick = std::clamp(m_mapPick, 0, (int)m_maps.size() - 1);
+    ImGui::SetNextItemWidth(180 * View::UiScale());
+    if (ImGui::BeginCombo("##map", m_maps[m_mapPick].name.c_str())) {
+      for (int i = 0; i < (int)m_maps.size(); ++i)
+        if (ImGui::Selectable(m_maps[i].name.c_str(), i == m_mapPick))
+          m_mapPick = i;
+      ImGui::EndCombo();
+    }
+    ImGui::SameLine();
+    if (Widgets::SmallButton("Copy here")) {
+      m_room.terrain.cells = m_maps[m_mapPick].cells;
+      m_room.terrain.settings = m_maps[m_mapPick].settings;
+      Maps::Build(sim, m_room.terrain, 1);
+      m_brush.ClearHistory();
+      m_status = "Copied " + m_maps[m_mapPick].name + ".";
+    }
+  }
+  if (Widgets::SmallButton("Clear to a bare floor")) {
+    m_room.terrain.cells = BlankRoom(m_room.pos).terrain.cells;
+    Maps::Build(sim, m_room.terrain, 1);
+    m_brush.ClearHistory();
+  }
 }
 
-void CampaignEditor::DrawStartingKit(UI &ui) {
-  ImGui::TextDisabled("Glyphs a new game starts with; shrines teach the rest.");
+void CampaignEditor::DrawConditions() {
+  ImGui::TextDisabled("Sealed edges stay shut until every condition holds.");
+  for (int e = 0; e < EDGES; ++e) {
+    if (e)
+      ImGui::SameLine();
+    ImGui::Checkbox(EDGE_NAMES[e], &m_room.sealed[e]);
+  }
+  int remove = -1;
+  for (int i = 0; i < static_cast<int>(m_room.conditions.size()); ++i) {
+    ConditionDef &c = m_room.conditions[i];
+    ImGui::PushID(i);
+    ImGui::Separator();
+    int kind = static_cast<int>(c.kind);
+    const char *names[static_cast<int>(ConditionKind::Count)];
+    for (int k = 0; k < static_cast<int>(ConditionKind::Count); ++k)
+      names[k] = ConditionName(static_cast<ConditionKind>(k));
+    ImGui::SetNextItemWidth(220 * View::UiScale());
+    if (ImGui::Combo(TextFormat("%d", i + 1), &kind, names, IM_ARRAYSIZE(names)))
+      c.kind = static_cast<ConditionKind>(kind);
+    ImGui::SameLine();
+    if (Widgets::SmallButton("x"))
+      remove = i;
+    switch (c.kind) {
+    case ConditionKind::Defeat:
+      ImGui::InputTextWithHint("Tag", "empty: every enemy", &c.tag);
+      break;
+    case ConditionKind::Break:
+    case ConditionKind::Fill:
+      if (Widgets::SmallButton(c.region.width > 0 ? "Redraw region" : "Draw region")) {
+        m_tool = Tool::Region;
+        m_regionFor = i;
+      }
+      if (c.kind == ConditionKind::Break) {
+        float pct = c.share * 100.0f;
+        if (ImGui::SliderFloat("Broken", &pct, 5.0f, 100.0f, "%.0f%%"))
+          c.share = pct / 100.0f;
+      } else {
+        int el = static_cast<int>(c.element);
+        const char *els[] = {"Air",  "Water", "Earth", "Fire",  "Steam", "Cloud", "Ice",
+                             "Sand", "Rock",  "Wood",  "Grass", "Smoke"};
+        if (ImGui::Combo("Element", &el, els, IM_ARRAYSIZE(els)))
+          c.element = static_cast<Element>(el);
+        ImGui::SliderInt("Cells", &c.amount, 1, 2000);
+      }
+      break;
+    case ConditionKind::Talk: {
+      ImGui::InputTextWithHint("NPC tag", "empty: the first NPC", &c.tag);
+      int node = c.node + 1;
+      if (ImGui::InputInt("Up to node", &node))
+        c.node = std::max(0, node) - 1;
+      ImGui::TextDisabled("Node 0: just talking is enough.");
+      break;
+    }
+    default:
+      break;
+    }
+    ImGui::InputTextWithHint("Hint", "shown to the player (optional)", &c.hint);
+    ImGui::PopID();
+  }
+  if (remove >= 0) {
+    m_room.conditions.erase(m_room.conditions.begin() + remove);
+    m_regionFor = -1;
+  }
+  if (Widgets::SmallButton("+ Condition"))
+    m_room.conditions.push_back({});
+}
+
+void CampaignEditor::DrawCampaignTab(UI &ui) {
+  Widgets::SectionHeader("Starting kit");
+  ImGui::TextDisabled("Glyphs a new game knows; shrines and NPCs teach the rest.");
   for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign}) {
     int n = 0;
     for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {
