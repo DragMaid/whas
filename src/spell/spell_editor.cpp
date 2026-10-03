@@ -216,7 +216,9 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.hardnessScale != 1.0f)
     ImGui::Text("Lands x%.2f as hard", stats.hardnessScale);
   if (stats.crush > 0.0f)
-    ImGui::Text("Crushes what it hits to sand (%.1f)", stats.crush);
+    ImGui::Text("Crushes (%.1f): rock and earth burst out as sand, %d "
+                "cells around the hit",
+                stats.crush, std::min(4, static_cast<int>(stats.crush)));
   else if (stats.crush < 0.0f)
     ImGui::Text("Reforms sand into earth (%.1f)", -stats.crush);
   if (stats.restore > 0.0f)
@@ -1217,6 +1219,11 @@ void DrawStatChanges(const Spell &beforeSpell, const Spell &afterSpell) {
     add("Guided turn", a.homeTurnRate * RAD2DEG, b.homeTurnRate * RAD2DEG, 1,
         "%.0f deg/s");
     add("Follows cursor", a.steerTime, b.steerTime, 1, "%.1fs");
+    add("Crush", std::max(0.0f, a.crush), std::max(0.0f, b.crush), 1, "%.1f");
+    add("Reform", std::max(0.0f, -a.crush), std::max(0.0f, -b.crush), 1,
+        "%.1f");
+    add("Restore", a.restore, b.restore, 1, "%.1f");
+    add("Cooling", -a.temperatureDelta, -b.temperatureDelta, 0, "%.0f C");
   }
   if (rows.empty())
     return;
