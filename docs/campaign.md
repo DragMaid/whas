@@ -101,9 +101,3 @@ background PNG decoded. Crossing an edge then only rebuilds the terrain and
 uploads one texture, without waiting on the disk. Rooms further than one
 step away are dropped from the cache. Code: `CampaignPlay::Preload`,
 `Fetch` and `EnterRoom`.
-
-## Camera
-
-`View::Follow` keeps the player centred at twice the fitted zoom, easing
-toward them, and never shows past the room's edges (on a window taller or
-wider than the room it centres instead). Entering a room snaps it.

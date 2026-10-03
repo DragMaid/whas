@@ -8,7 +8,7 @@ Everything lives in a static library `whas`; `whasg` (the game) and
 
 One fixed-size grid of cells, `GRID_W x GRID_H` (`include/whas/constants.h`),
 drawn `CELL_SIZE` pixels each. The view (`engine/view.cpp`) scales it to fit
-the window, or follows a point zoomed in (campaigns).
+the window.
 
 | Part | Where | What it does |
 |---|---|---|
