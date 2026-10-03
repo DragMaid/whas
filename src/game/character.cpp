@@ -61,16 +61,25 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   if (wet > 0.0f)
     wet = std::max(0.0f, wet - dt * (flying ? FLIGHT_DRY_RATE : 1.0f));
 
-  // Buried (a spell dropped sand or earth on us, or made it under our feet):
-  // pop up onto the top of the pile instead of being stuck inside it
+  // Terrain grew into us: slip out to the nearest free spot, in any
+  // direction, if one is close. Further than that we're walled in and have
+  // to dig out (loose grains are thrown off by Unbury first).
   if (Collides(sim, pos)) {
-    for (float y = std::floor(pos.y) - 1.0f; y >= -HEIGHT; y -= 1.0f) {
-      if (!Collides(sim, {pos.x, y})) {
-        pos.y = y;
-        vel.y = std::min(vel.y, 0.0f);
-        grounded = true;
-        break;
+    float best = 1e9f;
+    Vector2 to = pos;
+    for (int dy = -UNSTUCK_REACH; dy <= UNSTUCK_REACH; ++dy)
+      for (int dx = -UNSTUCK_REACH; dx <= UNSTUCK_REACH; ++dx) {
+        // Prefer up a little: standing on what buried us beats sinking
+        float d = static_cast<float>(dx * dx + dy * dy) + (dy > 0 ? 0.5f : 0.0f);
+        Vector2 at{std::round(pos.x) + dx, std::round(pos.y) + dy};
+        if (d < best && !Collides(sim, at)) {
+          best = d;
+          to = at;
+        }
       }
+    if (best < 1e9f) {
+      pos = to;
+      vel = {0.0f, std::min(vel.y, 0.0f)};
     }
   }
 
@@ -142,6 +151,41 @@ void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
   grounded = Collides(sim, {pos.x, pos.y + 0.05f});
   if (grounded)
     flying = false;
+}
+
+void Character::Unbury(Simulation &sim) {
+  constexpr float eps = 0.001f;
+  int x0 = static_cast<int>(std::floor(pos.x + eps));
+  int x1 = static_cast<int>(std::floor(pos.x + WIDTH - eps));
+  int y0 = static_cast<int>(std::floor(pos.y + eps));
+  int y1 = static_cast<int>(std::floor(pos.y + HEIGHT - eps));
+  float cx = pos.x + WIDTH * 0.5f;
+  for (int y = std::max(0, y0); y <= std::min(GRID_H - 1, y1); ++y)
+    for (int x = std::max(0, x0); x <= std::min(GRID_W - 1, x1); ++x) {
+      const Cell &c = sim.GetCell(x, y);
+      const auto &props =
+          sim.GetConfig().elements[static_cast<size_t>(c.element)];
+      if (c.element == Element::AIR || !props.mobile || !props.solid)
+        continue;
+      // Shrugged off to the nearer side and up
+      Element e = c.element;
+      float side = x + 0.5f < cx ? -1.0f : 1.0f;
+      float depth = static_cast<float>(y - y0) / HEIGHT;
+      sim.Erase(x, y, 0);
+      sim.GetParticleSystem().Spawn({x + 0.5f, y + 0.5f},
+                                    {side * (18.0f + 10.0f * depth),
+                                     -22.0f - 8.0f * depth},
+                                    e);
+    }
+}
+
+void Character::PlaceClear(const Simulation &sim) {
+  for (float y = std::floor(pos.y); y >= -HEIGHT; y -= 1.0f)
+    if (!Collides(sim, {pos.x, y})) {
+      pos.y = y;
+      break;
+    }
+  Step(sim, {}, 0.0f);
 }
 
 void Character::Launch(Vector2 velocity) {
