@@ -21,7 +21,6 @@ using Theme::Tone;
 namespace {
 
 constexpr int PLAYER_ID = 1;
-constexpr float CAMERA_ZOOM = 2.0f;
 constexpr float REACH = 9.0f;        // cells to use an object
 constexpr float RESPAWN_DELAY = 1.5f; // seconds lying there before respawning
 constexpr int MAX_TICKS_PER_FRAME = 3;
@@ -164,7 +163,6 @@ void CampaignPlay::Stop() {
   m_enemies.clear();
   m_bench.Close();
   m_backpack = m_warp = false;
-  View::StopFollowing();
 }
 
 void CampaignPlay::Preload(RoomPos pos) {
@@ -226,8 +224,6 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   for (auto [dx, dy] : {std::pair{1, 0}, {-1, 0}, {0, 1}, {0, -1}})
     Preload(pos.Step(dx, dy));
   SaveProgress();
-  View::Follow({m_player.Center().x * CELL_SIZE, m_player.Center().y * CELL_SIZE},
-               CAMERA_ZOOM, true);
 }
 
 void CampaignPlay::Respawn(Simulation &sim) {
@@ -337,8 +333,6 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
   }
   m_accumulator = std::min(m_accumulator, TurnController::TICK_DT);
   m_trail.Update(&m_player, 1, GetFrameTime());
-  View::Follow({m_player.Center().x * CELL_SIZE, m_player.Center().y * CELL_SIZE},
-               CAMERA_ZOOM);
 }
 
 void CampaignPlay::Cast(Simulation &sim, UI &ui) {
