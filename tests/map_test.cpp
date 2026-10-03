@@ -1,3 +1,4 @@
+#include "whas/core/bytes.h"
 #include "whas/core/config_json.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
@@ -147,4 +148,37 @@ TEST_CASE("signs are counted per circle against the limit", "[spell]") {
   // More than five spells in a layer is over the limit too, but still a spell
   layered.components.assign(LAYER_MAX_COMPONENTS + 1, part);
   REQUIRE(SpellRules::CountGlyphs(layered).OverLimit());
+}
+
+TEST_CASE("maps made at an older world size are stretched to this one",
+          "[map]") {
+  // A 1280x720-era map (320x180 cells, no "size"): rock below row 150
+  nlohmann::json j = Maps::ToJson(GeneratedMap(3));
+  j.erase("size");
+  j["spawns"] = {{40.0, 130.0}, {270.0, 130.0}};
+
+  // Encode 320x180 directly: runs of (count, element)
+  std::vector<uint8_t> rle;
+  auto run = [&](size_t n, Element e) {
+    for (; n >= 0x80; n >>= 7)
+      rle.push_back(static_cast<uint8_t>(n & 0x7F) | 0x80);
+    rle.push_back(static_cast<uint8_t>(n));
+    rle.push_back(static_cast<uint8_t>(e));
+  };
+  run(150 * 320, Element::AIR);
+  run(30 * 320, Element::ROCK);
+  j["cells"] = Base64::Encode(rle);
+
+  MapDef back;
+  std::string error;
+  REQUIRE(Maps::FromJson(j, back, error));
+  REQUIRE(back.cells.size() == static_cast<size_t>(GRID_W) * GRID_H);
+  int floorRow = 150 * GRID_H / 180;
+  REQUIRE(back.cells[static_cast<size_t>(floorRow + 1) * GRID_W + 10] ==
+          static_cast<uint8_t>(Element::ROCK));
+  REQUIRE(back.cells[static_cast<size_t>(floorRow - 2) * GRID_W + 10] ==
+          static_cast<uint8_t>(Element::AIR));
+  REQUIRE(back.spawns[0].x == 40.0f * GRID_W / 320);
+  // Saved again, it's at this size
+  REQUIRE(Maps::ToJson(back)["size"][0] == GRID_W);
 }
