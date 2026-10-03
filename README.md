@@ -5,6 +5,7 @@ A falling-sand duel game. You draw spells as circles of sigils and signs, then f
 - Client: C++20, raylib and ImGui (`src/`, `include/`)
 - Server: .NET 10 with Postgres (`server/`)
 - Wire protocol: `docs/protocol.md`
+- More documentation (architecture, spells, campaigns): [`docs/`](docs/README.md)
 
 ## Building the game
 
@@ -77,7 +78,7 @@ cmake --build build --target whas_tests  # the tests only
 |---|---|
 | `--server ws://host:8080/ws` | Connect to a server at start-up (`wss://` works too, for TLS tunnels like ngrok) |
 | `--identity data/guest-2.json` | Use another guest identity file. Lets two copies on one machine play as different players; a second copy picks a free one on its own. |
-| `--open SCREEN` | Start on a screen instead of the menu: `sandbox`, `duel` (solo planned duel), `rts` (solo real-time duel), `spells` (library), `spell-editor`, `maps` (gallery), `map-editor` |
+| `--open SCREEN` | Start on a screen instead of the menu: `sandbox`, `duel` (solo planned duel), `rts` (solo real-time duel), `spells` (library), `spell-editor`, `maps` (gallery), `map-editor`, `campaigns` (list), `campaign:<id>` (continue that campaign) |
 | `--watch replay.json` | Open a saved replay, for example one from `data/replays/` |
 | `--screenshot shot.png` | Save the screen after one second and quit (for checking screens without clicking through them) |
 | `--replay match.json --verify` | No window: re-simulate a replay and check every turn against the hashes the players reported. Exits 0 when everything matches. |
@@ -93,6 +94,7 @@ cmake --build build --target whas_tests  # the tests only
 | `F4` | Simulation settings |
 | `F11` | Borderless window |
 | `1`-`6` | Pick a hotbar spell |
+| `Q` | Cast from yourself, or place the spell on the ground or a wall (press on a surface, drag to aim) |
 
 **Planned duel**
 
@@ -110,6 +112,8 @@ cmake --build build --target whas_tests  # the tests only
 - `W` or `Space`: jump
 - `S`: dive
 - Click: cast the selected spell. A spell can't be cast again until as long as its cast time has passed.
+
+**Campaign**: see [docs/campaign.md](docs/campaign.md) (`B` backpack, `E` use, `1`-`3` slots)
 
 **Map editor**
 
@@ -129,6 +133,7 @@ cmake --build build --target whas_tests  # the tests only
 | `data/maps/` | Your maps and their thumbnails |
 | `data/replays/` | Replays of the online matches you finished |
 | `data/guest*.json` | Your guest identity per server |
+| `data/campaigns/*/save.json`, `backpack/` | Your progress and workbench spells in each campaign (the campaigns themselves can be committed) |
 
 ## Tests
 
