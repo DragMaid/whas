@@ -189,6 +189,10 @@ struct ModifierTuning {
   float reformChancePerSign = 0.25f;
   float radiusPerSign = 1.0f; // cells beyond the one that was hit
   int maxRadius = 4;
+  // Crushed grit is thrown out of the hole, away from where it was hit
+  float debrisSpeedMin = 25.0f; // cells/s
+  float debrisSpeedMax = 60.0f;
+  float debrisLift = 15.0f;
 };
 
 constexpr ModifierTuning kModifier;
@@ -206,7 +210,7 @@ void ReplaceCell(Grid &grid, ElementContext &ctx, int x, int y,
   ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, wasStatic || isStatic);
 }
 
-// Crushing grinds rock and earth into sand; inverted, it packs sand back into
+// Crushing grinds rock and earth into sand thrown out of the hole; inverted, it packs sand back into
 // earth. Repetition puts cells back the way the world made them: default
 // temperature and hardness, no longer burning.
 void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
@@ -226,7 +230,21 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
           (c.element == Element::ROCK || c.element == Element::EARTH) &&
           RandomUnit(ctx) < p.crush * kModifier.crushChancePerSign) {
         ctx.particles.Note({ParticleNoise::Break, c.element, {x + 0.5f, y + 0.5f}});
-        ReplaceCell(grid, ctx, x, y, Element::SAND);
+        ReplaceCell(grid, ctx, x, y, Element::AIR);
+        // Out of the hole: away from the hit, or back along the spell
+        Vector2 out{static_cast<float>(dx), static_cast<float>(dy)};
+        if (dx == 0 && dy == 0)
+          out = {-p.vel.x, -p.vel.y};
+        float len = std::sqrt(out.x * out.x + out.y * out.y);
+        if (len > 0.0f)
+          out = {out.x / len, out.y / len};
+        float speed = kModifier.debrisSpeedMin +
+                      RandomUnit(ctx) * (kModifier.debrisSpeedMax -
+                                         kModifier.debrisSpeedMin);
+        ParticleSystem::SpawnFrom(
+            ctx, {x + 0.5f, y + 0.5f},
+            {out.x * speed, out.y * speed - kModifier.debrisLift},
+            Element::SAND);
       } else if (p.crush < 0.0f && c.element == Element::SAND &&
                  RandomUnit(ctx) < -p.crush * kModifier.reformChancePerSign) {
         ReplaceCell(grid, ctx, x, y, Element::EARTH);

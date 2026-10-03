@@ -92,6 +92,13 @@ TEST_CASE("crushing grinds earth into sand and inverted crushing reforms it",
   Step(sim, 90);
   int crushed = Count(sim, Element::SAND);
   REQUIRE(crushed > sand + 10);
+  // It digs: the grit is thrown out of the block, not left where it was
+  int thrown = 0;
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      thrown += sim.GetCell(x, y).element == Element::SAND &&
+                (x < 150 || x >= 170 || y < GRID_H - 40);
+  REQUIRE(thrown > 5);
 
   SpellStats reform =
       SpellQuant::Canonical(Make("water", {Sign("crushing", 2.0f, true)}));
