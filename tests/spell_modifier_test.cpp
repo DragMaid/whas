@@ -43,7 +43,7 @@ Spell Make(const char *sigil, std::vector<PlacedGlyph> modifiers = {}) {
   Spell s;
   s.name = sigil;
   s.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f});
-  s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 2.0f, 0.0f});
+  s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 2.0f, 0.0f});
   for (auto &m : modifiers)
     s.glyphs.push_back(m);
   return s;
@@ -516,7 +516,7 @@ TEST_CASE("the dragon sigil shapes a spell but needs an element", "[spell]") {
 
   Spell alone;
   alone.glyphs = {{"dragon", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
-                  {"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
+                  {"levitation", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
   REQUIRE_FALSE(SpellSystem::Evaluate(alone).valid);
 }
 
@@ -1029,4 +1029,99 @@ TEST_CASE("convergence makes spells faster, tighter and smaller", "[spell]") {
   REQUIRE(blast.valid);
   REQUIRE(blast.force > gust.force);
   REQUIRE(blast.diameter < gust.diameter);
+}
+
+namespace {
+
+int Held(const Simulation &sim, Element e) {
+  int n = 0;
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x) {
+      const Cell &c = sim.GetCell(x, y);
+      n += c.element == e && (c.flags & CELL_HELD);
+    }
+  return n;
+}
+
+Spell ColumnOf(const char *sigil, bool levitate, bool repetition = false) {
+  Spell s;
+  s.name = "col";
+  s.glyphs = {{sigil, GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
+              {"column", GlyphKind::Sign, {100, 0}, 1.0f, 0.0f}};
+  if (levitate)
+    s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 2.0f, 0.0f});
+  if (repetition)
+    s.glyphs.push_back({"repetition", GlyphKind::Sign, {-100, 0}, 1.0f, 0.0f});
+  return s;
+}
+
+} // namespace
+
+TEST_CASE("a column holds water as a pillar, then lets it fall", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(11);
+  Floor(sim);
+  SpellStats stats = SpellQuant::Canonical(ColumnOf("water", false));
+  REQUIRE(stats.valid);
+  REQUIRE(stats.holdTime > 0.0f);
+  REQUIRE(stats.speed == 0.0f);
+
+  // Aimed straight up from just above the floor
+  sim.CastSpell(stats, {100, GRID_H - 12.0f}, {0, -1});
+  Step(sim, 2);
+  int held = Held(sim, Element::WATER);
+  REQUIRE(held >= stats.particleCount * 3 / 4);
+  // A second in, the pillar still stands where it was made
+  Step(sim, 60);
+  REQUIRE(Held(sim, Element::WATER) == held);
+  for (int y = GRID_H - 25; y < GRID_H - 20; ++y)
+    REQUIRE(sim.GetCell(100, y).element == Element::WATER);
+
+  // Let go: the water is still there, but it falls
+  Step(sim, (int)(stats.holdTime * 60) + 30);
+  REQUIRE(Held(sim, Element::WATER) == 0);
+  REQUIRE(Count(sim, Element::WATER) + sim.GetParticleCount() >= held * 3 / 4);
+  REQUIRE(sim.GetCell(100, GRID_H - 22).element != Element::WATER);
+}
+
+TEST_CASE("repetition mends a held column, without it damage stays",
+          "[spell]") {
+  for (bool repetition : {false, true}) {
+    Simulation sim;
+    sim.SetSeed(12);
+    Floor(sim);
+    SpellStats stats =
+        SpellQuant::Canonical(ColumnOf("earth", false, repetition));
+    sim.CastSpell(stats, {100, GRID_H - 12.0f}, {0, -1});
+    Step(sim, 2);
+    int held = Held(sim, Element::EARTH);
+    REQUIRE(held > 10);
+    sim.Erase(100, GRID_H - 22, 2); // a hole knocked in it
+    Step(sim, 10);
+    if (repetition)
+      REQUIRE(Held(sim, Element::EARTH) == held);
+    else
+      REQUIRE(Held(sim, Element::EARTH) < held);
+  }
+}
+
+TEST_CASE("levitation launches a column as one block that lands held",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(13);
+  Floor(sim);
+  SpellStats stats = SpellQuant::Canonical(ColumnOf("sand", true));
+  REQUIRE(stats.speed > 0.0f);
+  sim.CastSpell(stats, {60, GRID_H - 40.0f}, {1, 0});
+  Step(sim, 2);
+  REQUIRE(Held(sim, Element::SAND) == 0); // flying
+  Step(sim, (int)(stats.range / stats.speed * 60) + 4);
+  int held = Held(sim, Element::SAND);
+  REQUIRE(held > stats.particleCount / 2);
+  // Set down near where it flew, still in the air: held, not fallen
+  int far = 0;
+  for (int y = GRID_H - 60; y < GRID_H - 20; ++y)
+    for (int x = 60 + (int)stats.range - 10; x < GRID_W; ++x)
+      far += sim.GetCell(x, y).element == Element::SAND;
+  REQUIRE(far > held / 2);
 }

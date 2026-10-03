@@ -32,7 +32,8 @@ bool Stats::operator==(const Stats &o) const {
          homeTarget == o.homeTarget && homeElement == o.homeElement &&
          homeTurnRate == o.homeTurnRate && homeRadius == o.homeRadius &&
          steerTime == o.steerTime && steerRate == o.steerRate &&
-         parts == o.parts;
+         holdTime == o.holdTime && holdLength == o.holdLength &&
+         holdWidth == o.holdWidth && parts == o.parts;
 }
 
 Stats Quantize(const SpellStats &s) {
@@ -68,6 +69,9 @@ Stats Quantize(const SpellStats &s) {
   q.homeRadius = Q(s.homeRadius, STAT_SCALE);
   q.steerTime = Q(s.steerTime, STAT_SCALE);
   q.steerRate = Q(s.steerRate, STAT_SCALE);
+  q.holdTime = Q(s.holdTime, STAT_SCALE);
+  q.holdLength = Q(s.holdLength, STAT_SCALE);
+  q.holdWidth = Q(s.holdWidth, STAT_SCALE);
   for (const SpellStats &part : s.parts)
     q.parts.push_back(Quantize(part));
   return q;
@@ -106,6 +110,9 @@ SpellStats Dequantize(const Stats &q) {
   s.homeRadius = D(q.homeRadius, STAT_SCALE);
   s.steerTime = D(q.steerTime, STAT_SCALE);
   s.steerRate = D(q.steerRate, STAT_SCALE);
+  s.holdTime = D(q.holdTime, STAT_SCALE);
+  s.holdLength = D(q.holdLength, STAT_SCALE);
+  s.holdWidth = D(q.holdWidth, STAT_SCALE);
   for (const Stats &part : q.parts)
     s.parts.push_back(Dequantize(part));
   // Only used for the editor's balance display; the direction comes from
@@ -174,6 +181,11 @@ void to_json(nlohmann::json &j, const Stats &s) {
     j["steerTime"] = s.steerTime;
     j["steerRate"] = s.steerRate;
   }
+  if (s.holdTime != 0) {
+    j["holdTime"] = s.holdTime;
+    j["holdLength"] = s.holdLength;
+    j["holdWidth"] = s.holdWidth;
+  }
   if (!s.parts.empty()) {
     j["parts"] = nlohmann::json::array();
     for (const Stats &part : s.parts) {
@@ -216,6 +228,9 @@ void from_json(const nlohmann::json &j, Stats &s) {
   s.homeRadius = j.value("homeRadius", int32_t{0});
   s.steerTime = j.value("steerTime", int32_t{0});
   s.steerRate = j.value("steerRate", int32_t{0});
+  s.holdTime = j.value("holdTime", int32_t{0});
+  s.holdLength = j.value("holdLength", int32_t{0});
+  s.holdWidth = j.value("holdWidth", int32_t{0});
   s.parts.clear();
   if (auto it = j.find("parts"); it != j.end())
     for (const auto &pj : *it) {

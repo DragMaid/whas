@@ -79,6 +79,12 @@ struct SpellStats {
   float restore = 0.0f; // repetition: resets what it hits to its natural state
   float collectRadius = 0.0f; // collection: cells around the caster...
   int collectMax = 0;         // ...and how many of them it can draw in
+  // Column: held as a block holdLength cells along the aim and holdWidth
+  // across for holdTime seconds, then let go into the world. Speed 0 when
+  // nothing levitates it.
+  float holdTime = 0.0f;
+  float holdLength = 0.0f;
+  float holdWidth = 0.0f;
 
   // Compound: one entry per embedded spell, each ready to fire
   std::vector<SpellStats> parts;
@@ -99,6 +105,14 @@ struct SpellEffect {
   int bonusParticles = 0;     // drawn in by collection when cast
   int guideId = -1; // steered spells: the path its particles follow
   int castId = -1;  // on its particles, so they don't collide with each other
+  // Column: forming, flying as a block, holding, then done. holdTicks
+  // counts down the current phase; holdCells are the cells it keeps
+  // (y * GRID_W + x).
+  enum HoldPhase : uint8_t { HoldForming, HoldFlying, HoldHolding, HoldDone };
+  uint8_t holdPhase = HoldForming;
+  int holdTicks = 0;
+  float holdGap = 0.0f; // cells between the origin and the block's near end
+  std::vector<int32_t> holdCells;
 };
 
 namespace SpellSystem {

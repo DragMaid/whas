@@ -17,7 +17,7 @@ Spell MakeSpell(const char *sigil, float sigilScale, int signs) {
   spell.name = sigil;
   spell.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, sigilScale, 0.0f});
   for (int i = 0; i < signs; ++i)
-    spell.glyphs.push_back({"column", GlyphKind::Sign, {0, -100}, 1.0f, 0.0f});
+    spell.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -100}, 1.0f, 0.0f});
   // Wind only moves things: an inverted pulling sign makes it push
   if (std::string_view(sigil) == "wind")
     spell.glyphs.push_back(
@@ -308,7 +308,7 @@ TEST_CASE("real-time casts wait out their cast time", "[match]") {
   Spell water;
   water.name = "Water";
   water.glyphs = {{"water", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
-                  {"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
+                  {"levitation", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
   PlannedCast cast = PlannedCast::Local(water, {1, 0});
   REQUIRE(cast.stats.valid);
   int ticks = TurnController::CastTicks(cast.stats);
@@ -339,7 +339,7 @@ TEST_CASE("real-time rounds play the same on every machine", "[match]") {
   Match::State sb = Match::BeginRound(b, 99, 0, &options);
   Spell water;
   water.glyphs = {{"water", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
-                  {"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
+                  {"levitation", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
   for (int tick = 0; tick < 240; ++tick) {
     TurnPlan p0, p1;
     PlanStep s0, s1;

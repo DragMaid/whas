@@ -44,8 +44,8 @@ std::vector<Spell> SpellStore::LoadAll() const {
       Spell spell;
       spell.name = j.value("name", entry.path().stem().string());
       SpellJson::Read(j, spell);
-      if (j.value("format", 1) < SpellJson::FORMAT)
-        SpellJson::MigrateLegacyIds(spell);
+      if (int format = j.value("format", 1); format < SpellJson::FORMAT)
+        SpellJson::MigrateLegacyIds(spell, format);
 
       if (!spell.name.empty())
         spells.push_back(std::move(spell));

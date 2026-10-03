@@ -437,7 +437,8 @@ void RigidBodySystem::ExtractDynamicBodies(Grid &grid, ElementContext &ctx,
 
       // Only consider elements explicitly marked as rigid-body candidates
       // for extraction into Box2D bodies.
-      if (!props.rigidBodyCandidate || (cell.flags & CELL_ANCHORED))
+      if (!props.rigidBodyCandidate ||
+          (cell.flags & (CELL_ANCHORED | CELL_HELD)))
         continue;
 
       // bodyID == -1 → never-been-a-body rigid pixel (freshly painted)

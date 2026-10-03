@@ -49,10 +49,16 @@ constexpr Entry kEntries[] = {
                 "weaving body. Needs an element sigil beside it and plenty "
                 "of material (collection helps)."}},
     // Signs: how the spell behaves
+    {"levitation",
+     {"Levitation", "Thrust: points the way the spell flies. More or bigger "
+                    "signs fly faster and further; unbalanced ones bend it "
+                    "sideways."}},
     {"column",
-     {"Column", "Thrust: points the way the spell flies. More or bigger "
-                "columns fly faster and further; unbalanced ones bend it "
-                "sideways."}},
+     {"Column", "Holds the element as a block: a pillar in front of you, or "
+                "where it's drawn (Q). Levitation launches the block whole. "
+                "Shapes are fitted inside it. Bigger signs hold longer; when "
+                "it lets go the material is left to the world. Repetition "
+                "keeps it as cast and mends it; without, damage stays."}},
     {"convergence",
      {"Convergence", "Packs the spell tighter: faster and further, denser "
                      "and narrower, with less material, and a little harder "

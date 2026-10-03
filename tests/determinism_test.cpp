@@ -13,7 +13,7 @@ Spell MakeSpell(const char *sigil, float sigilScale, int signs) {
   spell.name = sigil;
   spell.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, sigilScale, 0.0f});
   for (int i = 0; i < signs; ++i)
-    spell.glyphs.push_back({"column", GlyphKind::Sign, {0, -100}, 1.0f, 0.0f});
+    spell.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -100}, 1.0f, 0.0f});
   // Wind only moves things: an inverted pulling sign makes it push
   if (std::string_view(sigil) == "wind")
     spell.glyphs.push_back(
