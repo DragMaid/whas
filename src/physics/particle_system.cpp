@@ -147,6 +147,9 @@ void Deposit(Particle &p, Grid &grid, ElementContext &ctx) {
     return;
   if (p.castId >= 0)
     ctx.particles.Note({ParticleNoise::Impact, p.element, p.pos});
+  // A crushing spell only works what it hits; it leaves nothing of its own
+  if (p.crush != 0.0f)
+    return;
 
   int px = static_cast<int>(std::floor(p.pos.x));
   int py = static_cast<int>(std::floor(p.pos.y));
@@ -878,6 +881,10 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
         if (p.remainingDistance <= 0.0f) {
           if (light) {
             Burst(p); // light doesn't fall: it goes off where it stops
+            break;
+          }
+          if (p.crush != 0.0f) {
+            p.active = false; // spent: crushing makes no material
             break;
           }
           // Out of range: the spell lets go and the element falls naturally

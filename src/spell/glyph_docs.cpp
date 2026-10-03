@@ -65,9 +65,9 @@ constexpr Entry kEntries[] = {
                      "where it lands. Wind underfoot throws you harder; a "
                      "wind field becomes a narrower, stronger jet."}},
     {"crushing",
-     {"Crushing", "Grinds what it hits: earth and rock burst out of the hole "
-                  "as flying sand, so it digs. Bigger signs dig wider. "
-                  "Inverted (F), it packs sand back into earth."}},
+     {"Crushing", "Makes the spell a digging tool: it leaves nothing of its "
+                  "own. Earth and rock it hits burst out as flying sand. "
+                  "Inverted (F), it packs sand into earth instead."}},
     {"repetition",
      {"Repetition", "Puts what it hits back the way it was: its natural heat "
                     "and hardness, no longer burning."}},

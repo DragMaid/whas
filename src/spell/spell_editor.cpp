@@ -216,11 +216,13 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.hardnessScale != 1.0f)
     ImGui::Text("Lands x%.2f as hard", stats.hardnessScale);
   if (stats.crush > 0.0f)
-    ImGui::Text("Crushes (%.1f): rock and earth burst out as sand, %d "
-                "cells around the hit",
-                stats.crush, std::min(4, static_cast<int>(stats.crush)));
+    ImGui::Text("Digs (%.1f): leaves no %s; rock and earth burst out as "
+                "sand, %d cells around the hit",
+                stats.crush, ElementName(stats.element),
+                std::min(4, static_cast<int>(stats.crush)));
   else if (stats.crush < 0.0f)
-    ImGui::Text("Reforms sand into earth (%.1f)", -stats.crush);
+    ImGui::Text("Packs sand into earth (%.1f); leaves no %s", -stats.crush,
+                ElementName(stats.element));
   if (stats.restore > 0.0f)
     ImGui::Text("Restores what it hits (%.1f)", stats.restore);
   if (stats.collectMax > 0)

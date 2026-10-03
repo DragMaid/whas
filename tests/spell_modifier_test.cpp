@@ -109,6 +109,30 @@ TEST_CASE("rock grown into a character slips it aside, never to the top",
   REQUIRE(sealed.pos.y == at.y);
 }
 
+TEST_CASE("an earth crushing spell digs and leaves no earth behind",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(9);
+  Fill(sim, 0, GRID_H - 4, GRID_W - 1, GRID_H - 1, Element::ROCK);
+  Fill(sim, 150, GRID_H - 60, 175, GRID_H - 5, Element::ROCK);
+  for (int y = GRID_H - 60; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (sim.GetCell(x, y).element == Element::ROCK)
+        sim.Anchor(x, y);
+  int rock = Count(sim, Element::ROCK);
+  SpellStats dig = SpellQuant::Canonical(
+      Make("earth", {Sign("crushing", 2.0f), Sign("convergence", 2.0f)}));
+  REQUIRE(dig.crush > 0.0f);
+  sim.CastSpell(dig, {120, GRID_H - 30.0f}, {1, 0});
+  Step(sim, 120);
+  REQUIRE(Count(sim, Element::EARTH) == 0);
+  REQUIRE(Count(sim, Element::ROCK) < rock);
+  int earthParticles = 0;
+  sim.GetParticleSystem().ForEachActive(
+      [&](Particle &p) { earthParticles += p.element == Element::EARTH; });
+  REQUIRE(earthParticles == 0);
+}
+
 TEST_CASE("crushing grinds earth into sand and inverted crushing reforms it",
           "[spell]") {
   Simulation sim;

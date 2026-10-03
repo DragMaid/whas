@@ -1010,6 +1010,12 @@ void FormBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
   Vector2 d = effect.direction;
   Vector2 perp{-d.y, d.x};
   bool flying = s.speed > 0.0f && s.range > 0.0f;
+  // Crushing makes no material, so there's nothing to stand still
+  if (s.crush != 0.0f && !flying) {
+    effect.emitted = TotalParticles(effect);
+    effect.holdPhase = SpellEffect::HoldDone;
+    return;
+  }
   for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
     Vector2 pos{effect.origin.x + d.x * (effect.holdGap + a + 0.5f) + perp.x * (l + 0.5f),
                 effect.origin.y + d.y * (effect.holdGap + a + 0.5f) + perp.y * (l + 0.5f)};
@@ -1053,7 +1059,8 @@ void LandBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
     p.active = false;
     int x = static_cast<int>(std::floor(p.pos.x));
     int y = static_cast<int>(std::floor(p.pos.y));
-    if (!ctx.grid.InBounds(x, y) || !Holdable(ctx, ctx.grid.Get(x, y)))
+    if (p.crush != 0.0f || !ctx.grid.InBounds(x, y) ||
+        !Holdable(ctx, ctx.grid.Get(x, y)))
       return;
     effect.holdCells.push_back(y * GRID_W + x);
     PutHeld(effect, ctx, x, y);

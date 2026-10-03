@@ -21,7 +21,7 @@ say how it behaves. The editor (`E`) shows what a spell does as you draw;
 | `levitation` | Thrust: points and speeds the spell. Unbalanced signs bend it. (Before evaluator version 7 this was called `column`.) |
 | `column` | Holds the element as a block. See below. |
 | `convergence` | Faster, denser, narrower |
-| `crushing` | Rock and earth it hits burst out of the hole as flying sand, so it digs. Inverted: packs sand into earth. |
+| `crushing` | A digging tool: the spell leaves none of its own element. Rock and earth it hits burst out of the hole as flying sand. Inverted: packs sand it hits into earth. |
 | `repetition` | Puts what it hits back to its natural state. On a column: keeps the block as cast and mends it. |
 | `cooling` | Chills: water to ice, fire down to smoke |
 | `strengthening` | Lands harder; earth becomes rock |
