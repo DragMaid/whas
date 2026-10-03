@@ -34,12 +34,13 @@ bool Contains(Rectangle r, Vector2 p) {
 void Sandbox::EnsureAvatar(Simulation &sim) {
   if (m_hasAvatar)
     return;
-  // The bottom rows sit behind the action bar: give the world a rock bed
-  // there (as arenas have) so nothing rests out of sight
+  // The bottom rows sit behind the action bar: give the world an earth bed
+  // there so nothing rests out of sight. Earth, not loose rock: a rock floor
+  // becomes one huge body that wobbles and thumps
   for (int y = ArenaGen::FLOOR_BOTTOM - 3; y < GRID_H; ++y)
     for (int x = 0; x < GRID_W; ++x)
       if (sim.GetCell(x, y).element == Element::AIR)
-        sim.Paint(x, y, Element::ROCK, 0);
+        sim.Paint(x, y, Element::EARTH, 0);
   m_avatar = {};
   m_avatar.id = 1;
   m_avatar.maxHp = m_avatar.hp = Match::MAX_HP;

@@ -266,12 +266,12 @@ void MapEditor::DrawGenerate(Simulation &sim) {
   ImGui::SliderInt("Rocks %", &m_map.gen.rocks, 0, 400);
   if (Widgets::Button("Generate (replaces the painting)", {-1, 0}))
     Generate(sim);
-  if (Widgets::Button("Clear to bare rock", {-1, 0})) {
+  if (Widgets::Button("Clear to bare earth", {-1, 0})) {
     sim.GetConfig() = m_config;
     sim.Restart(m_map.genSeed);
     for (int y = ArenaGen::FLOOR_BOTTOM - 3; y < GRID_H; ++y)
       for (int x = 0; x < GRID_W; ++x)
-        sim.Paint(x, y, Element::ROCK, 0);
+        sim.Paint(x, y, Element::EARTH, 0);
     for (int i = 0; i < 2; ++i)
       m_map.spawns[i] = Settle(sim, m_map.spawns[i]);
     m_brush.ClearHistory();
