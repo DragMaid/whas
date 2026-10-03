@@ -104,7 +104,7 @@ instead.
     Regions are drawn with "Draw region": drag a rectangle in the room.
   - *Background*: drop a PNG on the window or type its path. It's scaled
     to the world's size and copied into the campaign folder.
-  - *Terrain*: copy a 1v1 map in, or clear to a bare floor.
+  - *Terrain*: copy a 1v1 map in, or clear to a bare earth floor.
 - **Campaign** tab: the starting kit, the glyphs a new game knows.
 - The wave icon lets the world settle (water and sand come to rest).
 - **Play this room** saves and starts there with every glyph unlocked,

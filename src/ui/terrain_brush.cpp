@@ -85,6 +85,18 @@ void TerrainBrush::HandleKeys(Simulation &sim) {
     Undo(sim);
 }
 
+// Rock is anchored as it will be when the map loads, so it doesn't tumble
+// (and thump) while the editor lets the world settle
+static void PaintAnchored(Simulation &sim, int cx, int cy, Element element, int size) {
+  sim.Paint(cx, cy, element, size);
+  if (element != Element::ROCK)
+    return;
+  for (int dy = -size; dy <= size; ++dy)
+    for (int dx = -size; dx <= size; ++dx)
+      if (dx * dx + dy * dy <= size * size)
+        sim.Anchor(cx + dx, cy + dy);
+}
+
 void TerrainBrush::Paint(Simulation &sim, Vector2 cell, bool overUi) {
   bool left = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
   bool right = IsMouseButtonDown(MOUSE_BUTTON_RIGHT);
@@ -104,7 +116,7 @@ void TerrainBrush::Paint(Simulation &sim, Vector2 cell, bool overUi) {
   if (right || element == Element::AIR)
     sim.Erase(cx, cy, size);
   else
-    sim.Paint(cx, cy, element, size);
+    PaintAnchored(sim, cx, cy, element, size);
   if (!overUi) {
     float wheel = GetMouseWheelMove();
     if (wheel != 0)
@@ -125,7 +137,7 @@ void TerrainBrush::Undo(Simulation &sim) {
         continue;
       sim.Erase(x, y, 0);
       if (before[i] != static_cast<uint8_t>(Element::AIR))
-        sim.Paint(x, y, static_cast<Element>(before[i]), 0);
+        PaintAnchored(sim, x, y, static_cast<Element>(before[i]), 0);
     }
 }
 

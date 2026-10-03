@@ -397,7 +397,7 @@ RoomDef BlankRoom(RoomPos pos) {
   for (int y = GRID_H - 12; y < GRID_H; ++y)
     for (int x = 0; x < GRID_W; ++x)
       r.terrain.cells[static_cast<size_t>(y) * GRID_W + x] =
-          static_cast<uint8_t>(Element::ROCK);
+          static_cast<uint8_t>(Element::EARTH);
   return r;
 }
 
