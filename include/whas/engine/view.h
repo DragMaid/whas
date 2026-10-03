@@ -12,6 +12,12 @@ namespace View {
 // Refit to the current window size; call once a frame before drawing
 void Update();
 
+// Follow a point (world pixels) zoomed in `zoom` times past the fit, never
+// showing past the world's edges. Snap jumps there at once (a new room).
+void Follow(Vector2 world, float zoom, bool snap = false);
+// Back to showing the whole world
+void StopFollowing();
+
 Camera2D Camera();
 // Screen pixels per world pixel
 float Scale();

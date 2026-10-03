@@ -94,6 +94,7 @@ public:
 
   SpellLibrary &Library() { return m_library; }
   SpellThumbnails &Thumbnails() { return *m_thumbnails; }
+  const SvgLibrary &Glyphs() const { return m_spellEditor.Glyphs(); }
   DeckBook &Decks() { return m_decks; }
   // Beam preview plus aim-vs-cast arrows, origin in (fractional) cells.
   // worldGravity is the config's world gravity, for the falling arcs.

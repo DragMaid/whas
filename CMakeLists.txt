@@ -153,6 +153,9 @@ set(SOURCES
     src/game/character_draw.cpp
     src/game/sandbox.cpp
     src/game/placement.cpp
+    src/campaign/campaign.cpp
+    src/campaign/enemies.cpp
+    src/campaign/campaign_play.cpp
     src/game/flight_trail.cpp
     src/game/replay.cpp
     src/game/replay_store.cpp

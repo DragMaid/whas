@@ -76,8 +76,17 @@ void DrawChaosBadge(ImDrawList *dl, ImVec2 c) {
 } // namespace
 
 void SpellEditor::DrawLibraryTab() {
-  if (!m_spells || !m_decks)
+  if (!m_spells)
     return;
+  if (!m_decks) {
+    // A library of its own (a campaign backpack): no decks beside it
+    float w = ImGui::GetContentRegionAvail().x;
+    ImGui::BeginChild("SpellGrid", {w, 0}, true);
+    DrawSpellGrid(w);
+    ImGui::EndChild();
+    DrawLibraryPopups();
+    return;
+  }
   if (!m_decks->Find(m_selectedDeck))
     m_selectedDeck = m_decks->ActiveId();
 
@@ -171,10 +180,12 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
       m_popupRef = ref;
       m_openPopup = "Delete spell?";
     }
-    ImGui::Separator();
-    if (ImGui::MenuItem("Test in sandbox"))
-      m_testRef = ref;
-    if (const Deck *deck = m_decks->Find(m_selectedDeck)) {
+    if (m_decks) {
+      ImGui::Separator();
+      if (ImGui::MenuItem("Test in sandbox"))
+        m_testRef = ref;
+    }
+    if (const Deck *deck = m_decks ? m_decks->Find(m_selectedDeck) : nullptr) {
       auto empty = std::find(deck->slots.begin(), deck->slots.end(), "");
       if (ImGui::MenuItem(TextFormat("Add to \"%s\"", deck->name.c_str()),
                           nullptr, false, empty != deck->slots.end()))
@@ -419,7 +430,8 @@ void SpellEditor::DrawLibraryPopups() {
     if (Widgets::Button("Rename") || enter) {
       std::string newRef, err;
       if (m_spells->Rename(m_popupRef, m_renameBuffer, newRef, err)) {
-        m_decks->ReplaceRef(m_popupRef, newRef);
+        if (m_decks)
+          m_decks->ReplaceRef(m_popupRef, newRef);
         m_statusMessage = "Renamed.";
         close();
       } else {
@@ -441,7 +453,7 @@ void SpellEditor::DrawLibraryPopups() {
                 spell ? spell->name.c_str() : m_popupRef.c_str());
     if (Widgets::Button("Delete")) {
       std::string err;
-      if (m_spells->Remove(m_popupRef, err))
+      if (m_spells->Remove(m_popupRef, err) && m_decks)
         m_decks->RemoveRef(m_popupRef);
       m_statusMessage = err.empty() ? "Deleted." : err;
       close();

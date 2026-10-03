@@ -9,6 +9,7 @@ struct CharacterInput {
   bool right = false;
   bool jump = false;
   bool down = false; // fall faster while in the air
+  float walk = 1.0f; // walking speed multiplier; only campaign enemies change it
 
   bool Any() const { return left || right || jump || down; }
   bool operator==(const CharacterInput &) const = default;
@@ -77,6 +78,8 @@ struct Character {
   void Unbury(Simulation &sim);
   // Spawning: rise out of whatever is here, however deep, then settle
   void PlaceClear(const Simulation &sim);
+  // Whether a body with its top-left here is clear of terrain
+  static bool Fits(const Simulation &sim, Vector2 pos);
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);
