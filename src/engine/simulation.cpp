@@ -250,6 +250,7 @@ uint64_t Simulation::StateHash() const {
     f.Add(p.remainingDistance);
     f.Add(p.power);
     f.Add(p.owner);
+    f.Add(p.lastHit);
   });
   for (const Guide &g : m_particles.Guides()) {
     f.Add(g.id);

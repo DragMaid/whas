@@ -53,6 +53,9 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round,
 
 namespace {
 
+// Burn exposure (ticks) a fire projectile passing through a body leaves
+constexpr int FIRE_HIT_EXPOSURE = 3;
+
 void ApplyHits(Simulation &sim, Character *chars, int count) {
   for (const ParticleHit &hit : sim.GetParticleSystem().TakeHits()) {
     for (Character &c : std::span(chars, count)) {
@@ -60,7 +63,9 @@ void ApplyHits(Simulation &sim, Character *chars, int count) {
         continue;
       c.hp = std::max(0.0f, c.hp - hit.power * DAMAGE_PER_POWER);
       if (hit.element == Element::WATER)
-        c.burnStacks = 0;
+        c.Soak();
+      else if (hit.element == Element::FIRE)
+        c.Ignite(FIRE_HIT_EXPOSURE);
     }
   }
 }
@@ -176,6 +181,7 @@ uint64_t Hash(const Simulation &sim, const State &state) {
     addI(c.facing);
     addI(c.burnStacks);
     addI(c.burnExposure);
+    addF(c.wet);
   }
   return h;
 }
@@ -196,6 +202,7 @@ std::string EncodeSnapshot(const Simulation &sim, const State &state) {
     out.Put(c.maxHp);
     out.Put(c.burnStacks);
     out.Put(c.burnExposure);
+    out.Put(c.wet);
   }
   std::vector<uint8_t> world = sim.SaveSnapshot();
   out.Put(static_cast<uint32_t>(world.size()));
@@ -224,6 +231,7 @@ bool DecodeSnapshot(const std::string &text, Simulation &sim, State &state) {
       c.maxHp = in.Get<float>();
       c.burnStacks = in.Get<int>();
       c.burnExposure = in.Get<int>();
+      c.wet = in.Get<float>();
     }
     uint32_t size = in.Get<uint32_t>();
     const uint8_t *world = in.Take(size);

@@ -73,6 +73,9 @@ struct Particle {
     // spell particles of different casts collide; one cast's never do, so a
     // figure doesn't knock itself apart.
     int castId = -1;
+    // Hurtbox this particle last struck: fire passes through bodies and
+    // shouldn't burn the same one again on every step inside it
+    int lastHit = -1;
 };
 
 // Where a caster's cursor is (cells), for sights set
@@ -163,7 +166,8 @@ public:
     int NextGuideId() const { return m_nextGuideId; }
 
 private:
-    bool HitHurtbox(const Particle &p);
+    // Records a hit; true when the particle is spent by it
+    bool HitHurtbox(Particle &p);
     // A light mote ends in a flash
     void Burst(Particle &p);
     // Turn the guides toward what they chase and keep their particles on

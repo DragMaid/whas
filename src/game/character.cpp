@@ -58,6 +58,9 @@ bool Collides(const Simulation &sim, Vector2 pos) {
 } // namespace
 
 void Character::Step(const Simulation &sim, CharacterInput input, float dt) {
+  if (wet > 0.0f)
+    wet = std::max(0.0f, wet - dt * (flying ? FLIGHT_DRY_RATE : 1.0f));
+
   // Buried (a spell dropped sand or earth on us, or made it under our feet):
   // pop up onto the top of the pile instead of being stuck inside it
   if (Collides(sim, pos)) {
@@ -148,6 +151,23 @@ void Character::Launch(Vector2 velocity) {
     grounded = false;
 }
 
+void Character::Ignite(int exposureTicks) {
+  wet = 0.0f;
+  if (burnStacks == 0)
+    burnStacks = 1; // catching fire is immediate, building it up takes time
+  burnExposure += exposureTicks;
+  while (burnExposure >= TICKS_PER_STACK) {
+    burnExposure -= TICKS_PER_STACK;
+    burnStacks = std::min(burnStacks + 1, MAX_BURN_STACKS);
+  }
+}
+
+void Character::Soak() {
+  burnStacks = 0;
+  burnExposure = 0;
+  wet = WET_SECONDS;
+}
+
 void Character::UpdateBurn(const Simulation &sim, float dt) {
   if (!Alive())
     return;
@@ -166,18 +186,23 @@ void Character::UpdateBurn(const Simulation &sim, float dt) {
         inWater = true;
     }
   }
+  // Loose fire and water in the air count too (flying spell particles are
+  // handled as hits)
+  Rectangle box = Bounds();
+  for (const Particle &p : sim.GetParticleSystem().Pool()) {
+    if (!p.active || (p.isProjectile && p.remainingDistance > 0.0f) ||
+        (p.element != Element::FIRE && p.element != Element::WATER) ||
+        !CheckCollisionPointRec(p.pos, box))
+      continue;
+    (p.element == Element::FIRE ? inFire : inWater) = true;
+  }
 
   if (inWater) {
-    burnStacks = 0;
-    burnExposure = 0;
+    Soak();
     return;
   }
-  if (inFire && ++burnExposure >= TICKS_PER_STACK) {
-    burnExposure = 0;
-    burnStacks = std::min(burnStacks + 1, MAX_BURN_STACKS);
-  } else if (inFire && burnStacks == 0) {
-    burnStacks = 1; // catching fire is immediate, building it up takes time
-  }
+  if (inFire)
+    Ignite(1);
   if (burnStacks > 0)
     hp = std::max(0.0f, hp - burnStacks * BURN_DPS * dt);
 }

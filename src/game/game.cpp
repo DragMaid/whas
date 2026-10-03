@@ -248,6 +248,10 @@ void Game::QueueRtsCast(UI &ui, int tick) {
            2.5f);
     return;
   }
+  if (!me.CanCast(cast.stats.HasFlight())) {
+    Notify("Your spell paper is wet: only wind underfoot works", 1.5f);
+    return;
+  }
   int64_t key = Rts::CooldownKey(cast, ui.GetSelectedSlot());
   switch (m_rts.QueueCast(std::move(cast), key, tick)) {
   case Rts::Controller::CastResult::Queued:
@@ -471,6 +475,12 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
   state.clockProgress = TurnProgress();
   state.ticksFree = IsRts() ? TurnController::TURN_TICKS : TicksFree();
   state.matchRound = m_match.round;
+  // Planning shows the ghost's paper, otherwise the body's
+  const Character &me =
+      !IsRts() && m_turn.GetPhase() == TurnController::Phase::Planning
+          ? m_turn.LocalPreview().end
+          : m_match.characters[Local()];
+  state.wet = me.wet / Character::WET_SECONDS;
   state.cooldowns = {};
   if (IsRts()) {
     int tick = m_online ? m_online->RtsInputTick() : m_rtsTick;
@@ -563,7 +573,12 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
       float len = std::hypot(aim.x, aim.y);
       aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
                          : Vector2{(float)ghost.facing, 0.0f};
-      switch (m_turn.QueueCast(MakeCast(*spell, aim))) {
+      PlannedCast cast = MakeCast(*spell, aim);
+      if (!ghost.CanCast(cast.stats.HasFlight())) {
+        Notify("Your spell paper is wet: only wind underfoot works", 2.0f);
+        return;
+      }
+      switch (m_turn.QueueCast(std::move(cast))) {
       case TurnController::CastResult::Queued:
         if (AudioManager *audio = AudioManager::Instance())
           audio->PlayUi(UiSound::SpellPlan);
