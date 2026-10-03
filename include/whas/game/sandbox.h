@@ -1,6 +1,7 @@
 #pragma once
 #include "whas/game/character.h"
 #include "whas/game/flight_trail.h"
+#include "whas/game/placement.h"
 #include "whas/game/turn_controller.h"
 #include <vector>
 
@@ -32,6 +33,7 @@ private:
 
   Character m_avatar;
   FlightTrail m_trail;
+  CastTargeting m_targeting;
   bool m_hasAvatar = false;
   Vector2 m_home{0, 0}; // where Reset puts the avatar
   bool m_dragging = false;

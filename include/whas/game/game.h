@@ -2,10 +2,12 @@
 #include "whas/game/character.h"
 #include "whas/game/flight_trail.h"
 #include "whas/game/match.h"
+#include "whas/game/placement.h"
 #include "whas/game/rts.h"
 #include "whas/game/turn_controller.h"
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -89,7 +91,11 @@ private:
   void UpdateRts(Simulation &sim, UI &ui);
   void UpdateOnlineRts(Simulation &sim, UI &ui);
   // Real time: clicks become casts on the next tick
-  void QueueRtsCast(UI &ui, int tick);
+  void QueueRtsCast(const Simulation &sim, UI &ui, int tick);
+  // A cast the mouse asked for this frame, ready to queue (or nothing, with
+  // a notice saying why)
+  std::optional<PlannedCast> TakeCast(const Simulation &sim, UI &ui,
+                                      const Character &from);
   CharacterInput RtsInput() const;
   void DrawRtsHud() const;
   void Notify(const char *text, float seconds);
@@ -115,6 +121,7 @@ private:
   float m_rtsAccumulator = 0.0f;
   int m_rtsRound = -1; // online: the round the controller was reset for
   FlightTrail m_trail;
+  CastTargeting m_targeting;
   RoundState m_state = RoundState::Playing;
   // Between turns: the world is frozen until Space stops time to plan
   bool m_waiting = true;
