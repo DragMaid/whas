@@ -1,4 +1,6 @@
 #include "whas/net/plan_codec.h"
+#include "whas/game/placement.h"
+#include <cmath>
 
 namespace PlanCodec {
 
@@ -38,9 +40,15 @@ nlohmann::json Encode(const TurnPlan &plan) {
       run["c"] = std::move(cursor);
     if (!step.casts.empty()) {
       nlohmann::json casts = nlohmann::json::array();
-      for (const PlannedCast &cast : step.casts)
-        casts.push_back(
-            {{"id", cast.spellId}, {"ax", cast.aimQ.x}, {"ay", cast.aimQ.y}});
+      for (const PlannedCast &cast : step.casts) {
+        nlohmann::json c{
+            {"id", cast.spellId}, {"ax", cast.aimQ.x}, {"ay", cast.aimQ.y}};
+        if (cast.placed) {
+          c["px"] = cast.px;
+          c["py"] = cast.py;
+        }
+        casts.push_back(std::move(c));
+      }
       run["casts"] = std::move(casts);
     }
     runs.push_back(std::move(run));
@@ -79,6 +87,16 @@ bool Decode(const nlohmann::json &j, const SpellResolver &resolve,
           cast.spellId = c.at("id").get<int64_t>();
           cast.aimQ = {c.at("ax").get<int16_t>(), c.at("ay").get<int16_t>()};
           cast.aim = SpellQuant::DequantizeAim(cast.aimQ);
+          if (c.contains("px")) {
+            cast.placed = true;
+            cast.px = c.at("px").get<int16_t>();
+            cast.py = c.at("py").get<int16_t>();
+            float reach = Placement::REACH * PlannedCast::PLACE_SCALE + 1.0f;
+            if (std::hypot(float(cast.px), float(cast.py)) > reach) {
+              error = "placed out of reach";
+              return false;
+            }
+          }
           if (!resolve(cast.spellId, cast.spell, cast.stats)) {
             error = "unknown spell id";
             return false;

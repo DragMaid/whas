@@ -13,9 +13,19 @@ struct PlannedCast {
   int64_t spellId = 0; // server spell definition (0 offline)
   SpellQuant::Aim aimQ; // aim as sent over the wire
   Vector2 aim;       // DequantizeAim(aimQ): what the simulation uses
+  // Placed (Q): drawn on a surface instead of the body, this far from the
+  // caster's centre in 1/PLACE_SCALE cells. Flights always leave the body.
+  static constexpr int PLACE_SCALE = 8;
+  bool placed = false;
+  int16_t px = 0;
+  int16_t py = 0;
 
   // Offline: stats computed locally with the server's rounding
   static PlannedCast Local(const Spell &spell, Vector2 aim);
+  // Draw it at `at` (cells) for a caster centred on `caster`
+  void PlaceAt(Vector2 at, Vector2 caster);
+  // Where it leaves from for a caster centred here
+  Vector2 Origin(Vector2 caster) const;
 };
 
 // Where the player's cursor was on a tick, for sights set spells: cells in

@@ -11,6 +11,23 @@ PlannedCast PlannedCast::Local(const Spell &spell, Vector2 aim) {
           SpellQuant::DequantizeAim(q)};
 }
 
+void PlannedCast::PlaceAt(Vector2 at, Vector2 caster) {
+  auto q = [](float v) {
+    return static_cast<int16_t>(
+        std::clamp<long>(std::lround(v * PLACE_SCALE), INT16_MIN, INT16_MAX));
+  };
+  placed = true;
+  px = q(at.x - caster.x);
+  py = q(at.y - caster.y);
+}
+
+Vector2 PlannedCast::Origin(Vector2 caster) const {
+  if (!placed || stats.HasFlight())
+    return caster;
+  return {caster.x + static_cast<float>(px) / PLACE_SCALE,
+          caster.y + static_cast<float>(py) / PLACE_SCALE};
+}
+
 void PlanPreview::Reset(const Character &start) {
   end = start;
   path.clear();
@@ -28,7 +45,7 @@ void PlanPreview::Append(const Simulation &sim, const TurnPlan &plan,
     if (stats.HasFlight())
       end.wet = 0.0f;
     Vector2 dir = SpellSystem::ResolveDirection(stats, cast.aim);
-    casts.push_back({cast.spell, end.Center(), dir, stats});
+    casts.push_back({cast.spell, cast.Origin(end.Center()), dir, stats});
     if (stats.HasFlight())
       end.Launch(SpellSystem::FlightVelocity(stats, cast.aim));
   }
@@ -201,7 +218,8 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
       if (cast.stats.HasFlight())
         character.wet = 0.0f;
       // Cast from where the caster stands, then any flight carries them off
-      sim.CastSpell(cast.stats, character.Center(), cast.aim, character.id);
+      sim.CastSpell(cast.stats, cast.Origin(character.Center()), cast.aim,
+                    character.id);
       if (cast.stats.HasFlight()) {
         character.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
         AudioManager::EmitFlightLaunch(character.Center().x);

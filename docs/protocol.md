@@ -239,7 +239,10 @@ collapsed into runs, and casts carry the server spell id:
 
 `in` is a bit field: 1 = left, 2 = right, 4 = jump, 8 = down (dive while airborne). `c` is where the
 player's cursor was, in 1/8 cells, for sights set spells (two int16s); a
-run without it keeps the last one. The server rejects a plan
+run without it keeps the last one. A placed cast (Q, drawn on the ground or a
+wall) also carries `"px","py"`: where it is drawn, from the caster's centre in
+1/8 cells, at most 48 cells away. Wind underfoot ignores it and always leaves
+the body. The server rejects a plan
 (`server/Whas.Server/Matches/PlanValidator.cs`) if any of these hold:
 
 - it runs past 180 ticks,
@@ -248,7 +251,8 @@ run without it keeps the last one. The server rejects a plan
 - it casts a spell that isn't in that round's deck, or an invalid one,
 - an aim isn't a unit vector (±2%),
 - it has more than one wind underfoot cast in a pause,
-- a cursor isn't two int16s.
+- a cursor isn't two int16s,
+- a placed cast is more than 48 cells from the caster.
 
 ## REST
 

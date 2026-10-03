@@ -106,7 +106,8 @@ void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
     return;
   if (cast.stats.HasFlight())
     m_avatar.wet = 0.0f;
-  sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
+  sim.CastSpell(cast.stats, cast.Origin(m_avatar.Center()), cast.aim,
+                m_avatar.id);
   if (cast.stats.HasFlight()) {
     m_avatar.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
     AudioManager::EmitFlightLaunch(m_avatar.Center().x);
@@ -120,6 +121,8 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
   state.matchRound = -1;
 
   bool keyboardFree = !ImGui::GetIO().WantCaptureKeyboard;
+  if (keyboardFree && IsKeyPressed(KEY_Q))
+    m_targeting.Toggle();
   if (state.timeToggleRequested || (keyboardFree && IsKeyPressed(KEY_SPACE)))
     ToggleTime();
   state.timeToggleRequested = false;
@@ -187,12 +190,11 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   if (ui.IsBlockingWorldInput())
     return;
 
-  if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+  // Right click while placing lets go of the spot instead
+  if (!m_targeting.Placing() && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
     PlaceAvatar(sim, mouse);
     return;
   }
-  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-    return;
 
   // Grab the avatar (a little slack so it's easy to hit)
   Rectangle grab = m_avatar.Bounds();
@@ -200,16 +202,22 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   grab.y -= 1;
   grab.width += 2;
   grab.height += 2;
-  if (Contains(grab, mouse)) {
+  if (!m_targeting.Placing() && IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+      Contains(grab, mouse)) {
     m_dragging = true;
     m_dragOffset = {mouse.x - m_avatar.pos.x, mouse.y - m_avatar.pos.y};
     return;
   }
 
+  const char *blocked = nullptr;
+  auto target = m_targeting.Update(sim, m_avatar.Center(), mouse, true,
+                                   m_avatar.facing, &blocked);
   const Spell *spell = ui.GetSelectedSpell();
-  if (!spell || !SpellSystem::Evaluate(*spell).valid)
+  if (!target || !spell || !SpellSystem::Evaluate(*spell).valid)
     return;
-  PlannedCast cast = PlannedCast::Local(*spell, AimAtMouse());
+  PlannedCast cast = PlannedCast::Local(*spell, target->aim);
+  if (target->at)
+    cast.PlaceAt(*target->at, m_avatar.Center());
   if (m_stopped) {
     m_queued.push_back(std::move(cast));
     if (AudioManager *audio = AudioManager::Instance())
@@ -255,7 +263,7 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
   for (const PlannedCast &cast : m_queued) {
     Vector2 dir = SpellSystem::ResolveDirection(cast.stats, cast.aim);
     Color c = ui.GetSpellColor(cast.spell);
-    ui.DrawSpellBeam(cast.stats, m_avatar.Center(), dir,
+    ui.DrawSpellBeam(cast.stats, cast.Origin(m_avatar.Center()), dir,
                      Color{c.r, c.g, c.b, 200}, gravity);
   }
 
@@ -272,7 +280,9 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                     Theme::Rl(Tone::Brass, 0.85f));
     return;
   }
-  if (const Spell *spell = ui.GetSelectedSpell())
+  if (m_targeting.Placing())
+    m_targeting.DrawWorld(sim, m_avatar.Center(), MouseCell());
+  else if (const Spell *spell = ui.GetSelectedSpell())
     ui.DrawAimIndicator(*spell, m_avatar.Center(), AimAtMouse(), gravity);
   if (m_stopped)
     Theme::DrawText(Theme::RlHeading(),
