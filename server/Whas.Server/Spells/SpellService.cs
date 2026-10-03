@@ -177,12 +177,15 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
     // the flight sigil (now "wind_underfoot") and "gust" the push field (now
     // "wind"). Same as SpellJson::MigrateLegacyIds on the client.
     const int WindRenameVersion = 5;
+    // Before this, "column" was the thrust sign (now "levitation")
+    public const int LevitationRenameVersion = 7;
 
-    static List<Glyph> MigrateLegacyIds(List<Glyph> glyphs) =>
+    static List<Glyph> MigrateLegacyIds(List<Glyph> glyphs, int fromVersion) =>
         glyphs.Select(g => g.AssetId switch
         {
-            "wind" => g with { AssetId = "wind_underfoot" },
-            "gust" => g with { AssetId = "wind" },
+            "wind" when fromVersion < WindRenameVersion => g with { AssetId = "wind_underfoot" },
+            "gust" when fromVersion < WindRenameVersion => g with { AssetId = "wind" },
+            "column" when fromVersion < LevitationRenameVersion => g with { AssetId = "levitation" },
             _ => g,
         }).ToList();
 
@@ -195,10 +198,11 @@ public sealed class SpellService(IDbContextFactory<WhasDb> dbFactory)
             return;
         var glyphs = JsonSerializer.Deserialize<List<Glyph>>(s.GlyphsJson, Protocol.Json)!;
         var components = ComponentsOf(s);
-        if (s.EvaluatorVersion < WindRenameVersion)
+        if (s.EvaluatorVersion < LevitationRenameVersion)
         {
-            glyphs = MigrateLegacyIds(glyphs);
-            components = components?.Select(c => c with { Glyphs = MigrateLegacyIds(c.Glyphs) })
+            int from = s.EvaluatorVersion;
+            glyphs = MigrateLegacyIds(glyphs, from);
+            components = components?.Select(c => c with { Glyphs = MigrateLegacyIds(c.Glyphs, from) })
                                    .ToList();
             s.GlyphsJson = JsonSerializer.Serialize(glyphs, Protocol.Json);
             if (components is not null)

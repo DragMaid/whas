@@ -78,9 +78,10 @@ public:
   // Spell casting; owner is the caster's hurtbox id so it can't hit itself
   void CastSpell(const Spell &spell, Vector2 origin, Vector2 aimDirection,
                  int owner = -1);
-  // Cast with stats handed in (lockstep play uses the server's stats)
+  // Cast with stats handed in (lockstep play uses the server's stats).
+  // placed: drawn on a surface (Q), so a column forms right there.
   void CastSpell(const SpellStats &stats, Vector2 origin, Vector2 aimDirection,
-                 int owner = -1);
+                 int owner = -1, bool placed = false);
 
 private:
   // Collection: draw matching cells around the caster into the spell,

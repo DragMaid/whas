@@ -108,7 +108,7 @@ void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
   if (cast.stats.HasFlight())
     m_avatar.wet = 0.0f;
   sim.CastSpell(cast.stats, cast.Origin(m_avatar.Center()), cast.aim,
-                m_avatar.id);
+                m_avatar.id, cast.placed);
   if (cast.stats.HasFlight()) {
     m_avatar.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
     AudioManager::EmitFlightLaunch(m_avatar.Center().x);

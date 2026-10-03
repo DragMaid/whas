@@ -39,14 +39,27 @@ std::vector<Spell> Cases() {
           float rot = rotations[(n * 7 + i * 5) % 9];
           float scale = 0.1f * static_cast<float>(1 + (n * 3 + i * 11) % 30);
           s.glyphs.push_back(
-              {"column", GlyphKind::Sign, {10.0f * i, -120.0f}, scale, rot});
+              {"levitation", GlyphKind::Sign, {10.0f * i, -120.0f}, scale, rot});
         }
         out.push_back(std::move(s));
       }
     }
   }
+  // Columns without levitation stand still; with shapes and repetition
+  for (const char *sigil : {"water", "earth", "fire", "sand"})
+    for (float scale : {0.4f, 1.0f, 2.2f}) {
+      Spell s;
+      s.name = "case" + std::to_string(n++);
+      s.glyphs = {{sigil, GlyphKind::Sigil, {0, 0}, scale, 0.0f},
+                  {"column", GlyphKind::Sign, {0, -120}, scale, 0.0f}};
+      out.push_back(s);
+      s.name = "case" + std::to_string(n++);
+      s.glyphs.push_back({"orb", GlyphKind::Sign, {100, 0}, 1.0f, 0.0f});
+      s.glyphs.push_back({"repetition", GlyphKind::Sign, {-100, 0}, 1.0f, 0.0f});
+      out.push_back(std::move(s));
+    }
   // No sigil, and two sigils: both invalid
-  out.push_back({"no-sigil", {{"column", GlyphKind::Sign, {0, 0}, 1, 0}}});
+  out.push_back({"no-sigil", {{"levitation", GlyphKind::Sign, {0, 0}, 1, 0}}});
   out.push_back({"two-sigils",
                  {{"fire", GlyphKind::Sigil, {0, 0}, 1, 0},
                   {"water", GlyphKind::Sigil, {40, 0}, 1, 0}}});
@@ -55,7 +68,7 @@ std::vector<Spell> Cases() {
   const char *modifiers[] = {"convergence", "crushing",      "repetition",
                              "cooling",     "strengthening", "collection",
                              "expansion",   "orb",           "pulling",
-                             "sights_set"};
+                             "sights_set",  "column"};
   const char *modSigils[] = {"water", "fire",           "earth",
                              "rock",  "wind",           "wind_underfoot",
                              "light"};
@@ -69,7 +82,7 @@ std::vector<Spell> Cases() {
           Spell s;
           s.name = "case" + std::to_string(n++);
           s.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, 1.1f, 0.0f});
-          s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.0f,
+          s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 1.0f,
                               0.0f});
           s.glyphs.push_back({mod, GlyphKind::Sign, {-100, 60}, scale, 45.0f,
                               inverted == 1});
@@ -91,7 +104,7 @@ std::vector<Spell> Cases() {
       s.glyphs.push_back({mod, GlyphKind::Sign, {x, 80}, 0.6f, 0.0f});
       x += 40;
     }
-    s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.5f, -45.0f});
+    s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 1.5f, -45.0f});
     out.push_back(std::move(s));
   }
 
@@ -102,7 +115,7 @@ std::vector<Spell> Cases() {
       s.name = "case" + std::to_string(n++);
       s.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, scale, 0.0f});
       s.glyphs.push_back({"dragon", GlyphKind::Sigil, {0, 80}, 1.0f, 0.0f});
-      s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.2f, 0.0f});
+      s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 1.2f, 0.0f});
       if (scale > 1.0f)
         s.glyphs.push_back({"orb", GlyphKind::Sign, {90, 0}, 1.0f, 0.0f});
       out.push_back(std::move(s));
@@ -110,12 +123,12 @@ std::vector<Spell> Cases() {
   }
   out.push_back({"dragon-alone",
                  {{"dragon", GlyphKind::Sigil, {0, 0}, 1, 0},
-                  {"column", GlyphKind::Sign, {0, -120}, 1, 0}}});
+                  {"levitation", GlyphKind::Sign, {0, -120}, 1, 0}}});
   out.push_back({"two-dragons",
                  {{"water", GlyphKind::Sigil, {0, 0}, 1, 0},
                   {"dragon", GlyphKind::Sigil, {60, 0}, 1, 0},
                   {"dragon", GlyphKind::Sigil, {-60, 0}, 1, 0},
-                  {"column", GlyphKind::Sign, {0, -120}, 1, 0}}});
+                  {"levitation", GlyphKind::Sign, {0, -120}, 1, 0}}});
 
   // Guidance: a human sigil or a second element sigil is the target
   {
@@ -150,7 +163,7 @@ std::vector<Spell> Cases() {
         if (withGuidance)
           s.glyphs.push_back(
               {"guidance", GlyphKind::Sigil, {0, 130}, guidance, 0.0f});
-        s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.2f, 0.0f});
+        s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 1.2f, 0.0f});
         if (std::string(g.name) == "guided-wind-human")
           s.glyphs.push_back({"pulling", GlyphKind::Sign, {90, 0}, 1.0f, 0.0f});
         out.push_back(std::move(s));
@@ -173,7 +186,7 @@ std::vector<Spell> Cases() {
         c.position = {60.0f * i - 120.0f, 0.0f};
         c.glyphs.push_back(
             {partSigils[i], GlyphKind::Sigil, {0, 0}, 0.4f + 0.3f * i, 0.0f});
-        c.glyphs.push_back({"column", GlyphKind::Sign, {0, -120},
+        c.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120},
                             0.5f + 0.2f * (i + ring), rotations[(i + ring) % 9]});
         if (i % 2 == 1)
           c.glyphs.push_back({"crushing", GlyphKind::Sign, {80, 0}, 0.8f, 0.0f,
@@ -181,7 +194,7 @@ std::vector<Spell> Cases() {
         s.components.push_back(std::move(c));
       }
       if (ring >= 1) {
-        s.glyphs.push_back({"column", GlyphKind::Sign, {0, -210}, 0.8f,
+        s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -210}, 0.8f,
                             ring == 1 ? 0.0f : 45.0f});
         s.glyphs.push_back({"cooling", GlyphKind::Sign, {150, 150}, 0.6f, 0.0f});
       }
@@ -200,7 +213,7 @@ std::vector<Spell> Cases() {
     s.name = "layered-ring-sigil";
     SpellComponent c;
     c.glyphs.push_back({"water", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f});
-    c.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f});
+    c.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f});
     s.components.push_back(c);
     s.glyphs.push_back({"fire", GlyphKind::Sigil, {0, -210}, 0.5f, 0.0f});
     out.push_back(std::move(s));
@@ -237,17 +250,26 @@ TEST_CASE("spells evaluate to the golden quantized stats", "[spell]") {
   }
 }
 
-TEST_CASE("format 1 spells rename the wind sigils", "[spell]") {
+TEST_CASE("old spell files rename the wind sigils and the thrust sign",
+          "[spell]") {
   Spell s;
   s.glyphs = {{"wind", GlyphKind::Sigil, {0, 0}, 1, 0},
               {"column", GlyphKind::Sign, {0, -120}, 1, 0}};
   SpellComponent c;
-  c.glyphs = {{"gust", GlyphKind::Sigil, {0, 0}, 1, 0}};
+  c.glyphs = {{"gust", GlyphKind::Sigil, {0, 0}, 1, 0},
+              {"column", GlyphKind::Sign, {0, -120}, 1, 0}};
   s.components.push_back(c);
-  SpellJson::MigrateLegacyIds(s);
+  Spell v2 = s;
+  SpellJson::MigrateLegacyIds(s, 1);
   CHECK(s.glyphs[0].assetId == "wind_underfoot");
-  CHECK(s.glyphs[1].assetId == "column");
+  CHECK(s.glyphs[1].assetId == "levitation");
   CHECK(s.components[0].glyphs[0].assetId == "wind");
+  CHECK(s.components[0].glyphs[1].assetId == "levitation");
+  // Format 2 already has the new wind names: only the thrust sign moves
+  v2.glyphs[0].assetId = "wind_underfoot";
+  SpellJson::MigrateLegacyIds(v2, 2);
+  CHECK(v2.glyphs[0].assetId == "wind_underfoot");
+  CHECK(v2.glyphs[1].assetId == "levitation");
 }
 
 TEST_CASE("the editor's problem text agrees with the evaluator", "[spell]") {

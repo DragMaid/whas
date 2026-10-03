@@ -226,6 +226,11 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.collectMax > 0)
     ImGui::Text("Collects up to %d cells within %.0f", stats.collectMax,
                 stats.collectRadius);
+  if (stats.holdTime > 0.0f)
+    ImGui::Text("Column: a %.0f x %.0f block held %.1fs, %s",
+                stats.holdLength, stats.holdWidth, stats.holdTime,
+                stats.speed > 0.0f ? "launched by levitation"
+                                   : "formed in front of you");
 }
 
 
@@ -859,9 +864,9 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
                         {aimMark.x + 6.0f, aimMark.y + 4.0f},
                         Theme::U32(Tone::Verdigris, 0.8f));
 
-  // Only column signs push; the other signs have no direction
+  // Only levitation signs push; the other signs have no direction
   for (const auto &glyph : m_currentSpell.glyphs) {
-    if (glyph.kind != GlyphKind::Sign || glyph.assetId != "column")
+    if (glyph.kind != GlyphKind::Sign || glyph.assetId != "levitation")
       continue;
     float rad = glyph.rotationDeg * DEG2RAD;
     ImVec2 dir{std::sin(rad), -std::cos(rad)};
@@ -1224,6 +1229,7 @@ void DrawStatChanges(const Spell &beforeSpell, const Spell &afterSpell) {
         "%.1f");
     add("Restore", a.restore, b.restore, 1, "%.1f");
     add("Cooling", -a.temperatureDelta, -b.temperatureDelta, 0, "%.0f C");
+    add("Held for", a.holdTime, b.holdTime, 1, "%.1fs");
   }
   if (rows.empty())
     return;

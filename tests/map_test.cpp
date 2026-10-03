@@ -126,17 +126,17 @@ TEST_CASE("signs are counted per circle against the limit", "[spell]") {
   Spell spell;
   spell.glyphs.push_back({"water", GlyphKind::Sigil});
   for (int i = 0; i < SIGN_LIMIT; ++i)
-    spell.glyphs.push_back({"column", GlyphKind::Sign});
+    spell.glyphs.push_back({"levitation", GlyphKind::Sign});
   SpellRules::Count count = SpellRules::CountGlyphs(spell);
   REQUIRE(count.mostSigns == SIGN_LIMIT);
   REQUIRE(count.sigils == 1);
   REQUIRE(SpellRules::WithinLimits(spell));
-  spell.glyphs.push_back({"column", GlyphKind::Sign});
+  spell.glyphs.push_back({"levitation", GlyphKind::Sign});
   REQUIRE_FALSE(SpellRules::WithinLimits(spell));
 
   // A layered spell: the limit is per circle, not for the whole spell
   Spell layered;
-  layered.glyphs.assign(20, {"column", GlyphKind::Sign});
+  layered.glyphs.assign(20, {"levitation", GlyphKind::Sign});
   SpellComponent part;
   part.glyphs.assign(20, {"orb", GlyphKind::Sign});
   layered.components = {part, part};

@@ -219,7 +219,7 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
         character.wet = 0.0f;
       // Cast from where the caster stands, then any flight carries them off
       sim.CastSpell(cast.stats, cast.Origin(character.Center()), cast.aim,
-                    character.id);
+                    character.id, cast.placed);
       if (cast.stats.HasFlight()) {
         character.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
         AudioManager::EmitFlightLaunch(character.Center().x);

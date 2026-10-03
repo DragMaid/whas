@@ -1,4 +1,5 @@
 #include "whas/spell/spell_system.h"
+#include "whas/constants.h"
 #include "whas/element/base/econtext.h"
 #include "whas/element/base/factory.h"
 #include "whas/physics/particle_system.h"
@@ -98,6 +99,14 @@ struct SpellTuning {
   float maxSteerTime = 3.0f;
   float steerBaseRate = 1.6f; // rad/s, about 90 degrees a second
   float steerRatePerSign = 0.2f;
+  // Column: the element is held as a block for a while, then let go
+  float holdBaseTime = 1.5f; // seconds
+  float holdTimePerSign = 1.0f;
+  float maxHoldTime = 6.0f;
+  int minHoldWidth = 2;
+  int maxHoldWidth = 24;
+  int maxHoldLength = 120;
+  float mendsPerSign = 3.0f; // cells repetition mends per tick
   float maxSteerRate = 2.5f;
   // Layered spells: an embedded spell of scale s is worth s / this; one
   // that fills the whole core is worth all of it
@@ -202,6 +211,7 @@ struct Modifiers {
   float expansion = 0.0f;
   float pull = 0.0f; // pulling signs, negative when inverted (pushing)
   float sights = 0.0f;
+  float column = 0.0f;
   // Summed scales of each shape's trigger glyphs
   std::array<float, static_cast<size_t>(SpellShape::Count)> shapes{};
 
@@ -210,7 +220,7 @@ struct Modifiers {
                 repetition + o.repetition,   cooling + o.cooling,
                 strengthening + o.strengthening, collection + o.collection,
                 expansion + o.expansion,     pull + o.pull,
-                sights + o.sights, {}};
+                sights + o.sights,           column + o.column, {}};
     for (size_t i = 0; i < shapes.size(); ++i)
       m.shapes[i] = shapes[i] + o.shapes[i];
     return m;
@@ -286,8 +296,10 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
       m.pull += sign;
     else if (id == "sights_set")
       m.sights += glyph.scale;
-    else {
-      // Column: sign glyphs point up in their SVG; rotate like
+    else if (id == "column")
+      m.column += glyph.scale;
+    else if (id == "levitation") {
+      // Levitation is thrust: sign glyphs point up in their SVG; rotate like
       // SpellGeometry does
       float rad = glyph.rotationDeg * DEG2RAD;
       Vector2 forward{std::sin(rad), -std::cos(rad)};
@@ -326,7 +338,7 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
   return c;
 }
 
-// How a circle's column signs steer and speed up the spell
+// How a circle's levitation signs steer and speed up the spell
 struct Thrust {
   float imbalance = 0.0f;
   float offsetRad = 0.0f;
@@ -510,9 +522,25 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
                                  kTuning.steerRatePerSign * mods.sights);
     }
 
-    s.power = 0.5f * s.density * s.speed * s.speed * kTuning.powerScale;
     s.particleCount = std::clamp(static_cast<int>(count * effect), 1,
                                  kTuning.maxParticles);
+    // Column: a block as wide as the beam and long enough for the material.
+    // Without levitation it doesn't fly: it forms in front of the caster.
+    if (mods.column > 0.0f && s.element != Element::LIGHT) {
+      s.holdTime = std::min(kTuning.maxHoldTime,
+                            kTuning.holdBaseTime +
+                                kTuning.holdTimePerSign * mods.column);
+      int width = std::clamp(static_cast<int>(std::lround(s.diameter)),
+                             kTuning.minHoldWidth, kTuning.maxHoldWidth);
+      s.holdWidth = static_cast<float>(width);
+      s.holdLength = static_cast<float>(std::clamp(
+          (s.particleCount + width - 1) / width, 2, kTuning.maxHoldLength));
+      if (c.magnitude <= 0.0f && speedBonus <= 0.0f) {
+        s.speed = 0.0f;
+        s.range = 0.0f;
+      }
+    }
+    s.power = 0.5f * s.density * s.speed * s.speed * kTuning.powerScale;
     break;
   }
   case SpellKind::Flight:
@@ -872,6 +900,224 @@ void EmitElement(SpellEffect &effect, ElementContext &ctx, float dt) {
   }
 }
 
+// Column: the figure as (ahead, lateral) points before it is fitted into
+// the block. A plain stream fills the block.
+std::vector<Vector2> FigurePoints(const SpellStats &s, int count) {
+  std::vector<Vector2> pts;
+  const ShapeDef &def = SpellShapes::Get(s.shape);
+  float row = 0.0f; // how far back the next row sits
+  for (const ShapePart &part : def.parts) {
+    if (static_cast<int>(pts.size()) >= count)
+      break;
+    if (part.kind == ShapePart::Kind::Burst && part.disk) {
+      int left = count - static_cast<int>(pts.size());
+      int r = static_cast<int>(std::ceil(std::sqrt(left / PI))) + 1;
+      for (int dy = -r; dy <= r; ++dy)
+        for (int dx = -r; dx <= r; ++dx)
+          if (dx * dx + dy * dy <= r * r + r)
+            pts.push_back({-(row + r + dy), static_cast<float>(dx)});
+      row += 2 * r + 1;
+      continue;
+    }
+    float scale = SpellShapes::PartScale(part, s.diameter);
+    int cycle = SpellShapes::ScaledRows(part, scale);
+    if (part.kind == ShapePart::Kind::Burst) {
+      for (int r = 0; r < cycle; ++r)
+        for (float off : SpellShapes::RowOffsets(part, r, scale))
+          pts.push_back({-(row + r * part.rowSpacing), off});
+      row += cycle * part.rowSpacing;
+      continue;
+    }
+    if (part.beamLanes)
+      return {}; // a stream: fill the block
+    int length = SpellShapes::PartLength(part, scale);
+    for (int r = 0; (length == 0 || r < length) &&
+                    static_cast<int>(pts.size()) < count;
+         ++r) {
+      float weave = 0.0f;
+      if (def.weaveAmplitude > 0.0f)
+        weave = def.weaveAmplitude *
+                std::sin(2.0f * PI * (row + r) / def.weaveWavelength);
+      for (float off : SpellShapes::RowOffsets(part, r % cycle, scale))
+        pts.push_back({-(row + r), off + weave});
+    }
+    row += length;
+  }
+  return pts;
+}
+
+// The block's cells, as (ahead, lateral) from the near end on the aim line:
+// the figure shrunk to fit holdLength x holdWidth, the rest discarded
+std::vector<std::pair<int, int>> BlockLayout(const SpellStats &s, int count) {
+  int len = std::max(1, static_cast<int>(s.holdLength));
+  int width = std::max(1, static_cast<int>(s.holdWidth));
+  std::vector<std::pair<int, int>> cells;
+  std::vector<Vector2> pts = FigurePoints(s, count);
+  if (pts.empty()) {
+    for (int a = 0; a < len; ++a)
+      for (int l = 0; l < width; ++l)
+        cells.push_back({a, l - width / 2});
+  } else {
+    float a0 = 1e9f, a1 = -1e9f, l0 = 1e9f, l1 = -1e9f;
+    for (Vector2 p : pts) {
+      a0 = std::min(a0, p.x), a1 = std::max(a1, p.x);
+      l0 = std::min(l0, p.y), l1 = std::max(l1, p.y);
+    }
+    float k = std::min({1.0f, len / (a1 - a0 + 1.0f), width / (l1 - l0 + 1.0f)});
+    float lc = (l0 + l1) * 0.5f;
+    std::vector<uint8_t> seen(static_cast<size_t>(len) * width, 0);
+    for (Vector2 p : pts) {
+      // Front of the figure at the far end of the block
+      int a = std::clamp(static_cast<int>(std::floor((a1 - p.x) * k)), 0, len - 1);
+      int l = static_cast<int>(std::floor((p.y - lc) * k + width * 0.5f));
+      if (l < 0 || l >= width || seen[a * width + l])
+        continue;
+      seen[a * width + l] = 1;
+      cells.push_back({len - 1 - a, l - width / 2});
+    }
+  }
+  if (static_cast<int>(cells.size()) > count)
+    cells.resize(count);
+  return cells;
+}
+
+bool Holdable(const ElementContext &ctx, const Cell &c) {
+  if (c.element == Element::AIR)
+    return true;
+  const auto &props = ctx.config.elements[static_cast<size_t>(c.element)];
+  bool liquid = props.mobile && !props.solid;
+  return (props.passable || liquid) && !(c.flags & CELL_HELD);
+}
+
+void PutHeld(const SpellEffect &effect, ElementContext &ctx, int x, int y) {
+  const SpellStats &s = effect.stats;
+  Cell cell = ElementFactory::Create(s.element, ctx.config);
+  if (s.temperature > 0.0f)
+    cell.temperature = s.temperature;
+  cell.temperature += s.temperatureDelta;
+  cell.hardness *= s.hardnessScale;
+  cell.flags |= CELL_HELD;
+  ctx.grid.Get(x, y) = cell;
+  ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, true);
+}
+
+int ToTicks(float seconds, float dt) {
+  return std::max(1, static_cast<int>(std::lround(seconds / dt)));
+}
+
+void FormBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
+  const SpellStats &s = effect.stats;
+  Vector2 d = effect.direction;
+  Vector2 perp{-d.y, d.x};
+  bool flying = s.speed > 0.0f && s.range > 0.0f;
+  for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
+    Vector2 pos{effect.origin.x + d.x * (effect.holdGap + a + 0.5f) + perp.x * (l + 0.5f),
+                effect.origin.y + d.y * (effect.holdGap + a + 0.5f) + perp.y * (l + 0.5f)};
+    int x = static_cast<int>(std::floor(pos.x));
+    int y = static_cast<int>(std::floor(pos.y));
+    if (!ctx.grid.InBounds(x, y))
+      continue;
+    if (flying) {
+      // A little spare range: the spell sets the block down itself
+      if (Particle *p = ctx.particles.Spawn(
+              {x + 0.5f, y + 0.5f}, {d.x * s.speed, d.y * s.speed}, s.element,
+              s.range + 8.0f, s.power, true, effect.owner)) {
+        p->castId = effect.castId;
+        p->temperature = s.temperature;
+        p->temperatureDelta = s.temperatureDelta;
+        p->hardnessScale = s.hardnessScale;
+        p->crush = s.crush;
+        p->restore = s.restore;
+      }
+      continue;
+    }
+    effect.holdCells.push_back(y * GRID_W + x);
+    if (Holdable(ctx, ctx.grid.Get(x, y)))
+      PutHeld(effect, ctx, x, y);
+  }
+  effect.emitted = TotalParticles(effect);
+  if (flying) {
+    effect.holdPhase = SpellEffect::HoldFlying;
+    effect.holdTicks = ToTicks(s.range / s.speed, dt);
+  } else {
+    effect.holdPhase = SpellEffect::HoldHolding;
+    effect.holdTicks = ToTicks(s.holdTime, dt);
+  }
+}
+
+// The block has flown its range: what's left of it is set down and held
+void LandBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
+  ctx.particles.ForEachActive([&](Particle &p) {
+    if (p.castId != effect.castId || !p.isProjectile)
+      return;
+    p.active = false;
+    int x = static_cast<int>(std::floor(p.pos.x));
+    int y = static_cast<int>(std::floor(p.pos.y));
+    if (!ctx.grid.InBounds(x, y) || !Holdable(ctx, ctx.grid.Get(x, y)))
+      return;
+    effect.holdCells.push_back(y * GRID_W + x);
+    PutHeld(effect, ctx, x, y);
+  });
+  effect.holdPhase = SpellEffect::HoldHolding;
+  effect.holdTicks = ToTicks(effect.stats.holdTime, dt);
+}
+
+// Keep the block in shape. With repetition it stays as cast (its heat and
+// hardness put back) and mends holes; without, damage stays.
+void HoldBlock(SpellEffect &effect, ElementContext &ctx) {
+  const SpellStats &s = effect.stats;
+  int mends = s.restore > 0.0f
+                  ? std::max(1, static_cast<int>(s.restore * kTuning.mendsPerSign))
+                  : 0;
+  for (int32_t i : effect.holdCells) {
+    int x = i % GRID_W, y = i / GRID_W;
+    Cell &c = ctx.grid.Get(x, y);
+    bool ours = c.element == s.element && (c.flags & CELL_HELD);
+    if (ours && s.restore > 0.0f) {
+      const auto &props = ctx.config.elements[static_cast<size_t>(c.element)];
+      c.temperature = s.temperature > 0.0f ? s.temperature
+                                           : props.defaultTemperature;
+      c.hardness = props.defaultHardness * s.hardnessScale;
+      c.flags &= ~CELL_BURNING;
+    } else if (!ours && mends > 0 && Holdable(ctx, c)) {
+      PutHeld(effect, ctx, x, y);
+      --mends;
+    }
+  }
+}
+
+void ReleaseBlock(SpellEffect &effect, ElementContext &ctx) {
+  for (int32_t i : effect.holdCells) {
+    int x = i % GRID_W, y = i / GRID_W;
+    Cell &c = ctx.grid.Get(x, y);
+    if (c.flags & CELL_HELD) {
+      c.flags &= ~CELL_HELD;
+      ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, true);
+    }
+  }
+  effect.holdCells.clear();
+  effect.holdPhase = SpellEffect::HoldDone;
+}
+
+void TickColumn(SpellEffect &effect, ElementContext &ctx, float dt) {
+  switch (effect.holdPhase) {
+  case SpellEffect::HoldForming:
+    FormBlock(effect, ctx, dt);
+    break;
+  case SpellEffect::HoldFlying:
+    if (--effect.holdTicks <= 0)
+      LandBlock(effect, ctx, dt);
+    break;
+  case SpellEffect::HoldHolding:
+    HoldBlock(effect, ctx);
+    if (--effect.holdTicks <= 0)
+      ReleaseBlock(effect, ctx);
+    break;
+  default:
+    break;
+  }
+}
+
 // Move what the field holds: acceleration = force * strength / mass, toward
 // the caster when pulling, away when pushing. A wind field moves every loose
 // thing, an element's field only that element.
@@ -968,7 +1214,10 @@ void SpellSystem::TickEffects(std::vector<SpellEffect> &effects,
   for (auto &effect : effects) {
     switch (effect.stats.kind) {
     case SpellKind::Element:
-      EmitElement(effect, ctx, dt);
+      if (effect.stats.holdTime > 0.0f)
+        TickColumn(effect, ctx, dt);
+      else
+        EmitElement(effect, ctx, dt);
       break;
     case SpellKind::Field:
       ApplyField(effect, ctx, bodies, dt);
@@ -982,6 +1231,8 @@ void SpellSystem::TickEffects(std::vector<SpellEffect> &effects,
   std::erase_if(effects, [](const SpellEffect &effect) {
     switch (effect.stats.kind) {
     case SpellKind::Element:
+      if (effect.stats.holdTime > 0.0f)
+        return effect.holdPhase == SpellEffect::HoldDone;
       return effect.emitted >= TotalParticles(effect) ||
              effect.shapePart >= SpellShapes::Get(effect.stats.shape).parts.size();
     case SpellKind::Field:

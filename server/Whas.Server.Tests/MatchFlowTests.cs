@@ -24,13 +24,13 @@ public class MatchFlowTests(ServerFixture server)
     static readonly object[] WaterGlyphs =
     [
         new { assetId = "water", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
-        new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
+        new { assetId = "levitation", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
     ];
 
     static readonly object[] WindGlyphs =
     [
         new { assetId = "wind_underfoot", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
-        new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
+        new { assetId = "levitation", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
     ];
 
     async Task<Player> NewPlayerAsync(string build)
@@ -320,7 +320,7 @@ public class MatchFlowTests(ServerFixture server)
 
             // 33 signs: accepted, but over the ordinary limit
             var signs = Enumerable.Repeat<object>(
-                new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 0.1f, rotation = 0f }, 33);
+                new { assetId = "levitation", kind = "sign", x = 0f, y = -120f, scale = 0.1f, rotation = 0f }, 33);
             object[] glyphs = [new { assetId = "water", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
                                .. signs];
             await host.Client.SendAsync(new { type = "uploadSpell", @ref = "big", name = "Deluge", glyphs });
@@ -413,7 +413,7 @@ public class MatchFlowTests(ServerFixture server)
             {
                 new { assetId = "fire", kind = "sigil", x = 0f, y = 0f, scale = 1f, rotation = 0f },
                 new { assetId = "water", kind = "sigil", x = 50f, y = 0f, scale = 1f, rotation = 0f },
-                new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
+                new { assetId = "levitation", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
             },
         });
         Assert.Contains("sigil", (await c.ExpectAsync("spellRejected")).GetProperty("reason").GetString());
@@ -424,7 +424,7 @@ public class MatchFlowTests(ServerFixture server)
             glyphs = new object[]
             {
                 new { assetId = "fire", kind = "sigil", x = 0f, y = 0f, scale = 9f, rotation = 0f },
-                new { assetId = "column", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
+                new { assetId = "levitation", kind = "sign", x = 0f, y = -120f, scale = 1f, rotation = 0f },
             },
         });
         Assert.Contains("scale", (await c.ExpectAsync("spellRejected")).GetProperty("reason").GetString());
