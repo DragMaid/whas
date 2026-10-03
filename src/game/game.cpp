@@ -350,7 +350,8 @@ void Game::ResetOpponent(Simulation &sim) {
   c.hp = c.maxHp;
   c.burnStacks = 0;
   c.burnExposure = 0;
-  c.Step(sim, {}, 0.0f);
+  c.wet = 0.0f;
+  c.PlaceClear(sim);
 }
 
 void Game::BeginPlanning(Simulation &sim) {

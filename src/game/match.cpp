@@ -46,7 +46,7 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round,
     c.facing = c.pos.x < GRID_W * 0.5f ? 1 : -1;
     c.look = c.facing;
     c.maxHp = c.hp = MAX_HP;
-    c.Step(sim, {}, 0.0f); // resolve grounded before the first plan
+    c.PlaceClear(sim); // out of the terrain, grounded before the first plan
   }
   return state;
 }

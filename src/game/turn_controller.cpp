@@ -227,5 +227,6 @@ void TurnController::ApplyPlanTick(const TurnPlan &plan, int tick,
     }
   }
   // The fallen don't walk, but they still fall
+  character.Unbury(sim);
   character.Step(sim, character.Alive() ? input : CharacterInput{}, TICK_DT);
 }

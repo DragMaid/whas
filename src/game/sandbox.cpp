@@ -57,7 +57,7 @@ void Sandbox::PlaceAvatar(const Simulation &sim, Vector2 cellPos) {
       std::clamp(m_avatar.pos.y, 0.0f, GRID_H - Character::HEIGHT);
   m_avatar.vel = {0, 0};
   m_avatar.pushX = 0;
-  m_avatar.Step(sim, {}, 0.0f);
+  m_avatar.PlaceClear(sim);
   m_home = m_avatar.pos;
 }
 
@@ -68,7 +68,8 @@ void Sandbox::ResetAvatar(const Simulation &sim) {
   m_avatar.hp = m_avatar.maxHp;
   m_avatar.burnStacks = 0;
   m_avatar.burnExposure = 0;
-  m_avatar.Step(sim, {}, 0.0f);
+  m_avatar.wet = 0.0f;
+  m_avatar.PlaceClear(sim);
 }
 
 int Sandbox::QueuedTicks() const {
@@ -237,8 +238,10 @@ void Sandbox::Tick(Simulation &sim, bool isPainting) {
     }
   }
 
-  if (!m_dragging)
+  if (!m_dragging) {
+    m_avatar.Unbury(sim);
     m_avatar.Step(sim, {}, TurnController::TICK_DT);
+  }
   sim.GetParticleSystem().SetHurtboxes({{m_avatar.id, m_avatar.Bounds()}});
   // Sights set follows the live cursor here (casts without the avatar
   // have no owner)

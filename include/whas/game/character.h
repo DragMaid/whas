@@ -70,6 +70,13 @@ struct Character {
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.
   void Step(const Simulation &sim, CharacterInput input, float dt);
+  // How far Step will slip a body out of terrain that grew into it
+  static constexpr int UNSTUCK_REACH = 3;
+  // Throw loose grains (sand) inside the body out of it as particles, the way
+  // a body shoves through powder. Call before Step with the live world.
+  void Unbury(Simulation &sim);
+  // Spawning: rise out of whatever is here, however deep, then settle
+  void PlaceClear(const Simulation &sim);
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);

@@ -59,22 +59,54 @@ SpellComponent Part(const Spell &spell, float scale, float rotation = 0.0f) {
 
 } // namespace
 
-TEST_CASE("a character buried by a spell pops up on top of the pile",
+TEST_CASE("a character buried in sand shrugs it off where it stands",
           "[character]") {
   Simulation sim;
   sim.SetSeed(3);
   Floor(sim);
   Character c;
   c.pos = {50, GRID_H - 4 - Character::HEIGHT};
+  Vector2 start = c.pos;
   // Sand dumped right over the character, up to its head
-  Fill(sim, 48, GRID_H - 12, 55, GRID_H - 5, Element::SAND);
+  Fill(sim, 48, GRID_H - 12, 59, GRID_H - 5, Element::SAND);
 
+  c.Unbury(sim);
   c.Step(sim, {}, DT);
   Rectangle b = c.Bounds();
   for (int y = (int)b.y; y < (int)(b.y + b.height); ++y)
     for (int x = (int)b.x; x < (int)(b.x + b.width); ++x)
       REQUIRE(sim.GetCell(x, y).element == Element::AIR);
-  REQUIRE(c.pos.y <= GRID_H - 12 - Character::HEIGHT);
+  // Not lifted onto the pile: the grains went flying instead
+  REQUIRE(c.pos.y >= start.y - 1.0f);
+  int flying = 0;
+  sim.GetParticleSystem().ForEachActive(
+      [&](Particle &p) { flying += p.element == Element::SAND; });
+  REQUIRE(flying > 20);
+}
+
+TEST_CASE("rock grown into a character slips it aside, never to the top",
+          "[character]") {
+  Simulation sim;
+  Floor(sim);
+  Character c;
+  c.pos = {50, GRID_H - 4 - Character::HEIGHT};
+  // A wall grows two cells into the body from the left, all the way up
+  Fill(sim, 30, GRID_H - 60, 51, GRID_H - 5, Element::ROCK);
+  for (int y = GRID_H - 60; y <= GRID_H - 5; ++y)
+    for (int x = 30; x <= 51; ++x)
+      sim.Anchor(x, y);
+  c.Step(sim, {}, DT);
+  REQUIRE(c.pos.x >= 52.0f);
+  REQUIRE(c.pos.x <= 52.0f + Character::UNSTUCK_REACH);
+  REQUIRE(c.pos.y > GRID_H - 30.0f);
+
+  // Sealed in: it stays put and has to dig
+  Character sealed;
+  sealed.pos = {35, GRID_H - 40.0f};
+  Vector2 at = sealed.pos;
+  sealed.Step(sim, {false, true, true, false}, DT);
+  REQUIRE(sealed.pos.x == at.x);
+  REQUIRE(sealed.pos.y == at.y);
 }
 
 TEST_CASE("crushing grinds earth into sand and inverted crushing reforms it",
