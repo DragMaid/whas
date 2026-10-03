@@ -47,6 +47,9 @@ struct UIState {
   bool configLocked = false;
   // The map editor has the screen: no action bar
   bool hideActionBar = false;
+  // A campaign (playing or editing) has the keys: no hotbar, editor or menu
+  // shortcuts
+  bool keysTaken = false;
 
   // Requests from the bar, handled by main
   bool menuRequested = false;

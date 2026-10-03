@@ -189,6 +189,7 @@ int main(int argc, char **argv) {
     if (IsKeyPressed(KEY_F11))
       ToggleBorderlessWindowed();
     View::Update();
+    uiState.keysTaken = campaign.Active() || campaignEditor.Editing();
     ui.HandleInput(uiState, sim);
 
     if (uiState.menuRequested) {
