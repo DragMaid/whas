@@ -19,9 +19,9 @@ say how it behaves. The editor (`E`) shows what a spell does as you draw;
 | Sign | Effect |
 |---|---|
 | `levitation` | Thrust: points and speeds the spell. Unbalanced signs bend it. (Before evaluator version 7 this was called `column`.) |
-| `column` | Holds the element as a block. See below. |
+| `column` | Holds the element as a block that rises out of its base; with crushing, a drill. Points like levitation. See below. |
 | `convergence` | Faster, denser, narrower |
-| `crushing` | A digging tool: the spell leaves none of its own element. Rock and earth it hits burst out of the hole as flying sand. Inverted: packs sand it hits into earth. |
+| `crushing` | A digging tool: the spell leaves none of its own element. Rock and earth it hits burst into sand thrown back the way the spell came, out of the hole (sand it runs into is thrown back too). Inverted: packs sand it hits into earth. |
 | `repetition` | Puts what it hits back to its natural state. On a column: keeps the block as cast and mends it. |
 | `cooling` | Chills: water to ice, fire down to smoke |
 | `strengthening` | Lands harder; earth becomes rock |
@@ -38,8 +38,25 @@ along the aim, `holdLength` cells long and `holdWidth` wide (the beam's
 width), and holds it for `holdTime` seconds (more and bigger column signs
 hold longer).
 
-- **No levitation**: the block forms in front of the caster (7 cells out,
-  clear of the body) or, when cast from a surface (right click), right there.
+- **Direction**: column signs point like levitation signs. Their net vector
+  turns the block off its base direction, up to 60 degrees, the same way
+  levitation turns a flight.
+- **No levitation**: the block rises out of its base at `holdRise` cells/s:
+  `(20 + 15 x column signs) x sqrt(60 / area)`, at least 4. The base is 7
+  cells in front of the caster (clear of the body), or, cast from a surface
+  (right click), the surface itself, rising straight out of it. Air and
+  gases are taken, loose cells (sand, water) are carried off ahead of the
+  front, and solid ground stops that lane. A character over it is lifted
+  (the unstuck rule moves it onto the new top). Its hold time starts once
+  it's fully risen.
+- **Drill (crushing, no levitation)**: rises the same way but builds
+  nothing. Every earth and rock cell in its risen part, rigid rock bodies
+  included, is ground to sand thrown back toward its base, and it keeps
+  grinding whatever comes in until its time runs out. Drawn on a surface
+  (right click) it bores into it. Inverted, it packs sand into earth.
+- While a column rises or holds, an outline shows the block (faint where
+  it's still to rise) and a ring at its base drains as its time runs out:
+  gold for a block, red for a drill.
 - **With levitation**: the block flies as one piece for the spell's range
   and is held where it lands. Whatever it lost on the way stays lost.
 - **Shapes** (orb, dragon) are scaled down to fit the block; whatever
@@ -51,8 +68,9 @@ hold longer).
 - **When it lets go**, the flags are cleared and the material is ordinary
   again: water falls, sand piles up, rock settles. Nothing vanishes.
 
-Code: `FormBlock`, `LandBlock`, `HoldBlock` and `ReleaseBlock` in
-`spell/spell_system.cpp`.
+Code: `FormBlock`, `RiseBlock`, `Drill`, `LandBlock`, `HoldBlock` and
+`ReleaseBlock` in `spell/spell_system.cpp`; the indicator is
+`UI::DrawActiveColumns`.
 
 ## Placed casts (right click)
 
@@ -61,7 +79,10 @@ or wall nearest the cursor (within `Placement::REACH`, 48 cells, of the
 caster; a ring marks the spot) and fires it from there, the way you're
 aiming, or straight out of the surface when that way leads into it. The
 spot travels in the plan as an offset from the caster (`px`, `py` in 1/8
-cells), so online peers agree. Wind underfoot always leaves the body.
+cells), so online peers agree. Wind underfoot always leaves the body. A standing
+column ignores the aim and rises straight out of the surface (a drill
+bores in); its aim is set when the cast is planned, so it travels the same
+way.
 
 ## Status effects
 

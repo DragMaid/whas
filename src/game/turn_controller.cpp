@@ -11,7 +11,20 @@ PlannedCast PlannedCast::Local(const Spell &spell, Vector2 aim) {
           SpellQuant::DequantizeAim(q)};
 }
 
-void PlannedCast::PlaceAt(Vector2 at, Vector2 caster) {
+namespace {
+
+const SpellStats *StandingPart(const SpellStats &s) {
+  if (s.holdRise > 0.0f)
+    return &s;
+  for (const SpellStats &part : s.parts)
+    if (const SpellStats *found = StandingPart(part))
+      return found;
+  return nullptr;
+}
+
+} // namespace
+
+void PlannedCast::PlaceAt(Vector2 at, Vector2 caster, Vector2 normal) {
   auto q = [](float v) {
     return static_cast<int16_t>(
         std::clamp<long>(std::lround(v * PLACE_SCALE), INT16_MIN, INT16_MAX));
@@ -19,6 +32,11 @@ void PlannedCast::PlaceAt(Vector2 at, Vector2 caster) {
   placed = true;
   px = q(at.x - caster.x);
   py = q(at.y - caster.y);
+  if (const SpellStats *column = StandingPart(stats)) {
+    float sign = column->crush != 0.0f ? -1.0f : 1.0f;
+    aimQ = SpellQuant::QuantizeAim({normal.x * sign, normal.y * sign});
+    aim = SpellQuant::DequantizeAim(aimQ);
+  }
 }
 
 Vector2 PlannedCast::Origin(Vector2 caster) const {

@@ -219,7 +219,7 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
     return;
   PlannedCast cast = PlannedCast::Local(*spell, target->aim);
   if (target->at)
-    cast.PlaceAt(*target->at, m_avatar.Center());
+    cast.PlaceAt(*target->at, m_avatar.Center(), target->normal);
   if (m_stopped) {
     m_queued.push_back(std::move(cast));
     if (AudioManager *audio = AudioManager::Instance())

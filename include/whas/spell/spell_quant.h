@@ -16,7 +16,7 @@ constexpr int32_t AIM_SCALE = 16384;   // unit aim vectors in 1/16384
 
 // Bump whenever SpellSystem::Evaluate or its tuning changes; the server keeps
 // stats per evaluator version so old replays still reproduce
-constexpr int EVALUATOR_VERSION = 7;
+constexpr int EVALUATOR_VERSION = 8;
 
 struct Stats {
   bool valid = false;
@@ -53,6 +53,7 @@ struct Stats {
   int32_t holdTime = 0;
   int32_t holdLength = 0;
   int32_t holdWidth = 0;
+  int32_t holdRise = 0;
   std::vector<Stats> parts; // layered spells
 
   bool operator==(const Stats &) const;

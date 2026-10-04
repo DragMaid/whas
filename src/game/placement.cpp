@@ -90,7 +90,7 @@ CastTargeting::Update(const Simulation &sim, Vector2 caster, Vector2 mouse,
   }
   if (aim.x * spot->normal.x + aim.y * spot->normal.y < 0.0f)
     aim = spot->normal;
-  return Target{aim, spot->pos};
+  return Target{aim, spot->pos, spot->normal};
 }
 
 void CastTargeting::DrawWorld(const Simulation &sim, Vector2 caster,

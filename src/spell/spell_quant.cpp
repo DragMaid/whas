@@ -33,7 +33,8 @@ bool Stats::operator==(const Stats &o) const {
          homeTurnRate == o.homeTurnRate && homeRadius == o.homeRadius &&
          steerTime == o.steerTime && steerRate == o.steerRate &&
          holdTime == o.holdTime && holdLength == o.holdLength &&
-         holdWidth == o.holdWidth && parts == o.parts;
+         holdWidth == o.holdWidth && holdRise == o.holdRise &&
+         parts == o.parts;
 }
 
 Stats Quantize(const SpellStats &s) {
@@ -72,6 +73,7 @@ Stats Quantize(const SpellStats &s) {
   q.holdTime = Q(s.holdTime, STAT_SCALE);
   q.holdLength = Q(s.holdLength, STAT_SCALE);
   q.holdWidth = Q(s.holdWidth, STAT_SCALE);
+  q.holdRise = Q(s.holdRise, STAT_SCALE);
   for (const SpellStats &part : s.parts)
     q.parts.push_back(Quantize(part));
   return q;
@@ -113,6 +115,7 @@ SpellStats Dequantize(const Stats &q) {
   s.holdTime = D(q.holdTime, STAT_SCALE);
   s.holdLength = D(q.holdLength, STAT_SCALE);
   s.holdWidth = D(q.holdWidth, STAT_SCALE);
+  s.holdRise = D(q.holdRise, STAT_SCALE);
   for (const Stats &part : q.parts)
     s.parts.push_back(Dequantize(part));
   // Only used for the editor's balance display; the direction comes from
@@ -186,6 +189,8 @@ void to_json(nlohmann::json &j, const Stats &s) {
     j["holdLength"] = s.holdLength;
     j["holdWidth"] = s.holdWidth;
   }
+  if (s.holdRise != 0)
+    j["holdRise"] = s.holdRise;
   if (!s.parts.empty()) {
     j["parts"] = nlohmann::json::array();
     for (const Stats &part : s.parts) {
@@ -231,6 +236,7 @@ void from_json(const nlohmann::json &j, Stats &s) {
   s.holdTime = j.value("holdTime", int32_t{0});
   s.holdLength = j.value("holdLength", int32_t{0});
   s.holdWidth = j.value("holdWidth", int32_t{0});
+  s.holdRise = j.value("holdRise", int32_t{0});
   s.parts.clear();
   if (auto it = j.find("parts"); it != j.end())
     for (const auto &pj : *it) {

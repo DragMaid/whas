@@ -22,8 +22,10 @@ struct PlannedCast {
 
   // Offline: stats computed locally with the server's rounding
   static PlannedCast Local(const Spell &spell, Vector2 aim);
-  // Draw it at `at` (cells) for a caster centred on `caster`
-  void PlaceAt(Vector2 at, Vector2 caster);
+  // Draw it at `at` (cells) for a caster centred on `caster`, on a surface
+  // facing `normal`. A standing column rises straight out of the surface
+  // (a crushing one bores into it) instead of following the aim.
+  void PlaceAt(Vector2 at, Vector2 caster, Vector2 normal);
   // Where it leaves from for a caster centred here
   Vector2 Origin(Vector2 caster) const;
 };

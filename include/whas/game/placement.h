@@ -31,6 +31,7 @@ public:
   struct Target {
     Vector2 aim;               // unit
     std::optional<Vector2> at; // placed: where the spell is drawn (cells)
+    Vector2 normal{0.0f, -1.0f}; // placed: out of the surface
   };
 
   // Mouse in cells; worldInput is false while a panel has the mouse. A

@@ -117,6 +117,11 @@ public:
     Particle *Spawn(Vector2 pos, Vector2 vel, Element element,
                     float remainingDistance = 0.0f, float power = 0.0f,
                     bool isProjectile = false, int owner = -1);
+    // Crushing: earth and rock ground to sand thrown off along `back` (out
+    // of the hole); inverted, sand packed into earth
+    static bool Crushable(const struct Cell &c, float crush);
+    static void Crush(struct ElementContext &ctx, int x, int y, Vector2 back,
+                      bool invert = false);
     // Spawn now, or queue it when called from a worker thread
     static void SpawnFrom(struct ElementContext &ctx, Vector2 pos, Vector2 vel,
                           Element element);
