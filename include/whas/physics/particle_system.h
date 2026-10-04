@@ -32,10 +32,12 @@ struct ParticleHit {
 // caster, a spell's element striking, a solid breaking, fire meeting water.
 // Sound only: not simulation state, never hashed or saved.
 struct ParticleNoise {
-  enum Kind : uint8_t { Cast, Impact, Break, Fizzle };
+  enum Kind : uint8_t { Cast, Impact, Break, Fizzle, BodyHit };
   Kind kind;
   Element element; // the spell's element, or what broke
   Vector2 pos;     // cells
+  float strength = 0.0f; // BodyHit: 0..1, how hard it struck
+  float heft = 0.0f;     // BodyHit: 0..1, how big the body is
 };
 
 // A particle spawn queued by a worker thread (see ElementContext)
