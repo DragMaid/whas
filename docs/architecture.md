@@ -16,6 +16,7 @@ the window.
 | Simulation | `engine/simulation.cpp` | One tick: pressure, cells on worker threads (chunked, deterministic order), rigid bodies, spell effects, particles, heat. |
 | Particles | `physics/particle_system.cpp` | Loose things in flight: spell projectiles, splashes, debris. Projectiles break cells by spending power; they hit hurtboxes (characters). |
 | Rigid bodies | `physics/rigid_body_system.cpp` | Rock and ice become Box2D bodies unless anchored (`CELL_ANCHORED`) or held (`CELL_HELD`). |
+| Sound | `audio/` | Listens to the world, never changes it: cells that move or come to rest, noises the particles log, and rigid bodies striking (one thump per rock or ice body, as loud as it hit; their cells and rock particles are silent). |
 | Snapshots | `engine/snapshot.cpp` | The whole world as bytes, for desync recovery. Bump `MAGIC` when the layout changes. |
 
 The simulation is deterministic: the same seed and inputs give the same

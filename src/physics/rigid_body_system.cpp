@@ -20,6 +20,12 @@ inline int32_t MakeBodyID(b2BodyId id) {
          (static_cast<int32_t>(id.generation) & 0xFFFF);
 }
 
+// Approach speed (cells/s) a body must strike with to be heard, and the
+// speed and size that sound full
+constexpr float HIT_SPEED = 2.5f;
+constexpr float HIT_FULL_SPEED = 12.0f;
+constexpr float HIT_FULL_PIXELS = 400.0f;
+
 // Return game world position projections from Box2D world
 inline std::pair<int, int> ProjectToWorld(float lx, float ly, b2Vec2 pos,
                                           b2Rot rot) {
@@ -44,6 +50,7 @@ void RigidBodySystem::CreateWorld() {
   b2WorldDef worldDef = b2DefaultWorldDef();
   // TODO: move this to config
   worldDef.gravity = {0.0f, 9.8f};
+  worldDef.hitEventThreshold = HIT_SPEED;
   m_worldId = b2CreateWorld(&worldDef);
   m_chunkMeshes.resize(CHUNK_COLS * CHUNK_ROWS);
 
@@ -136,12 +143,47 @@ void RigidBodySystem::PostUpdate(Grid &grid, ElementContext &ctx,
 
   // 3. Step physics
   b2World_Step(m_worldId, dt, 4);
+  HearHits(particles);
 
   // 4. Fluid displacement & drag
   ProcessDisplacement(grid, ctx, particles);
 
   // 5. Write bodies back to grid
   SyncBackToGrid(grid, ctx);
+}
+
+void RigidBodySystem::HearHits(ParticleSystem &particles) {
+  // One thump per body per step, the hardest it took
+  b2ContactEvents events = b2World_GetContactEvents(m_worldId);
+  std::vector<std::pair<const BodyData *, ParticleNoise>> hits;
+  for (int i = 0; i < events.hitCount; ++i) {
+    const b2ContactHitEvent &e = events.hitEvents[i];
+    for (b2ShapeId shape : {e.shapeIdA, e.shapeIdB}) {
+      if (!b2Shape_IsValid(shape))
+        continue;
+      int32_t id = MakeBodyID(b2Shape_GetBody(shape));
+      auto bd = std::find_if(m_bodies.begin(), m_bodies.end(), [&](auto &b) {
+        return MakeBodyID(b.bodyId) == id;
+      });
+      if (bd == m_bodies.end() || bd->elements.empty())
+        continue;
+      float strength = std::min(1.0f, e.approachSpeed / HIT_FULL_SPEED);
+      auto it = std::find_if(hits.begin(), hits.end(),
+                             [&](auto &h) { return h.first == &*bd; });
+      if (it != hits.end() && it->second.strength >= strength)
+        continue;
+      ParticleNoise n{ParticleNoise::BodyHit, bd->elements.front(),
+                      {e.point.x, e.point.y}};
+      n.strength = strength;
+      n.heft = std::min(1.0f, bd->originalPixels.size() / HIT_FULL_PIXELS);
+      if (it != hits.end())
+        it->second = n;
+      else
+        hits.push_back({&*bd, n});
+    }
+  }
+  for (auto &[bd, n] : hits)
+    particles.Note(n);
 }
 
 void RigidBodySystem::ClearBodiesFromGrid(Grid &grid,
@@ -596,6 +638,7 @@ void RigidBodySystem::AddTriangulatedShapes(b2BodyId bodyId,
   auto loops = GeometryUtils::MarchingSquares(mask, width, height);
   b2ShapeDef shapeDef = b2DefaultShapeDef();
   shapeDef.density = density / 1000.0f;
+  shapeDef.enableHitEvents = true;
 
   for (auto &loop : loops) {
     auto simplified = GeometryUtils::DouglasPeucker(loop, 0.5f);
