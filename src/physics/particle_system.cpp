@@ -96,7 +96,8 @@ float RandomUnit(ElementContext &ctx) {
 bool TryImpact(Particle &p, Grid &grid, ElementContext &ctx, int tx, int ty) {
   Cell &target = grid.Get(tx, ty);
   const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
-  bool granular = props.mobile && props.solid;
+  // A crushing spell clears grains out of its hole like the rubble
+  bool granular = props.mobile && props.solid && p.crush <= 0.0f;
   float cost = granular ? target.hardness * kImpact.granularCostScale
                         : target.hardness;
   if (p.power < cost)
@@ -192,10 +193,11 @@ struct ModifierTuning {
   float reformChancePerSign = 0.25f;
   float radiusPerSign = 1.0f; // cells beyond the one that was hit
   int maxRadius = 4;
-  // Crushed grit is thrown out of the hole, away from where it was hit
+  // Crushed grit is thrown back the way the spell came, out of the hole
   float debrisSpeedMin = 25.0f; // cells/s
   float debrisSpeedMax = 60.0f;
-  float debrisLift = 15.0f;
+  float debrisSpreadDeg = 20.0f;
+  float debrisLift = 6.0f;
 };
 
 constexpr ModifierTuning kModifier;
@@ -229,28 +231,12 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
       if (dx * dx + dy * dy > r * r || !grid.InBounds(x, y))
         continue;
       Cell &c = grid.Get(x, y);
-      if (p.crush > 0.0f &&
-          (c.element == Element::ROCK || c.element == Element::EARTH) &&
+      if (p.crush > 0.0f && ParticleSystem::Crushable(c, 1.0f) &&
           RandomUnit(ctx) < p.crush * kModifier.crushChancePerSign) {
-        ctx.particles.Note({ParticleNoise::Break, c.element, {x + 0.5f, y + 0.5f}});
-        ReplaceCell(grid, ctx, x, y, Element::AIR);
-        // Out of the hole: away from the hit, or back along the spell
-        Vector2 out{static_cast<float>(dx), static_cast<float>(dy)};
-        if (dx == 0 && dy == 0)
-          out = {-p.vel.x, -p.vel.y};
-        float len = std::sqrt(out.x * out.x + out.y * out.y);
-        if (len > 0.0f)
-          out = {out.x / len, out.y / len};
-        float speed = kModifier.debrisSpeedMin +
-                      RandomUnit(ctx) * (kModifier.debrisSpeedMax -
-                                         kModifier.debrisSpeedMin);
-        ParticleSystem::SpawnFrom(
-            ctx, {x + 0.5f, y + 0.5f},
-            {out.x * speed, out.y * speed - kModifier.debrisLift},
-            Element::SAND);
-      } else if (p.crush < 0.0f && c.element == Element::SAND &&
+        ParticleSystem::Crush(ctx, x, y, {-p.vel.x, -p.vel.y});
+      } else if (p.crush < 0.0f && ParticleSystem::Crushable(c, -1.0f) &&
                  RandomUnit(ctx) < -p.crush * kModifier.reformChancePerSign) {
-        ReplaceCell(grid, ctx, x, y, Element::EARTH);
+        ParticleSystem::Crush(ctx, x, y, {}, true);
       }
       if (p.restore > 0.0f && c.element != Element::AIR) {
         const auto &props =
@@ -419,6 +405,37 @@ bool MeetCell(Particle &p, Grid &grid, ElementContext &ctx, int x, int y) {
 }
 
 } // namespace
+
+bool ParticleSystem::Crushable(const Cell &c, float crush) {
+  if (crush < 0.0f)
+    return c.element == Element::SAND;
+  return c.element == Element::ROCK || c.element == Element::EARTH;
+}
+
+void ParticleSystem::Crush(ElementContext &ctx, int x, int y, Vector2 back,
+                           bool invert) {
+  Grid &grid = ctx.grid;
+  if (invert) {
+    ReplaceCell(grid, ctx, x, y, Element::EARTH);
+    return;
+  }
+  Cell &c = grid.Get(x, y);
+  ctx.particles.Note({ParticleNoise::Break, c.element, {x + 0.5f, y + 0.5f}});
+  ReplaceCell(grid, ctx, x, y, Element::AIR);
+  float len = std::sqrt(back.x * back.x + back.y * back.y);
+  Vector2 out = len > 0.0f ? Vector2{back.x / len, back.y / len}
+                           : Vector2{0.0f, -1.0f};
+  float spread = (RandomUnit(ctx) * 2.0f - 1.0f) * kModifier.debrisSpreadDeg *
+                 DEG2RAD;
+  float cs = std::cos(spread), sn = std::sin(spread);
+  out = {out.x * cs - out.y * sn, out.x * sn + out.y * cs};
+  float speed = kModifier.debrisSpeedMin +
+                RandomUnit(ctx) *
+                    (kModifier.debrisSpeedMax - kModifier.debrisSpeedMin);
+  ParticleSystem::SpawnFrom(
+      ctx, {x + 0.5f, y + 0.5f},
+      {out.x * speed, out.y * speed - kModifier.debrisLift}, Element::SAND);
+}
 
 namespace {
 

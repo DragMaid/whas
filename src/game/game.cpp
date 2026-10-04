@@ -255,7 +255,7 @@ std::optional<PlannedCast> Game::TakeCast(const Simulation &sim, UI &ui,
     return std::nullopt;
   }
   if (target->at && !cast.stats.HasFlight())
-    cast.PlaceAt(*target->at, from.Center());
+    cast.PlaceAt(*target->at, from.Center(), target->normal);
   return cast;
 }
 

@@ -266,6 +266,8 @@ uint64_t Simulation::StateHash() const {
     f.Add(e.timeRemaining);
     f.Add(e.holdPhase);
     f.Add(e.holdTicks);
+    f.Add(e.holdRisen);
+    f.Add(e.holdBlocked);
     for (int32_t c : e.holdCells)
       f.Add(c);
   }

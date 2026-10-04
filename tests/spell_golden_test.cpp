@@ -56,7 +56,17 @@ std::vector<Spell> Cases() {
       s.name = "case" + std::to_string(n++);
       s.glyphs.push_back({"orb", GlyphKind::Sign, {100, 0}, 1.0f, 0.0f});
       s.glyphs.push_back({"repetition", GlyphKind::Sign, {-100, 0}, 1.0f, 0.0f});
-      out.push_back(std::move(s));
+      out.push_back(s);
+      // Turned by its column signs, bigger, rising at its own speed
+      for (float rot : {-130.0f, -35.0f, 70.0f, 180.0f}) {
+        Spell t;
+        t.name = "case" + std::to_string(n++);
+        t.glyphs = {{sigil, GlyphKind::Sigil, {0, 0}, scale, 0.0f},
+                    {"column", GlyphKind::Sign, {0, -120}, scale, rot},
+                    {"column", GlyphKind::Sign, {80, -80}, 0.6f, rot * 0.5f},
+                    {"expansion", GlyphKind::Sign, {-100, 0}, scale, 0.0f}};
+        out.push_back(std::move(t));
+      }
     }
   // No sigil, and two sigils: both invalid
   out.push_back({"no-sigil", {{"levitation", GlyphKind::Sign, {0, 0}, 1, 0}}});

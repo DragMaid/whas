@@ -106,6 +106,12 @@ struct SpellTuning {
   int minHoldWidth = 2;
   int maxHoldWidth = 24;
   int maxHoldLength = 120;
+  // A standing column rises out of its base: cells/s, slower the bigger
+  // the block (by the square root of its area against riseRefArea)
+  float riseBase = 20.0f;
+  float risePerSign = 15.0f;
+  float riseRefArea = 60.0f;
+  float minRise = 4.0f;
   float mendsPerSign = 3.0f; // cells repetition mends per tick
   float maxSteerRate = 2.5f;
   // Layered spells: an embedded spell of scale s is worth s / this; one
@@ -192,6 +198,13 @@ bool SpellStats::HasFlight() const {
                      [](const SpellStats &p) { return p.HasFlight(); });
 }
 
+bool SpellStats::StandingColumn() const {
+  if (holdRise > 0.0f)
+    return true;
+  return std::any_of(parts.begin(), parts.end(),
+                     [](const SpellStats &p) { return p.StandingColumn(); });
+}
+
 float SpellSystem::ComponentEffectiveness(float scale) {
   return std::clamp(scale / kTuning.componentFullScale,
                     kTuning.componentMinEffect, kTuning.componentMaxEffect);
@@ -212,6 +225,7 @@ struct Modifiers {
   float pull = 0.0f; // pulling signs, negative when inverted (pushing)
   float sights = 0.0f;
   float column = 0.0f;
+  Vector2 columnNet{0.0f, 0.0f}; // column signs point the block like thrust
   // Summed scales of each shape's trigger glyphs
   std::array<float, static_cast<size_t>(SpellShape::Count)> shapes{};
 
@@ -220,7 +234,9 @@ struct Modifiers {
                 repetition + o.repetition,   cooling + o.cooling,
                 strengthening + o.strengthening, collection + o.collection,
                 expansion + o.expansion,     pull + o.pull,
-                sights + o.sights,           column + o.column, {}};
+                sights + o.sights,           column + o.column,
+                {columnNet.x + o.columnNet.x, columnNet.y + o.columnNet.y},
+                {}};
     for (size_t i = 0; i < shapes.size(); ++i)
       m.shapes[i] = shapes[i] + o.shapes[i];
     return m;
@@ -250,6 +266,23 @@ struct Circle {
 
   Modifiers mods;
 };
+
+// Which way a directional sign points: sign glyphs point up in their SVG;
+// rotate like SpellGeometry does
+Vector2 SignForward(const PlacedGlyph &glyph) {
+  float rad = glyph.rotationDeg * DEG2RAD;
+  return {std::sin(rad), -std::cos(rad)};
+}
+
+// How far a net sign vector turns the spell off its aim (levitation steering
+// the flight, column signs turning the block)
+float SteerOffset(Vector2 net, float magnitude) {
+  if (magnitude <= 0.0f)
+    return 0.0f;
+  float maxOffset = kTuning.maxOffsetDeg * DEG2RAD;
+  return std::clamp(std::atan2(net.x, std::max(0.0f, magnitude - net.y)),
+                    -maxOffset, maxOffset);
+}
 
 Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
   Circle c;
@@ -296,13 +329,13 @@ Circle ReadCircle(const std::vector<PlacedGlyph> &glyphs) {
       m.pull += sign;
     else if (id == "sights_set")
       m.sights += glyph.scale;
-    else if (id == "column")
+    else if (id == "column") {
+      Vector2 forward = SignForward(glyph);
       m.column += glyph.scale;
-    else if (id == "levitation") {
-      // Levitation is thrust: sign glyphs point up in their SVG; rotate like
-      // SpellGeometry does
-      float rad = glyph.rotationDeg * DEG2RAD;
-      Vector2 forward{std::sin(rad), -std::cos(rad)};
+      m.columnNet.x += forward.x * glyph.scale;
+      m.columnNet.y += forward.y * glyph.scale;
+    } else if (id == "levitation") {
+      Vector2 forward = SignForward(glyph);
       c.net.x += forward.x * glyph.scale;
       c.net.y += forward.y * glyph.scale;
       c.magnitude += glyph.scale;
@@ -348,16 +381,12 @@ struct Thrust {
 Thrust ReadThrust(const Circle &c) {
   Thrust t;
   float lateral = c.net.x;
-  float forward = -c.net.y;
   float lateralRatio = 0.0f;
   if (c.magnitude > 0.0f) {
     t.imbalance =
         std::min(1.0f, std::hypot(c.net.x, c.net.y) / c.magnitude);
     lateralRatio = std::min(1.0f, std::abs(lateral) / c.magnitude);
-    float maxOffset = kTuning.maxOffsetDeg * DEG2RAD;
-    t.offsetRad =
-        std::clamp(std::atan2(lateral, std::max(0.0f, c.magnitude + forward)),
-                   -maxOffset, maxOffset);
+    t.offsetRad = SteerOffset(c.net, c.magnitude);
   }
   t.speedGain = kTuning.speedPerSign * c.magnitude *
                 (1.0f - kTuning.lateralSpeedLoss * lateralRatio);
@@ -535,9 +564,14 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
       s.holdWidth = static_cast<float>(width);
       s.holdLength = static_cast<float>(std::clamp(
           (s.particleCount + width - 1) / width, 2, kTuning.maxHoldLength));
+      s.offsetRad += SteerOffset(mods.columnNet, mods.column);
       if (c.magnitude <= 0.0f && speedBonus <= 0.0f) {
         s.speed = 0.0f;
         s.range = 0.0f;
+        float area = s.holdLength * s.holdWidth;
+        s.holdRise = std::max(
+            kTuning.minRise, (kTuning.riseBase + kTuning.risePerSign * mods.column) *
+                                 std::sqrt(kTuning.riseRefArea / area));
       }
     }
     s.power = 0.5f * s.density * s.speed * s.speed * kTuning.powerScale;
@@ -1005,50 +1039,125 @@ int ToTicks(float seconds, float dt) {
   return std::max(1, static_cast<int>(std::lround(seconds / dt)));
 }
 
+// The grid cell a block cell (ahead, lateral) of a column lands in
+std::pair<int, int> BlockCell(const SpellEffect &effect, int a, int l) {
+  Vector2 d = effect.direction;
+  Vector2 perp{-d.y, d.x};
+  float ahead = effect.holdGap + a + 0.5f, side = l + 0.5f;
+  return {static_cast<int>(std::floor(effect.origin.x + d.x * ahead + perp.x * side)),
+          static_cast<int>(std::floor(effect.origin.y + d.y * ahead + perp.y * side))};
+}
+
+void StartHolding(SpellEffect &effect, float dt) {
+  effect.holdPhase = SpellEffect::HoldHolding;
+  effect.holdTotal = effect.holdTicks = ToTicks(effect.stats.holdTime, dt);
+}
+
 void FormBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
   const SpellStats &s = effect.stats;
   Vector2 d = effect.direction;
-  Vector2 perp{-d.y, d.x};
-  bool flying = s.speed > 0.0f && s.range > 0.0f;
-  // Crushing makes no material, so there's nothing to stand still
-  if (s.crush != 0.0f && !flying) {
-    effect.emitted = TotalParticles(effect);
-    effect.holdPhase = SpellEffect::HoldDone;
+  effect.emitted = TotalParticles(effect);
+  if (s.holdRise > 0.0f) {
+    effect.holdPhase = SpellEffect::HoldRising;
     return;
   }
+  // Levitated: the block flies as one piece
   for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
-    Vector2 pos{effect.origin.x + d.x * (effect.holdGap + a + 0.5f) + perp.x * (l + 0.5f),
-                effect.origin.y + d.y * (effect.holdGap + a + 0.5f) + perp.y * (l + 0.5f)};
-    int x = static_cast<int>(std::floor(pos.x));
-    int y = static_cast<int>(std::floor(pos.y));
+    auto [x, y] = BlockCell(effect, a, l);
     if (!ctx.grid.InBounds(x, y))
       continue;
-    if (flying) {
-      // A little spare range: the spell sets the block down itself
-      if (Particle *p = ctx.particles.Spawn(
-              {x + 0.5f, y + 0.5f}, {d.x * s.speed, d.y * s.speed}, s.element,
-              s.range + 8.0f, s.power, true, effect.owner)) {
-        p->castId = effect.castId;
-        p->temperature = s.temperature;
-        p->temperatureDelta = s.temperatureDelta;
-        p->hardnessScale = s.hardnessScale;
-        p->crush = s.crush;
-        p->restore = s.restore;
-      }
-      continue;
+    // A little spare range: the spell sets the block down itself
+    if (Particle *p = ctx.particles.Spawn(
+            {x + 0.5f, y + 0.5f}, {d.x * s.speed, d.y * s.speed}, s.element,
+            s.range + 8.0f, s.power, true, effect.owner)) {
+      p->castId = effect.castId;
+      p->temperature = s.temperature;
+      p->temperatureDelta = s.temperatureDelta;
+      p->hardnessScale = s.hardnessScale;
+      p->crush = s.crush;
+      p->restore = s.restore;
     }
-    effect.holdCells.push_back(y * GRID_W + x);
-    if (Holdable(ctx, ctx.grid.Get(x, y)))
-      PutHeld(effect, ctx, x, y);
   }
-  effect.emitted = TotalParticles(effect);
-  if (flying) {
-    effect.holdPhase = SpellEffect::HoldFlying;
-    effect.holdTicks = ToTicks(s.range / s.speed, dt);
+  effect.holdPhase = SpellEffect::HoldFlying;
+  effect.holdTotal = effect.holdTicks = ToTicks(s.range / s.speed, dt);
+}
+
+// A crushing column grinds whatever crushable is in its risen part, the
+// grit thrown back out toward its base
+void Drill(SpellEffect &effect, ElementContext &ctx) {
+  const SpellStats &s = effect.stats;
+  Vector2 back{-effect.direction.x, -effect.direction.y};
+  for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
+    if (a >= effect.holdRisen)
+      continue;
+    auto [x, y] = BlockCell(effect, a, l);
+    if (ctx.grid.InBounds(x, y) &&
+        ParticleSystem::Crushable(ctx.grid.Get(x, y), s.crush))
+      ParticleSystem::Crush(ctx, x, y, back, s.crush < 0.0f);
+  }
+}
+
+// What a rising column does to a cell in its way: empty or passable cells
+// are taken, loose ones (sand, water) are carried off ahead of it, anything
+// solid stops that lane
+enum class RiseInto { Take, Carry, Stop };
+
+RiseInto RiseCell(const ElementContext &ctx, const Cell &c) {
+  if (c.element == Element::AIR)
+    return RiseInto::Take;
+  const auto &props = ctx.config.elements[static_cast<size_t>(c.element)];
+  if (c.flags & CELL_HELD)
+    return RiseInto::Stop;
+  if (props.passable)
+    return RiseInto::Take;
+  if (props.mobile && c.bodyID < 0)
+    return RiseInto::Carry;
+  return RiseInto::Stop;
+}
+
+// Grow the column out of its base by its rise speed. A crushing column
+// drills instead of building.
+void RiseBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
+  const SpellStats &s = effect.stats;
+  float before = effect.holdRisen;
+  effect.holdRisen = std::min(s.holdLength, before + s.holdRise * dt);
+  if (s.crush != 0.0f) {
+    Drill(effect, ctx);
   } else {
-    effect.holdPhase = SpellEffect::HoldHolding;
-    effect.holdTicks = ToTicks(s.holdTime, dt);
+    Vector2 d = effect.direction;
+    int width = std::max(1, static_cast<int>(s.holdWidth));
+    for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
+      int lane = l + width / 2;
+      uint32_t bit = lane >= 0 && lane < 32 ? 1u << lane : 0u;
+      if (a < before || a >= effect.holdRisen || (effect.holdBlocked & bit))
+        continue;
+      auto [x, y] = BlockCell(effect, a, l);
+      if (!ctx.grid.InBounds(x, y)) {
+        effect.holdBlocked |= bit;
+        continue;
+      }
+      Cell &c = ctx.grid.Get(x, y);
+      switch (RiseCell(ctx, c)) {
+      case RiseInto::Stop:
+        effect.holdBlocked |= bit;
+        continue;
+      case RiseInto::Carry:
+        // Pushed off the front, a little faster than the column grows
+        if (Particle *p = ctx.particles.Spawn(
+                {x + 0.5f + d.x, y + 0.5f + d.y},
+                {d.x * (s.holdRise + 10.0f), d.y * (s.holdRise + 10.0f)},
+                c.element))
+          p->temperature = c.temperature;
+        break;
+      case RiseInto::Take:
+        break;
+      }
+      effect.holdCells.push_back(y * GRID_W + x);
+      PutHeld(effect, ctx, x, y);
+    }
   }
+  if (effect.holdRisen >= s.holdLength)
+    StartHolding(effect, dt);
 }
 
 // The block has flown its range: what's left of it is set down and held
@@ -1065,8 +1174,7 @@ void LandBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
     effect.holdCells.push_back(y * GRID_W + x);
     PutHeld(effect, ctx, x, y);
   });
-  effect.holdPhase = SpellEffect::HoldHolding;
-  effect.holdTicks = ToTicks(effect.stats.holdTime, dt);
+  StartHolding(effect, dt);
 }
 
 // Keep the block in shape. With repetition it stays as cast (its heat and
@@ -1111,12 +1219,18 @@ void TickColumn(SpellEffect &effect, ElementContext &ctx, float dt) {
   case SpellEffect::HoldForming:
     FormBlock(effect, ctx, dt);
     break;
+  case SpellEffect::HoldRising:
+    RiseBlock(effect, ctx, dt);
+    break;
   case SpellEffect::HoldFlying:
     if (--effect.holdTicks <= 0)
       LandBlock(effect, ctx, dt);
     break;
   case SpellEffect::HoldHolding:
-    HoldBlock(effect, ctx);
+    if (effect.stats.crush != 0.0f && effect.stats.holdRise > 0.0f)
+      Drill(effect, ctx);
+    else
+      HoldBlock(effect, ctx);
     if (--effect.holdTicks <= 0)
       ReleaseBlock(effect, ctx);
     break;

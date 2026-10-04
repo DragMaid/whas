@@ -228,11 +228,15 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.collectMax > 0)
     ImGui::Text("Collects up to %d cells within %.0f", stats.collectMax,
                 stats.collectRadius);
-  if (stats.holdTime > 0.0f)
-    ImGui::Text("Column: a %.0f x %.0f block held %.1fs, %s",
-                stats.holdLength, stats.holdWidth, stats.holdTime,
-                stats.speed > 0.0f ? "launched by levitation"
-                                   : "formed in front of you");
+  if (stats.holdTime > 0.0f && stats.holdRise > 0.0f)
+    ImGui::Text("Column: a %.0f x %.0f %s rising %.0f cells/s, held %.1fs",
+                stats.holdLength, stats.holdWidth,
+                stats.crush != 0.0f ? "drill" : "block", stats.holdRise,
+                stats.holdTime);
+  else if (stats.holdTime > 0.0f)
+    ImGui::Text("Column: a %.0f x %.0f block held %.1fs, launched by "
+                "levitation",
+                stats.holdLength, stats.holdWidth, stats.holdTime);
 }
 
 
@@ -1234,6 +1238,7 @@ void DrawStatChanges(const Spell &beforeSpell, const Spell &afterSpell) {
     add("Restore", a.restore, b.restore, 1, "%.1f");
     add("Cooling", -a.temperatureDelta, -b.temperatureDelta, 0, "%.0f C");
     add("Held for", a.holdTime, b.holdTime, 1, "%.1fs");
+    add("Rises", a.holdRise, b.holdRise, 1, "%.0f cells/s");
   }
   if (rows.empty())
     return;

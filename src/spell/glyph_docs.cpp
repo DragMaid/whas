@@ -54,11 +54,14 @@ constexpr Entry kEntries[] = {
                     "signs fly faster and further; unbalanced ones bend it "
                     "sideways."}},
     {"column",
-     {"Column", "Holds the element as a block: a pillar in front of you, or "
-                "where it's drawn (right click). Levitation launches the block whole. "
-                "Shapes are fitted inside it. Bigger signs hold longer; when "
-                "it lets go the material is left to the world. Repetition "
-                "keeps it as cast and mends it; without, damage stays."}},
+     {"Column", "Holds the element as a block that rises out of its base: in "
+                "front of you, or straight out of the surface it's drawn on "
+                "(right click). It points like levitation: turn the sign to "
+                "lean it. More signs rise faster and hold longer; a bigger "
+                "block rises slower. It lifts whoever stands on it and stops "
+                "at solid ground. With crushing it's a drill that grinds its "
+                "path for as long as it holds. Levitation launches the block "
+                "whole. Repetition keeps it as cast and mends it."}},
     {"convergence",
      {"Convergence", "Packs the spell tighter: faster and further, denser "
                      "and narrower, with less material, and a little harder "
@@ -66,7 +69,8 @@ constexpr Entry kEntries[] = {
                      "wind field becomes a narrower, stronger jet."}},
     {"crushing",
      {"Crushing", "Makes the spell a digging tool: it leaves nothing of its "
-                  "own. Earth and rock it hits burst out as flying sand. "
+                  "own. Earth and rock it hits burst out as sand, thrown back "
+                  "the way the spell came. With a column it drills. "
                   "Inverted (F), it packs sand into earth instead."}},
     {"repetition",
      {"Repetition", "Puts what it hits back the way it was: its natural heat "

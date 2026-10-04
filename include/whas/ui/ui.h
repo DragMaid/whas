@@ -118,6 +118,8 @@ private:
   void DrawElementPropertyEditor(SimulationConfig &config);
   void DrawInspector(Simulation &sim);
   void DrawActiveFields(const Simulation &sim) const;
+  // Columns at work: their outline and how long they hold
+  void DrawActiveColumns(const Simulation &sim) const;
   void DrawBlindness();
   // Restyle ImGui when the UI scale changes
   void ApplyUiScale();

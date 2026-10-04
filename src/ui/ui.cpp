@@ -142,6 +142,7 @@ void UI::DrawWorld(const UIState &state, Simulation &sim) {
   if (state.debugOverlay)
     sim.GetRigidBodySystem().DrawDebug();
   DrawActiveFields(sim);
+  DrawActiveColumns(sim);
 }
 
 void UI::ApplyUiScale() {
@@ -490,6 +491,59 @@ void UI::DrawActiveFields(const Simulation &sim) const {
         DrawLineEx(b, a, 1.5f, c);
       }
     }
+  }
+}
+
+void UI::DrawActiveColumns(const Simulation &sim) const {
+  for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
+    const SpellStats &s = effect.stats;
+    bool rising = effect.holdPhase == SpellEffect::HoldRising;
+    if (s.kind != SpellKind::Element || s.holdTime <= 0.0f ||
+        (!rising && effect.holdPhase != SpellEffect::HoldHolding))
+      continue;
+    // A drill is red, a building column gold
+    Color ink = s.crush != 0.0f ? Color{196, 52, 36, 255} : Color{226, 176, 70, 255};
+    Vector2 timer;
+    if (s.holdRise > 0.0f) {
+      Vector2 d = effect.direction;
+      Vector2 n{-d.y, d.x};
+      float w = s.holdWidth;
+      float side0 = -std::floor(w / 2.0f), side1 = side0 + w;
+      auto at = [&](float ahead, float side) {
+        return Vector2{(effect.origin.x + d.x * ahead + n.x * side) * CELL_SIZE,
+                       (effect.origin.y + d.y * ahead + n.y * side) * CELL_SIZE};
+      };
+      float a0 = effect.holdGap, a1 = a0 + s.holdLength;
+      float risen = a0 + effect.holdRisen;
+      auto outline = [&](float from, float to, Color c) {
+        Vector2 p[] = {at(from, side0), at(to, side0), at(to, side1),
+                       at(from, side1)};
+        for (int i = 0; i < 4; ++i)
+          DrawLineEx(p[i], p[(i + 1) % 4], 1.5f, c);
+      };
+      // Where it will reach, faint; what it's risen to, firm
+      if (rising)
+        outline(a0, a1, Fade(ink, 0.3f));
+      outline(a0, risen, Fade(ink, 0.85f));
+      timer = at(a0 - 3.0f, (side0 + side1) * 0.5f);
+    } else {
+      if (effect.holdCells.empty())
+        continue;
+      Vector2 sum{0.0f, 0.0f};
+      for (int32_t i : effect.holdCells) {
+        sum.x += i % GRID_W + 0.5f;
+        sum.y += i / GRID_W + 0.5f;
+      }
+      float k = CELL_SIZE / static_cast<float>(effect.holdCells.size());
+      timer = {sum.x * k, sum.y * k};
+    }
+    // Time left to hold, as a draining ring (full while it rises)
+    float left = rising ? 1.0f
+                        : static_cast<float>(effect.holdTicks) /
+                              std::max(1, effect.holdTotal);
+    float r = 2.2f * CELL_SIZE;
+    DrawRing(timer, r - 2.0f, r + 1.0f, 0.0f, 360.0f, 24, Color{38, 30, 24, 150});
+    DrawRing(timer, r - 1.5f, r + 0.5f, -90.0f, -90.0f + 360.0f * left, 24, ink);
   }
 }
 

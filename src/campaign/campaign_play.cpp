@@ -384,7 +384,7 @@ void CampaignPlay::Cast(Simulation &sim, UI &ui) {
     return;
   }
   if (target->at && !cast.stats.HasFlight())
-    cast.PlaceAt(*target->at, m_player.Center());
+    cast.PlaceAt(*target->at, m_player.Center(), target->normal);
   m_cooldowns.Use(m_slot, m_tick, TurnController::CastTicks(cast.stats));
   sim.CastSpell(cast.stats, cast.Origin(m_player.Center()), cast.aim,
                 m_player.id, cast.placed);

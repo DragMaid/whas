@@ -57,7 +57,7 @@ TEST_CASE("a placed cast survives the wire and fires from its spot",
   c.Step(sim, {}, 0.0f);
 
   PlannedCast cast = PlannedCast::Local(Fire(), {0, -1});
-  cast.PlaceAt({90.5f, GRID_H - 4.5f}, c.Center());
+  cast.PlaceAt({90.5f, GRID_H - 4.5f}, c.Center(), {0.0f, -1.0f});
   TurnPlan plan;
   plan.steps.push_back({});
   plan.steps[0].casts.push_back(cast);
