@@ -1205,6 +1205,33 @@ TEST_CASE("column signs turn the block like levitation turns a spell",
   REQUIRE(SpellQuant::Canonical(turned).offsetRad < -0.5f);
 }
 
+TEST_CASE("a column cast at a slant is as solid as an upright one", "[spell]") {
+  SpellStats stats = SpellQuant::Canonical(ColumnOf("earth", false));
+  auto cast = [&](Simulation &sim, Vector2 dir) {
+    sim.SetSeed(17);
+    sim.CastSpell(stats, {200, GRID_H / 2.0f}, dir, -1, true);
+    for (int i = 0; i < RiseTicks(stats); ++i)
+      sim.Update(DT);
+  };
+  Simulation straight, slanted;
+  cast(straight, {0, -1});
+  cast(slanted, {0.7071f, -0.7071f});
+  int upright = Count(straight, Element::EARTH);
+  int slant = Count(slanted, Element::EARTH);
+  REQUIRE(slant > upright * 0.9f);
+  REQUIRE(slant < upright * 1.1f);
+  int holes = 0;
+  for (int y = 1; y < GRID_H - 1; ++y)
+    for (int x = 1; x < GRID_W - 1; ++x) {
+      auto earth = [&](int i, int j) {
+        return slanted.GetCell(i, j).element == Element::EARTH;
+      };
+      holes += !earth(x, y) && earth(x - 1, y) && earth(x + 1, y) &&
+               earth(x, y - 1) && earth(x, y + 1);
+    }
+  REQUIRE(holes == 0);
+}
+
 TEST_CASE("a rising column lifts the character standing over it", "[spell]") {
   Simulation sim;
   sim.SetSeed(15);

@@ -1039,13 +1039,46 @@ int ToTicks(float seconds, float dt) {
   return std::max(1, static_cast<int>(std::lround(seconds / dt)));
 }
 
-// The grid cell a block cell (ahead, lateral) of a column lands in
-std::pair<int, int> BlockCell(const SpellEffect &effect, int a, int l) {
+// A block cell (ahead, lateral) and the grid cell it fills
+struct BlockSpot {
+  int a, l, x, y;
+};
+
+// Every grid cell whose centre lies in a cell of the block, nearest the
+// base first. Filled from the grid side so a turned block has no holes.
+std::vector<BlockSpot> BlockCells(const SpellEffect &effect) {
+  const SpellStats &s = effect.stats;
+  int len = std::max(1, static_cast<int>(s.holdLength));
+  int width = std::max(1, static_cast<int>(s.holdWidth));
+  int l0 = -(width / 2);
+  std::vector<uint8_t> in(static_cast<size_t>(len) * width, 0);
+  for (auto [a, l] : BlockLayout(s, TotalParticles(effect)))
+    in[a * width + l - l0] = 1;
   Vector2 d = effect.direction;
   Vector2 perp{-d.y, d.x};
-  float ahead = effect.holdGap + a + 0.5f, side = l + 0.5f;
-  return {static_cast<int>(std::floor(effect.origin.x + d.x * ahead + perp.x * side)),
-          static_cast<int>(std::floor(effect.origin.y + d.y * ahead + perp.y * side))};
+  Vector2 o{effect.origin.x + d.x * effect.holdGap,
+            effect.origin.y + d.y * effect.holdGap};
+  float x0 = 1e9f, x1 = -1e9f, y0 = 1e9f, y1 = -1e9f;
+  for (float a : {0.0f, static_cast<float>(len)})
+    for (float l : {static_cast<float>(l0), static_cast<float>(l0 + width)}) {
+      float x = o.x + d.x * a + perp.x * l, y = o.y + d.y * a + perp.y * l;
+      x0 = std::min(x0, x), x1 = std::max(x1, x);
+      y0 = std::min(y0, y), y1 = std::max(y1, y);
+    }
+  std::vector<BlockSpot> spots;
+  for (int y = static_cast<int>(std::floor(y0)); y <= static_cast<int>(y1); ++y)
+    for (int x = static_cast<int>(std::floor(x0)); x <= static_cast<int>(x1); ++x) {
+      float cx = x + 0.5f - o.x, cy = y + 0.5f - o.y;
+      int a = static_cast<int>(std::floor(cx * d.x + cy * d.y));
+      int l = static_cast<int>(std::floor(cx * perp.x + cy * perp.y));
+      if (a < 0 || a >= len || l < l0 || l >= l0 + width ||
+          !in[a * width + l - l0])
+        continue;
+      spots.push_back({a, l, x, y});
+    }
+  std::stable_sort(spots.begin(), spots.end(),
+                   [](const BlockSpot &p, const BlockSpot &q) { return p.a < q.a; });
+  return spots;
 }
 
 void StartHolding(SpellEffect &effect, float dt) {
@@ -1062,8 +1095,7 @@ void FormBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
     return;
   }
   // Levitated: the block flies as one piece
-  for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
-    auto [x, y] = BlockCell(effect, a, l);
+  for (auto [a, l, x, y] : BlockCells(effect)) {
     if (!ctx.grid.InBounds(x, y))
       continue;
     // A little spare range: the spell sets the block down itself
@@ -1087,10 +1119,9 @@ void FormBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
 void Drill(SpellEffect &effect, ElementContext &ctx) {
   const SpellStats &s = effect.stats;
   Vector2 back{-effect.direction.x, -effect.direction.y};
-  for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
+  for (auto [a, l, x, y] : BlockCells(effect)) {
     if (a >= effect.holdRisen)
       continue;
-    auto [x, y] = BlockCell(effect, a, l);
     if (ctx.grid.InBounds(x, y) &&
         ParticleSystem::Crushable(ctx.grid.Get(x, y), s.crush))
       ParticleSystem::Crush(ctx, x, y, back, s.crush < 0.0f);
@@ -1126,12 +1157,11 @@ void RiseBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
   } else {
     Vector2 d = effect.direction;
     int width = std::max(1, static_cast<int>(s.holdWidth));
-    for (auto [a, l] : BlockLayout(s, TotalParticles(effect))) {
+    for (auto [a, l, x, y] : BlockCells(effect)) {
       int lane = l + width / 2;
       uint32_t bit = lane >= 0 && lane < 32 ? 1u << lane : 0u;
       if (a < before || a >= effect.holdRisen || (effect.holdBlocked & bit))
         continue;
-      auto [x, y] = BlockCell(effect, a, l);
       if (!ctx.grid.InBounds(x, y)) {
         effect.holdBlocked |= bit;
         continue;
