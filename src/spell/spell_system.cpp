@@ -108,10 +108,10 @@ struct SpellTuning {
   int maxHoldLength = 120;
   // A standing column rises out of its base: cells/s, slower the bigger
   // the block (by the square root of its area against riseRefArea)
-  float riseBase = 20.0f;
-  float risePerSign = 15.0f;
+  float riseBase = 40.0f;
+  float risePerSign = 30.0f;
   float riseRefArea = 60.0f;
-  float minRise = 4.0f;
+  float minRise = 8.0f;
   float drillDepthPerSign = 16.0f; // cells a crushing column digs per sign
   int minDrillWidth = 10;          // wide enough for its caster to drop in
   float mendsPerSign = 3.0f; // cells repetition mends per tick
@@ -1161,6 +1161,19 @@ void Drill(SpellEffect &effect, ElementContext &ctx) {
   }
 }
 
+void ReleaseBlock(SpellEffect &effect, ElementContext &ctx) {
+  for (int32_t i : effect.holdCells) {
+    int x = i % GRID_W, y = i / GRID_W;
+    Cell &c = ctx.grid.Get(x, y);
+    if (c.flags & CELL_HELD) {
+      c.flags &= ~CELL_HELD;
+      ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, true);
+    }
+  }
+  effect.holdCells.clear();
+  effect.holdPhase = SpellEffect::HoldDone;
+}
+
 // Grow the column out of its base by its rise speed. A crushing column
 // drills instead of building.
 void RiseBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
@@ -1201,8 +1214,9 @@ void RiseBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
       PutHeld(effect, ctx, x, y);
     }
   }
+  // Once built, the spell is done: the block is the world's
   if (effect.holdRisen >= s.holdLength)
-    StartHolding(effect, dt);
+    ReleaseBlock(effect, ctx);
 }
 
 // The block has flown its range: what's left of it is set down and held
@@ -1246,19 +1260,6 @@ void HoldBlock(SpellEffect &effect, ElementContext &ctx) {
   }
 }
 
-void ReleaseBlock(SpellEffect &effect, ElementContext &ctx) {
-  for (int32_t i : effect.holdCells) {
-    int x = i % GRID_W, y = i / GRID_W;
-    Cell &c = ctx.grid.Get(x, y);
-    if (c.flags & CELL_HELD) {
-      c.flags &= ~CELL_HELD;
-      ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, true);
-    }
-  }
-  effect.holdCells.clear();
-  effect.holdPhase = SpellEffect::HoldDone;
-}
-
 void TickColumn(SpellEffect &effect, ElementContext &ctx, float dt) {
   switch (effect.holdPhase) {
   case SpellEffect::HoldForming:
@@ -1272,10 +1273,7 @@ void TickColumn(SpellEffect &effect, ElementContext &ctx, float dt) {
       LandBlock(effect, ctx, dt);
     break;
   case SpellEffect::HoldHolding:
-    if (effect.stats.crush != 0.0f && effect.stats.holdRise > 0.0f)
-      Drill(effect, ctx);
-    else
-      HoldBlock(effect, ctx);
+    HoldBlock(effect, ctx);
     if (--effect.holdTicks <= 0)
       ReleaseBlock(effect, ctx);
     break;

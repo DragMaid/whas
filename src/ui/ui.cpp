@@ -503,8 +503,9 @@ void UI::DrawActiveColumns(const Simulation &sim) const {
       continue;
     // A drill is red, a building column gold
     Color ink = s.crush != 0.0f ? Color{196, 52, 36, 255} : Color{226, 176, 70, 255};
-    Vector2 timer;
-    if (s.holdRise > 0.0f) {
+    // A rising column is done once built: just where it will reach, faint,
+    // and what it's risen to, firm
+    if (rising) {
       Vector2 d = effect.direction;
       Vector2 n{-d.y, d.x};
       float w = s.holdWidth;
@@ -521,26 +522,22 @@ void UI::DrawActiveColumns(const Simulation &sim) const {
         for (int i = 0; i < 4; ++i)
           DrawLineEx(p[i], p[(i + 1) % 4], 1.5f, c);
       };
-      // Where it will reach, faint; what it's risen to, firm
-      if (rising)
-        outline(a0, a1, Fade(ink, 0.3f));
+      outline(a0, a1, Fade(ink, 0.3f));
       outline(a0, risen, Fade(ink, 0.85f));
-      timer = at(a0 - 3.0f, (side0 + side1) * 0.5f);
-    } else {
-      if (effect.holdCells.empty())
-        continue;
-      Vector2 sum{0.0f, 0.0f};
-      for (int32_t i : effect.holdCells) {
-        sum.x += i % GRID_W + 0.5f;
-        sum.y += i / GRID_W + 0.5f;
-      }
-      float k = CELL_SIZE / static_cast<float>(effect.holdCells.size());
-      timer = {sum.x * k, sum.y * k};
+      continue;
     }
-    // Time left to hold, as a draining ring (full while it rises)
-    float left = rising ? 1.0f
-                        : static_cast<float>(effect.holdTicks) /
-                              std::max(1, effect.holdTotal);
+    // A launched block: time left to hold, as a draining ring
+    if (effect.holdCells.empty())
+      continue;
+    Vector2 sum{0.0f, 0.0f};
+    for (int32_t i : effect.holdCells) {
+      sum.x += i % GRID_W + 0.5f;
+      sum.y += i / GRID_W + 0.5f;
+    }
+    float k = CELL_SIZE / static_cast<float>(effect.holdCells.size());
+    Vector2 timer{sum.x * k, sum.y * k};
+    float left =
+        static_cast<float>(effect.holdTicks) / std::max(1, effect.holdTotal);
     float r = 2.2f * CELL_SIZE;
     DrawRing(timer, r - 2.0f, r + 1.0f, 0.0f, 360.0f, 24, Color{38, 30, 24, 150});
     DrawRing(timer, r - 1.5f, r + 0.5f, -90.0f, -90.0f + 360.0f * left, 24, ink);

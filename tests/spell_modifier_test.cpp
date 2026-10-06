@@ -1095,46 +1095,51 @@ Spell ColumnOf(const char *sigil, bool levitate, bool repetition = false) {
 
 } // namespace
 
-TEST_CASE("a column holds water as a pillar, then lets it fall", "[spell]") {
-  Simulation sim;
-  sim.SetSeed(11);
-  Floor(sim);
-  SpellStats stats = SpellQuant::Canonical(ColumnOf("water", false));
-  REQUIRE(stats.valid);
-  REQUIRE(stats.holdTime > 0.0f);
-  REQUIRE(stats.speed == 0.0f);
-
-  // Aimed straight up from just above the floor
-  sim.CastSpell(stats, {100, GRID_H - 12.0f}, {0, -1});
-  Step(sim, RiseTicks(stats));
-  int held = Held(sim, Element::WATER);
-  REQUIRE(held >= stats.particleCount * 3 / 4);
-  // A second in, the pillar still stands where it was made
-  Step(sim, 60);
-  REQUIRE(Held(sim, Element::WATER) == held);
-  for (int y = GRID_H - 25; y < GRID_H - 20; ++y)
-    REQUIRE(sim.GetCell(100, y).element == Element::WATER);
-
-  // Let go: the water is still there, but it falls
-  Step(sim, (int)(stats.holdTime * 60) + 30);
-  REQUIRE(Held(sim, Element::WATER) == 0);
-  REQUIRE(Count(sim, Element::WATER) + sim.GetParticleCount() >= held * 3 / 4);
-  REQUIRE(sim.GetCell(100, GRID_H - 22).element != Element::WATER);
+TEST_CASE("a standing column is done once built: earth stays, water falls",
+          "[spell]") {
+  for (const char *sigil : {"earth", "water"}) {
+    Simulation sim;
+    sim.SetSeed(11);
+    Floor(sim);
+    SpellStats stats = SpellQuant::Canonical(ColumnOf(sigil, false));
+    REQUIRE(stats.valid);
+    REQUIRE(stats.speed == 0.0f);
+    Element e = stats.element;
+    int floor = Count(sim, e);
+    // Aimed straight up from just above the floor
+    sim.CastSpell(stats, {100, GRID_H - 12.0f}, {0, -1});
+    Step(sim, RiseTicks(stats));
+    REQUIRE(Held(sim, e) == 0);
+    REQUIRE(sim.GetActiveSpellEffects().empty());
+    int built = Count(sim, e) - floor;
+    REQUIRE(built >= stats.particleCount * 3 / 4);
+    Step(sim, 60);
+    bool standing = true;
+    for (int y = GRID_H - 25; y < GRID_H - 20; ++y)
+      standing &= sim.GetCell(100, y).element == e;
+    REQUIRE(standing == (e == Element::EARTH));
+  }
 }
 
-TEST_CASE("repetition mends a held column, without it damage stays",
+TEST_CASE("repetition mends a launched block, without it damage stays",
           "[spell]") {
   for (bool repetition : {false, true}) {
     Simulation sim;
     sim.SetSeed(12);
     Floor(sim);
     SpellStats stats =
-        SpellQuant::Canonical(ColumnOf("earth", false, repetition));
-    sim.CastSpell(stats, {100, GRID_H - 12.0f}, {0, -1});
-    Step(sim, RiseTicks(stats));
+        SpellQuant::Canonical(ColumnOf("earth", true, repetition));
+    sim.CastSpell(stats, {60, GRID_H - 40.0f}, {1, 0});
+    Step(sim, (int)(stats.range / stats.speed * 60) + 4);
     int held = Held(sim, Element::EARTH);
     REQUIRE(held > 10);
-    sim.Erase(100, GRID_H - 22, 2); // a hole knocked in it
+    for (int y = 0; y < GRID_H; ++y)
+      for (int x = 0; x < GRID_W; ++x)
+        if (sim.GetCell(x, y).flags & CELL_HELD) {
+          sim.Erase(x, y, 1); // a hole knocked in it
+          y = GRID_H;
+          break;
+        }
     Step(sim, 10);
     if (repetition)
       REQUIRE(Held(sim, Element::EARTH) == held);
@@ -1183,13 +1188,14 @@ TEST_CASE("a column rises out of its base, quicker with more column signs",
   Simulation sim;
   sim.SetSeed(14);
   Floor(sim);
+  int floor = Count(sim, Element::EARTH);
   sim.CastSpell(one, {100, GRID_H - 4.5f}, {0, -1}, -1, true);
-  Step(sim, 3);
-  int early = Held(sim, Element::EARTH);
+  Step(sim, 2);
+  int early = Count(sim, Element::EARTH) - floor;
   REQUIRE(early > 0);
   REQUIRE(early < one.particleCount / 2);
   Step(sim, RiseTicks(one));
-  REQUIRE(Held(sim, Element::EARTH) > early * 2);
+  REQUIRE(Count(sim, Element::EARTH) - floor > early * 2);
 }
 
 TEST_CASE("column signs turn the block like levitation turns a spell",

@@ -57,12 +57,13 @@ constexpr Entry kEntries[] = {
      {"Column", "Holds the element as a block that rises out of its base: in "
                 "front of you, or straight out of the surface it's drawn on "
                 "(right click). It points like levitation: turn the sign to "
-                "lean it. More signs rise faster and hold longer; a bigger "
-                "block rises slower. It lifts whoever stands on it and stops "
-                "at solid ground. With crushing it's a drill that grinds its "
-                "path for as long as it holds; more signs dig deeper. "
-                "Levitation launches the block "
-                "whole. Repetition keeps it as cast and mends it."}},
+                "lean it. More signs rise faster; a bigger block rises "
+                "slower. It lifts whoever stands on it, stops at solid "
+                "ground and lets go once built. With crushing it's a drill "
+                "that grinds its path; more signs dig deeper. Levitation "
+                "launches the block whole, held where it lands for longer "
+                "with more signs; repetition keeps that one as cast and "
+                "mends it."}},
     {"convergence",
      {"Convergence", "Packs the spell tighter: faster and further, denser "
                      "and narrower, with less material, and a little harder "

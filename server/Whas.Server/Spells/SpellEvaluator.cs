@@ -8,7 +8,7 @@ namespace Whas.Server.Spells;
 public static class SpellEvaluator
 {
     // Bump together with SpellQuant::EVALUATOR_VERSION
-    public const int Version = 9;
+    public const int Version = 10;
 
     public const int StatScale = 1024;
     public const int AngleScale = 65536;
@@ -61,10 +61,10 @@ public static class SpellEvaluator
     const int MinHoldWidth = 2;
     const int MaxHoldWidth = 24;
     const int MaxHoldLength = 120;
-    const float RiseBase = 20.0f;
-    const float RisePerSign = 15.0f;
+    const float RiseBase = 40.0f;
+    const float RisePerSign = 30.0f;
     const float RiseRefArea = 60.0f;
-    const float MinRise = 4.0f;
+    const float MinRise = 8.0f;
     const float DrillDepthPerSign = 16.0f;
     const int MinDrillWidth = 10;
     const float MinPull = 0.25f;
