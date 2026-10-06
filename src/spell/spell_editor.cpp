@@ -229,10 +229,9 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
     ImGui::Text("Collects up to %d cells within %.0f", stats.collectMax,
                 stats.collectRadius);
   if (stats.holdTime > 0.0f && stats.holdRise > 0.0f)
-    ImGui::Text("Column: a %.0f x %.0f %s rising %.0f cells/s, held %.1fs",
+    ImGui::Text("Column: a %.0f x %.0f %s rising %.0f cells/s",
                 stats.holdLength, stats.holdWidth,
-                stats.crush != 0.0f ? "drill" : "block", stats.holdRise,
-                stats.holdTime);
+                stats.crush != 0.0f ? "drill" : "block", stats.holdRise);
   else if (stats.holdTime > 0.0f)
     ImGui::Text("Column: a %.0f x %.0f block held %.1fs, launched by "
                 "levitation",
@@ -1237,7 +1236,9 @@ void DrawStatChanges(const Spell &beforeSpell, const Spell &afterSpell) {
         "%.1f");
     add("Restore", a.restore, b.restore, 1, "%.1f");
     add("Cooling", -a.temperatureDelta, -b.temperatureDelta, 0, "%.0f C");
-    add("Held for", a.holdTime, b.holdTime, 1, "%.1fs");
+    // A rising column is done once built; only a launched one is held
+    add("Held for", a.holdRise > 0.0f ? 0.0f : a.holdTime,
+        b.holdRise > 0.0f ? 0.0f : b.holdTime, 1, "%.1fs");
     add("Rises", a.holdRise, b.holdRise, 1, "%.0f cells/s");
   }
   if (rows.empty())
