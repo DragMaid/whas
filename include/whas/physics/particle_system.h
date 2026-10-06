@@ -122,6 +122,9 @@ public:
     static bool Crushable(const struct Cell &c, float crush);
     static void Crush(struct ElementContext &ctx, int x, int y, Vector2 back,
                       bool invert = false);
+    // Lift a cell out of the grid and throw it off along `back` as `as`
+    static void Fling(struct ElementContext &ctx, int x, int y, Vector2 back,
+                      Element as);
     // Spawn now, or queue it when called from a worker thread
     static void SpawnFrom(struct ElementContext &ctx, Vector2 pos, Vector2 vel,
                           Element element);

@@ -16,7 +16,7 @@ constexpr int32_t AIM_SCALE = 16384;   // unit aim vectors in 1/16384
 
 // Bump whenever SpellSystem::Evaluate or its tuning changes; the server keeps
 // stats per evaluator version so old replays still reproduce
-constexpr int EVALUATOR_VERSION = 8;
+constexpr int EVALUATOR_VERSION = 9;
 
 struct Stats {
   bool valid = false;

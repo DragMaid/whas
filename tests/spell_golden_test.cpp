@@ -67,6 +67,13 @@ std::vector<Spell> Cases() {
                     {"expansion", GlyphKind::Sign, {-100, 0}, scale, 0.0f}};
         out.push_back(std::move(t));
       }
+      // A drill, its depth from its column signs
+      Spell d;
+      d.name = "case" + std::to_string(n++);
+      d.glyphs = {{sigil, GlyphKind::Sigil, {0, 0}, scale, 0.0f},
+                  {"column", GlyphKind::Sign, {0, -120}, 2.6f - scale, 40.0f},
+                  {"crushing", GlyphKind::Sign, {100, 0}, 1.0f, 0.0f}};
+      out.push_back(std::move(d));
     }
   // No sigil, and two sigils: both invalid
   out.push_back({"no-sigil", {{"levitation", GlyphKind::Sign, {0, 0}, 1, 0}}});

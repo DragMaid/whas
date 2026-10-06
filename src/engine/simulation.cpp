@@ -300,8 +300,16 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
   effect.owner = owner;
   effect.castId = m_particles.NewCastId();
-  // A column clears the caster's body; drawn on a surface it starts there
-  effect.holdGap = placed ? 0.5f : 7.0f;
+  // A column starts where it leaves the caster's body; drawn on a surface,
+  // just off it
+  if (placed) {
+    effect.holdGap = 0.5f;
+  } else {
+    Vector2 d = effect.direction;
+    effect.holdGap = std::min(
+        std::abs(d.x) > 1e-4f ? CASTER_HALF_W / std::abs(d.x) : 1e9f,
+        std::abs(d.y) > 1e-4f ? CASTER_HALF_H / std::abs(d.y) : 1e9f);
+  }
   // Sights set and guidance steer the whole figure along one path
   if (effect.stats.kind == SpellKind::Element && stats.holdTime <= 0.0f &&
       (stats.steerTime > 0.0f || stats.homeTarget != HomeTarget::None))

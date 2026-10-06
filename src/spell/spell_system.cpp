@@ -112,6 +112,8 @@ struct SpellTuning {
   float risePerSign = 15.0f;
   float riseRefArea = 60.0f;
   float minRise = 4.0f;
+  float drillDepthPerSign = 16.0f; // cells a crushing column digs per sign
+  int minDrillWidth = 10;          // wide enough for its caster to drop in
   float mendsPerSign = 3.0f; // cells repetition mends per tick
   float maxSteerRate = 2.5f;
   // Layered spells: an embedded spell of scale s is worth s / this; one
@@ -562,10 +564,19 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
       int width = std::clamp(static_cast<int>(std::lround(s.diameter)),
                              kTuning.minHoldWidth, kTuning.maxHoldWidth);
       s.holdWidth = static_cast<float>(width);
-      s.holdLength = static_cast<float>(std::clamp(
-          (s.particleCount + width - 1) / width, 2, kTuning.maxHoldLength));
+      bool standing = c.magnitude <= 0.0f && speedBonus <= 0.0f;
+      int length = (s.particleCount + width - 1) / width;
+      // A drill builds nothing: its column signs say how deep it digs
+      if (standing && s.crush != 0.0f) {
+        width = std::max(width, kTuning.minDrillWidth);
+        length = static_cast<int>(
+            std::lround(kTuning.drillDepthPerSign * mods.column));
+      }
+      s.holdWidth = static_cast<float>(width);
+      s.holdLength =
+          static_cast<float>(std::clamp(length, 2, kTuning.maxHoldLength));
       s.offsetRad += SteerOffset(mods.columnNet, mods.column);
-      if (c.magnitude <= 0.0f && speedBonus <= 0.0f) {
+      if (standing) {
         s.speed = 0.0f;
         s.range = 0.0f;
         float area = s.holdLength * s.holdWidth;
@@ -1052,7 +1063,9 @@ std::vector<BlockSpot> BlockCells(const SpellEffect &effect) {
   int width = std::max(1, static_cast<int>(s.holdWidth));
   int l0 = -(width / 2);
   std::vector<uint8_t> in(static_cast<size_t>(len) * width, 0);
-  for (auto [a, l] : BlockLayout(s, TotalParticles(effect)))
+  // A drill builds nothing, so no material limits how much of it there is
+  bool drill = s.crush != 0.0f && s.holdRise > 0.0f;
+  for (auto [a, l] : BlockLayout(s, drill ? len * width : TotalParticles(effect)))
     in[a * width + l - l0] = 1;
   Vector2 d = effect.direction;
   Vector2 perp{-d.y, d.x};
@@ -1114,20 +1127,6 @@ void FormBlock(SpellEffect &effect, ElementContext &ctx, float dt) {
   effect.holdTotal = effect.holdTicks = ToTicks(s.range / s.speed, dt);
 }
 
-// A crushing column grinds whatever crushable is in its risen part, the
-// grit thrown back out toward its base
-void Drill(SpellEffect &effect, ElementContext &ctx) {
-  const SpellStats &s = effect.stats;
-  Vector2 back{-effect.direction.x, -effect.direction.y};
-  for (auto [a, l, x, y] : BlockCells(effect)) {
-    if (a >= effect.holdRisen)
-      continue;
-    if (ctx.grid.InBounds(x, y) &&
-        ParticleSystem::Crushable(ctx.grid.Get(x, y), s.crush))
-      ParticleSystem::Crush(ctx, x, y, back, s.crush < 0.0f);
-  }
-}
-
 // What a rising column does to a cell in its way: empty or passable cells
 // are taken, loose ones (sand, water) are carried off ahead of it, anything
 // solid stops that lane
@@ -1144,6 +1143,22 @@ RiseInto RiseCell(const ElementContext &ctx, const Cell &c) {
   if (props.mobile && c.bodyID < 0)
     return RiseInto::Carry;
   return RiseInto::Stop;
+}
+
+// A crushing column grinds whatever crushable is in its risen part and
+// throws anything loose there out, all of it back toward its base
+void Drill(SpellEffect &effect, ElementContext &ctx) {
+  const SpellStats &s = effect.stats;
+  Vector2 back{-effect.direction.x, -effect.direction.y};
+  for (auto [a, l, x, y] : BlockCells(effect)) {
+    if (a >= effect.holdRisen || !ctx.grid.InBounds(x, y))
+      continue;
+    const Cell &c = ctx.grid.Get(x, y);
+    if (ParticleSystem::Crushable(c, s.crush))
+      ParticleSystem::Crush(ctx, x, y, back, s.crush < 0.0f);
+    else if (s.crush > 0.0f && RiseCell(ctx, c) == RiseInto::Carry)
+      ParticleSystem::Fling(ctx, x, y, back, c.element);
+  }
 }
 
 // Grow the column out of its base by its rise speed. A crushing column
