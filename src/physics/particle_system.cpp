@@ -419,9 +419,14 @@ void ParticleSystem::Crush(ElementContext &ctx, int x, int y, Vector2 back,
     ReplaceCell(grid, ctx, x, y, Element::EARTH);
     return;
   }
-  Cell &c = grid.Get(x, y);
-  ctx.particles.Note({ParticleNoise::Break, c.element, {x + 0.5f, y + 0.5f}});
-  ReplaceCell(grid, ctx, x, y, Element::AIR);
+  ctx.particles.Note(
+      {ParticleNoise::Break, grid.Get(x, y).element, {x + 0.5f, y + 0.5f}});
+  Fling(ctx, x, y, back, Element::SAND);
+}
+
+void ParticleSystem::Fling(ElementContext &ctx, int x, int y, Vector2 back,
+                           Element as) {
+  ReplaceCell(ctx.grid, ctx, x, y, Element::AIR);
   float len = std::sqrt(back.x * back.x + back.y * back.y);
   Vector2 out = len > 0.0f ? Vector2{back.x / len, back.y / len}
                            : Vector2{0.0f, -1.0f};
@@ -434,7 +439,7 @@ void ParticleSystem::Crush(ElementContext &ctx, int x, int y, Vector2 back,
                     (kModifier.debrisSpeedMax - kModifier.debrisSpeedMin);
   ParticleSystem::SpawnFrom(
       ctx, {x + 0.5f, y + 0.5f},
-      {out.x * speed, out.y * speed - kModifier.debrisLift}, Element::SAND);
+      {out.x * speed, out.y * speed - kModifier.debrisLift}, as);
 }
 
 namespace {

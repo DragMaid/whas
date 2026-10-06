@@ -60,7 +60,8 @@ constexpr Entry kEntries[] = {
                 "lean it. More signs rise faster and hold longer; a bigger "
                 "block rises slower. It lifts whoever stands on it and stops "
                 "at solid ground. With crushing it's a drill that grinds its "
-                "path for as long as it holds. Levitation launches the block "
+                "path for as long as it holds; more signs dig deeper. "
+                "Levitation launches the block "
                 "whole. Repetition keeps it as cast and mends it."}},
     {"convergence",
      {"Convergence", "Packs the spell tighter: faster and further, denser "

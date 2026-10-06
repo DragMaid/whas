@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <cmath>
 
+static_assert(Character::WIDTH == 2 * Simulation::CASTER_HALF_W &&
+              Character::HEIGHT == 2 * Simulation::CASTER_HALF_H);
+
 namespace {
 
 struct CharacterTuning {

@@ -42,18 +42,22 @@ hold longer).
   turns the block off its base direction, up to 60 degrees, the same way
   levitation turns a flight.
 - **No levitation**: the block rises out of its base at `holdRise` cells/s:
-  `(20 + 15 x column signs) x sqrt(60 / area)`, at least 4. The base is 7
-  cells in front of the caster (clear of the body), or, cast from a surface
+  `(20 + 15 x column signs) x sqrt(60 / area)`, at least 4. The base is
+  where the aim line leaves the caster's body, or, cast from a surface
   (right click), the surface itself, rising straight out of it. Air and
   gases are taken, loose cells (sand, water) are carried off ahead of the
   front, and solid ground stops that lane. A character over it is lifted
   (the unstuck rule moves it onto the new top). Its hold time starts once
   it's fully risen.
 - **Drill (crushing, no levitation)**: rises the same way but builds
-  nothing. Every earth and rock cell in its risen part, rigid rock bodies
-  included, is ground to sand thrown back toward its base, and it keeps
-  grinding whatever comes in until its time runs out. Drawn on a surface
-  (right click) it bores into it. Inverted, it packs sand into earth.
+  nothing, so no material limits it: it's 16 cells deep per column sign
+  (scale counts) and at least 10 wide, room for its caster to drop in.
+  Every earth and rock cell in its risen part, rigid rock bodies included,
+  is ground to sand thrown back toward its base, loose sand and water in
+  it are thrown out the same way, and it keeps at it until its time runs
+  out. Aimed at your feet it digs the ground out from under you. Drawn on
+  a surface (right click) it bores into it. Inverted, it packs sand into
+  earth.
 - While a column rises or holds, an outline shows the block (faint where
   it's still to rise) and a ring at its base drains as its time runs out:
   gold for a block, red for a drill.

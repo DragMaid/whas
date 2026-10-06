@@ -8,7 +8,7 @@ namespace Whas.Server.Spells;
 public static class SpellEvaluator
 {
     // Bump together with SpellQuant::EVALUATOR_VERSION
-    public const int Version = 8;
+    public const int Version = 9;
 
     public const int StatScale = 1024;
     public const int AngleScale = 65536;
@@ -65,6 +65,8 @@ public static class SpellEvaluator
     const float RisePerSign = 15.0f;
     const float RiseRefArea = 60.0f;
     const float MinRise = 4.0f;
+    const float DrillDepthPerSign = 16.0f;
+    const int MinDrillWidth = 10;
     const float MinPull = 0.25f;
     const float MaxPull = 2.5f;
     const float GustBaseDuration = 0.35f;
@@ -488,9 +490,18 @@ public static class SpellEvaluator
                     int width = Math.Clamp((int)MathF.Round(s.Diameter, MidpointRounding.AwayFromZero),
                                            MinHoldWidth, MaxHoldWidth);
                     s.HoldWidth = width;
-                    s.HoldLength = Math.Clamp((s.ParticleCount + width - 1) / width, 2, MaxHoldLength);
+                    bool standing = c.Magnitude <= 0.0f && speedBonus <= 0.0f;
+                    int length = (s.ParticleCount + width - 1) / width;
+                    // A drill builds nothing: its column signs say how deep it digs
+                    if (standing && s.Crush != 0.0f)
+                    {
+                        width = Math.Max(width, MinDrillWidth);
+                        length = (int)MathF.Round(DrillDepthPerSign * mods.Column, MidpointRounding.AwayFromZero);
+                    }
+                    s.HoldWidth = width;
+                    s.HoldLength = Math.Clamp(length, 2, MaxHoldLength);
                     s.OffsetRad += SteerOffset(mods.ColumnX, mods.ColumnY, mods.Column);
-                    if (c.Magnitude <= 0.0f && speedBonus <= 0.0f)
+                    if (standing)
                     {
                         s.Speed = 0.0f;
                         s.Range = 0.0f;

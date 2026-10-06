@@ -1232,6 +1232,57 @@ TEST_CASE("a column cast at a slant is as solid as an upright one", "[spell]") {
   REQUIRE(holes == 0);
 }
 
+TEST_CASE("column signs set how deep a drill digs, the sigil how much a "
+          "column builds",
+          "[spell]") {
+  auto drillOf = [](float sigil, float column) {
+    Spell s = ColumnOf("earth", false);
+    s.glyphs[0].scale = sigil;
+    s.glyphs[1].scale = column;
+    s.glyphs.push_back(Sign("crushing", 1.0f));
+    return SpellQuant::Canonical(s);
+  };
+  SpellStats one = drillOf(1.0f, 1.0f);
+  REQUIRE(drillOf(1.0f, 2.0f).holdLength > one.holdLength * 1.5f);
+  REQUIRE(drillOf(2.0f, 1.0f).holdLength == one.holdLength);
+  REQUIRE(one.holdWidth >= Character::WIDTH + 2);
+
+  Spell small = ColumnOf("earth", false), more = small, big = small;
+  more.glyphs[1].scale = 2.0f;
+  big.glyphs[0].scale = 2.0f;
+  float built = SpellQuant::Canonical(small).holdLength *
+                SpellQuant::Canonical(small).holdWidth;
+  REQUIRE(SpellQuant::Canonical(more).holdLength *
+              SpellQuant::Canonical(more).holdWidth == built);
+  REQUIRE(SpellQuant::Canonical(big).holdLength *
+              SpellQuant::Canonical(big).holdWidth > built);
+}
+
+TEST_CASE("drilling straight down under yourself drops you into the hole",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(18);
+  Fill(sim, 0, GRID_H - 40, GRID_W - 1, GRID_H - 1, Element::EARTH);
+  Character c;
+  c.pos = {196, GRID_H - 40 - Character::HEIGHT};
+  for (int i = 0; i < 10; ++i)
+    c.Step(sim, {}, DT);
+  float before = c.pos.y;
+  Spell drill = ColumnOf("earth", false);
+  drill.glyphs.push_back(Sign("crushing", 1.0f));
+  SpellStats stats = SpellQuant::Canonical(drill);
+  INFO("drill " << stats.holdWidth << " x " << stats.holdLength);
+  sim.CastSpell(stats, c.Center(), {0, 1}, c.id, false);
+  int ticks = RiseTicks(stats) + static_cast<int>(stats.holdTime / DT);
+  for (int i = 0; i < ticks; ++i) {
+    sim.Update(DT);
+    c.Unbury(sim);
+    c.Step(sim, {}, DT);
+  }
+  INFO("fell " << c.pos.y - before);
+  REQUIRE(c.pos.y > before + Character::HEIGHT);
+}
+
 TEST_CASE("a rising column lifts the character standing over it", "[spell]") {
   Simulation sim;
   sim.SetSeed(15);

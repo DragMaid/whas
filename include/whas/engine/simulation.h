@@ -23,6 +23,8 @@ struct ElementContext;
 
 class Simulation {
 public:
+  // A caster's body, centre to edge (cells): casts leave from its centre
+  static constexpr float CASTER_HALF_W = 4.0f, CASTER_HALF_H = 6.0f;
   // Worker count is fixed rather than taken from the hardware; results don't
   // depend on it, but it keeps performance the same on every machine
   explicit Simulation(int workerThreads = SIM_THREADS);
