@@ -187,6 +187,8 @@ json ToJson(const RoomDef &r) {
     }
     if (o.hidden)
       oj["hidden"] = true;
+    if (o.silver)
+      oj["silver"] = o.silver;
     if (o.reward)
       oj["reward"] = true;
     objects.push_back(std::move(oj));
@@ -203,6 +205,10 @@ json ToJson(const RoomDef &r) {
       ej["castEvery"] = e.castEvery;
       ej["spells"] = SpellsJson(e.spells);
     }
+    if (e.silver)
+      ej["silver"] = e.silver;
+    if (!e.drops.empty())
+      ej["drops"] = SpellsJson(e.drops);
     if (e.boss) {
       ej["boss"] = true;
       ej["name"] = e.name;
@@ -233,6 +239,10 @@ json ToJson(const RoomDef &r) {
               {"teachSigil", d.teachSigil}};
       if (!d.spells.empty())
         nj["spells"] = SpellsJson(d.spells);
+      if (d.silver)
+        nj["silver"] = d.silver;
+      if (d.price)
+        nj["price"] = d.price;
       nodes.push_back(std::move(nj));
     }
     npcs.push_back({{"name", n.name}, {"tag", n.tag}, {"pos", Vec(n.pos)},
@@ -278,6 +288,7 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       o.spells = SpellsFrom(oj, "spells");
       o.hidden = oj.value("hidden", false);
       o.reward = oj.value("reward", false);
+      o.silver = std::max(0, oj.value("silver", 0));
       r.objects.push_back(std::move(o));
     }
     r.enemies.clear();
@@ -291,6 +302,8 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       e.castEvery = ej.value("castEvery", e.castEvery);
       e.tag = ej.value("tag", "");
       e.spells = SpellsFrom(ej, "spells");
+      e.silver = std::max(0, ej.value("silver", 0));
+      e.drops = SpellsFrom(ej, "drops");
       e.boss = ej.value("boss", false);
       e.name = ej.value("name", e.name);
       for (const json &pj : ej.value("phases", json::array())) {
@@ -319,6 +332,8 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
         d.teach = dj.value("teach", "");
         d.teachSigil = dj.value("teachSigil", false);
         d.spells = SpellsFrom(dj, "spells");
+        d.silver = std::max(0, dj.value("silver", 0));
+        d.price = std::max(0, dj.value("price", 0));
         for (const json &rj : dj.value("replies", json::array()))
           if (d.replies.size() < MAX_REPLIES)
             d.replies.push_back({rj.value("text", ""), rj.value("next", -1)});
@@ -380,6 +395,11 @@ json ToJson(const Save &s) {
   for (RoomPos p : s.cleared)
     cleared.push_back(Pos(p));
   j["cleared"] = cleared;
+  j["silver"] = s.silver;
+  json looted = json::array();
+  for (auto [room, i] : s.looted)
+    looted.push_back({Pos(room), i});
+  j["looted"] = looted;
   if (s.respawn)
     j["respawn"] = {Pos(s.respawn->first), s.respawn->second};
   return j;
@@ -401,6 +421,9 @@ void FromJson(const json &j, Save &s) {
     s.talked = j.value("talked", std::set<std::string>{});
     for (const json &p : j.value("cleared", json::array()))
       s.cleared.insert(Pos(p));
+    s.silver = std::max(0, j.value("silver", 0));
+    for (const json &g : j.value("looted", json::array()))
+      s.looted.insert({Pos(g.at(0)), g.at(1).get<int>()});
   } catch (const std::exception &) {
     // A damaged save starts over rather than crashing the game
     s = {};

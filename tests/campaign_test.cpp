@@ -308,3 +308,34 @@ TEST_CASE("a boss moves into its phases as it weakens", "[campaign]") {
   REQUIRE(e.phase == 2);
   REQUIRE(e.def.damage == 30.0f);
 }
+
+TEST_CASE("silver, drops and prices survive a round trip", "[campaign]") {
+  RoomDef room = BlankRoom({0, 0});
+  EnemyDef undead;
+  undead.silver = 7;
+  undead.drops = {Bolt()};
+  room.enemies = {undead};
+  ObjectDef shrine{ObjectKind::Shrine, {80, 200}, "", false};
+  shrine.silver = 20;
+  room.objects = {shrine};
+  NpcDef seller;
+  seller.dialogue = {{"Buy?", {{"The bolt", 1}}, "", false},
+                     {"Yours.", {}, "", false, {Bolt()}, 0, 15}};
+  room.npcs = {seller};
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.enemies[0].silver == 7);
+  REQUIRE(back.enemies[0].drops.size() == 1);
+  REQUIRE(back.objects[0].silver == 20);
+  REQUIRE(back.npcs[0].dialogue[1].price == 15);
+  REQUIRE(back.npcs[0].dialogue[1].spells.size() == 1);
+
+  Save save;
+  save.silver = 42;
+  save.looted = {{{0, 0}, 3}};
+  Save loaded;
+  FromJson(ToJson(save), loaded);
+  REQUIRE(loaded.silver == 42);
+  REQUIRE(loaded.looted == save.looted);
+}

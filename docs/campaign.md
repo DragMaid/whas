@@ -50,6 +50,13 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 - **Sealed edges**: a room can seal some of its edges with a glowing
   barrier until its conditions hold (listed top right). Once met, they stay
   met in your save.
+- **Silver**: enemies can leave silver and blueprint pages behind the
+  first time they're beaten (walk over them to pick them up); shrines and
+  people can give silver too. It's counted top left.
+- **Shops**: a dialogue node can have a price. Replies leading to it show
+  the price (and are greyed out until you can pay); reaching it the first
+  time pays and gives what it holds (glyph, blueprints, silver). Bought
+  ones say so.
 - **Trials**: a room can be a trial, with a time limit and/or only some
   glyphs allowed (spells using others won't cast there). When time runs out
   the room starts over from where you came in. Meeting its conditions ends
@@ -125,7 +132,9 @@ instead.
   the terrain, where it stays) and/or a *Prize* (there once the room's
   conditions are met); the editor labels them. Dialogue is a list of nodes: node 1 starts the talk, each
   node has a line, up to three replies (each leads to a node or ends the
-  talk) and optionally a glyph it teaches and blueprints it gives.
+  talk) and optionally a glyph it teaches, blueprints and silver it gives,
+  and a price (a shop: put what's sold on the priced node). An enemy's
+  *Drops* are the silver and pages it leaves the first time it's beaten.
 - **Room** tab:
   - *To leave this room*: tick the edges to seal and add conditions. Every
     condition must hold to open them:
@@ -159,7 +168,8 @@ data/campaigns/<id>/
   backgrounds/*.png    scaled to GRID_W*CELL_SIZE x GRID_H*CELL_SIZE
   backpack/*.json      spells drawn at workbenches (spell file format)
   save.json            glyphs known, rooms visited, gates opened, respawn,
-                       shrines taken, slots, rooms cleared, conversations had
+                       shrines taken, slots, rooms cleared, conversations had,
+                       silver, enemies looted
 ```
 
 `save.json` and `backpack/` are per player and ignored by git; the rest is

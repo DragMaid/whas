@@ -240,6 +240,7 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   m_breakStart.assign(m_room.conditions.size(), 0);
   m_met.assign(m_room.conditions.size(), false);
   m_uncovered.assign(m_room.objects.size(), false);
+  m_drops.clear();
   m_entryAt = at;
   m_trialLeft = m_room.trial.seconds;
   m_trialFailed = false;
@@ -571,6 +572,10 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
                            ": draw it at a workbench"
                      : "You already know " + name;
       }
+      if (o.silver > 0) {
+        m_save.silver += o.silver;
+        text += (text.empty() ? "" : "\n") + std::string(TextFormat("+%d silver", o.silver));
+      }
       Notify(text, 4.0f);
       if (std::string found = Grant(o.spells); !found.empty())
         m_notice += (text.empty() ? "" : "\n") + found;
@@ -593,6 +598,7 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
       Respawn(sim);
     return;
   }
+  TickDrops(sim, dt);
   if (m_tick % 10 == 0)
     CheckConditions(sim);
   if (TrialRunning() && m_room.trial.seconds > 0) {
@@ -668,29 +674,47 @@ std::string CampaignPlay::NpcKey(int npc) const {
   return n.tag.empty() ? std::to_string(npc) : n.tag;
 }
 
+bool CampaignPlay::Bought(int npc, int node) const {
+  return m_save.talked.count(TalkKey(m_room.pos, NpcKey(npc), node) + "/given") > 0;
+}
+
 void CampaignPlay::ReachNode(int node) {
   const NpcDef &npc = m_room.npcs[m_talking];
   if (node < 0 || node >= static_cast<int>(npc.dialogue.size())) {
     m_talking = -1;
     return;
   }
-  m_node = node;
-  m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), -1));
-  m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), node));
   const DialogueNode &d = npc.dialogue[node];
   std::string key = TalkKey(m_room.pos, NpcKey(m_talking), node);
   bool first = !m_save.talked.count(key + "/given");
+  // A shop's wares are paid for the first time
+  if (first && d.price > 0) {
+    if (m_save.silver < d.price) {
+      Notify(TextFormat("You need %d silver", d.price), 2.0f);
+      if (node == 0)
+        m_talking = -1;
+      return;
+    }
+    m_save.silver -= d.price;
+  }
+  m_node = node;
+  m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), -1));
+  m_save.talked.insert(key);
   std::string text;
   if (!d.teach.empty() && m_save.glyphs.insert(d.teach).second) {
     GlyphDocs::Info info = GlyphDocs::Get(d.teach);
     text = std::string("Learned the ") + (info.name ? info.name : d.teach.c_str()) +
            (d.teachSigil ? " sigil" : " sign");
   }
-  // Blueprints are given once per node, not every time it's read
+  // Blueprints and silver are given once per node, not every time it's read
   std::string found;
-  if (first && !d.spells.empty()) {
+  if (first && (!d.spells.empty() || d.silver > 0 || d.price > 0)) {
     m_save.talked.insert(key + "/given");
     found = Grant(d.spells);
+    if (d.silver > 0) {
+      m_save.silver += d.silver;
+      found += (found.empty() ? "" : "\n") + std::string(TextFormat("+%d silver", d.silver));
+    }
   }
   if (!text.empty() || !found.empty()) {
     std::optional<Spell> card = m_noticeSpell;
@@ -698,6 +722,44 @@ void CampaignPlay::ReachNode(int node) {
     m_noticeSpell = card;
   }
   SaveProgress();
+}
+
+// Beaten enemies leave silver and pages the first time; they fall to the
+// floor and are picked up by walking over them
+void CampaignPlay::TickDrops(const Simulation &sim, float dt) {
+  for (int i = 0; i < static_cast<int>(m_enemies.size()); ++i) {
+    Enemies::Enemy &e = m_enemies[i];
+    if (e.body.Alive() || e.fallen)
+      continue;
+    e.fallen = true;
+    if (!m_save.looted.count({m_room.pos, i}) &&
+        (e.def.silver > 0 || !e.def.drops.empty()))
+      m_drops.push_back({e.body.Center(), i, e.def.silver, e.def.drops});
+  }
+  for (auto it = m_drops.begin(); it != m_drops.end();) {
+    int x = static_cast<int>(it->pos.x), below = static_cast<int>(it->pos.y + 1);
+    bool resting = below >= GRID_H;
+    if (!resting) {
+      const Cell &c = sim.GetCell(std::clamp(x, 0, GRID_W - 1), below);
+      const auto &props = sim.GetConfig().elements[static_cast<size_t>(c.element)];
+      resting = c.element != Element::AIR && props.solid && !props.passable;
+    }
+    if (!resting)
+      it->pos.y += 40.0f * dt;
+    if (m_player.Alive() && Dist(it->pos, m_player.Center()) < 8.0f) {
+      m_save.looted.insert({m_room.pos, it->enemy});
+      m_save.silver += it->silver;
+      std::string found = Grant(it->spells);
+      std::optional<Spell> card = m_noticeSpell;
+      std::string text = it->silver > 0 ? TextFormat("+%d silver", it->silver) : "";
+      Notify(text + (text.empty() || found.empty() ? "" : "\n") + found, 3.0f);
+      m_noticeSpell = card;
+      SaveProgress();
+      it = m_drops.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 bool CampaignPlay::RoomOpen() const {
@@ -795,6 +857,22 @@ void CampaignPlay::DrawWorld(const Simulation &sim, const UI &ui) const {
                    : !m_save.shrinesTaken.count(key);
     DrawCampaignObject(o, lit, ui.Glyphs());
   }
+  // Drops: a silver coin and/or a page, bobbing
+  float t = static_cast<float>(GetTime());
+  for (const Drop &d : m_drops) {
+    Vector2 p{d.pos.x * CELL_SIZE, d.pos.y * CELL_SIZE - 6 + 2 * std::sin(t * 3 + d.enemy)};
+    if (!d.spells.empty()) {
+      DrawRectangle(static_cast<int>(p.x - 5), static_cast<int>(p.y - 14), 10, 13,
+                    Color{235, 225, 195, 255});
+      DrawLine(static_cast<int>(p.x - 3), static_cast<int>(p.y - 10),
+               static_cast<int>(p.x + 3), static_cast<int>(p.y - 10), Color{90, 70, 50, 255});
+      p.x += 9;
+    }
+    if (d.silver > 0) {
+      DrawCircleV(p, 5, Color{205, 210, 220, 255});
+      DrawCircleLinesV(p, 5, Color{120, 125, 140, 255});
+    }
+  }
   for (const NpcDef &n : m_room.npcs) {
     Character body;
     body.pos = n.pos;
@@ -881,6 +959,8 @@ void CampaignPlay::DrawDialogue() {
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
                    ImGuiWindowFlags_AlwaysAutoResize);
   ImGui::TextColored(Theme::Vec(Tone::Brass), "%s", npc.name.c_str());
+  ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80 * s);
+  ImGui::TextDisabled("%d silver", m_save.silver);
   ImGui::PushTextWrapPos(0.0f);
   ImGui::TextUnformatted(node.text.c_str());
   ImGui::PopTextWrapPos();
@@ -889,9 +969,23 @@ void CampaignPlay::DrawDialogue() {
   bool keys = !std::exchange(m_talkFresh, false);
   int pick = -2; // -2: nothing chosen yet
   for (int i = 0; i < static_cast<int>(node.replies.size()); ++i) {
+    int next = node.replies[i].next;
     std::string label = TextFormat("%d. %s", i + 1, node.replies[i].text.c_str());
-    if (ImGui::Selectable(label.c_str()) || (keys && IsKeyPressed(KEY_ONE + i)))
-      pick = node.replies[i].next;
+    // Shop wares show their price, and can't be had without the silver
+    bool locked = false;
+    if (next >= 0 && next < (int)npc.dialogue.size() && npc.dialogue[next].price > 0) {
+      int price = npc.dialogue[next].price;
+      if (Bought(m_talking, next)) {
+        label += "  (bought)";
+      } else {
+        label += TextFormat("  (%d silver)", price);
+        locked = m_save.silver < price;
+      }
+    }
+    ImGui::BeginDisabled(locked);
+    if (ImGui::Selectable(label.c_str()) || (!locked && keys && IsKeyPressed(KEY_ONE + i)))
+      pick = next;
+    ImGui::EndDisabled();
   }
   if (node.replies.empty() &&
       (ImGui::Selectable("(Farewell)") ||
@@ -969,7 +1063,8 @@ void CampaignPlay::DrawHud(UI &ui) {
                 "B backpack   E use   right click: cast from a surface   Esc leave");
   else
     dl->AddText(tl, Theme::U32(Tone::Faint, 0.8f),
-                TextFormat("%d glyphs known", (int)m_save.glyphs.size()));
+                TextFormat("%d glyphs known   %d silver", (int)m_save.glyphs.size(),
+                           m_save.silver));
   ImVec2 bottom{tl.x, tl.y + 18 * s};
   if (m_testing)
     dl->AddText(bottom, Theme::U32(Tone::Brass),

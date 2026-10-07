@@ -853,7 +853,8 @@ void CampaignEditor::DrawSelected(Simulation &sim, UI &ui) {
       ImGui::TextDisabled("Ready-made spells for the backpack. They don't\n"
                           "teach their glyphs.");
       SpellPicker::Draw("shrine", o.spells, ui.Library(), ui.Thumbnails());
-      if (o.glyph.empty() && o.spells.empty())
+      ImGui::SliderInt("Silver", &o.silver, 0, 200);
+      if (o.glyph.empty() && o.spells.empty() && o.silver == 0)
         ImGui::TextColored(Theme::Vec(Tone::Oxblood), "It gives nothing yet.");
     }
     break;
@@ -880,6 +881,14 @@ void CampaignEditor::DrawSelected(Simulation &sim, UI &ui) {
                           "library and onto this mage.");
       if (e.spells.empty())
         ImGui::TextColored(Theme::Vec(Tone::Oxblood), "With no spells it only walks.");
+    }
+
+    Widgets::SectionHeader("Drops");
+    ImGui::TextDisabled("Left behind the first time it's beaten.");
+    ImGui::SliderInt("Silver", &e.silver, 0, 100);
+    if (ImGui::TreeNode("pages", "Blueprint pages (%d)", (int)e.drops.size())) {
+      SpellPicker::Draw("drops", e.drops, ui.Library(), ui.Thumbnails());
+      ImGui::TreePop();
     }
 
     Widgets::SectionHeader("Boss");
@@ -975,6 +984,11 @@ void CampaignEditor::DrawNpc(NpcDef &npc, UI &ui) {
       if (d.replies.empty())
         ImGui::TextDisabled("No replies: the talk ends after this.");
       GlyphCombo("Teaches", d.teach, d.teachSigil, ui, true);
+      ImGui::SliderInt("Gives silver", &d.silver, 0, 200);
+      ImGui::SliderInt("Price", &d.price, 0, 200, d.price ? "%d silver" : "free");
+      ImGui::SetItemTooltip("A shop: reaching this node costs this much (once).\n"
+                            "Replies leading here show the price and can't be\n"
+                            "picked without the silver. Put what's sold on this node.");
       if (ImGui::TreeNode("blueprints", "Blueprints it gives (%d)", (int)d.spells.size())) {
         SpellPicker::Draw("node spells", d.spells, ui.Library(), ui.Thumbnails());
         ImGui::TreePop();

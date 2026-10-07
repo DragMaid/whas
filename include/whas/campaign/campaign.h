@@ -53,6 +53,10 @@ struct EnemyDef {
     std::vector<Spell> spells; // a mage's new spells; empty keeps the old
   };
   std::vector<Phase> phases; // highest `below` first
+
+  // Left behind the first time it's beaten: silver and blueprint pages
+  int silver = 0;
+  std::vector<Spell> drops;
 };
 
 enum class ObjectKind : uint8_t { Gate, Workbench, Shrine };
@@ -72,6 +76,7 @@ struct ObjectDef {
   bool hidden = false;
   // Only there once the room's conditions are met (a trial's prize)
   bool reward = false;
+  int silver = 0; // Shrine: silver it gives too
 };
 // The cells an object takes up
 Rectangle ObjectBox(const ObjectDef &o);
@@ -88,6 +93,10 @@ struct DialogueNode {
   std::string teach;                  // glyph id learned on reaching it, or ""
   bool teachSigil = false;
   std::vector<Spell> spells; // blueprints given on reaching it
+  int silver = 0;            // given on reaching it (once)
+  // A shop: reaching it costs this much silver (once; replies leading here
+  // can't be picked without it)
+  int price = 0;
 };
 constexpr int MAX_REPLIES = 3;
 
@@ -171,6 +180,8 @@ struct Save {
   std::set<RoomPos> cleared;          // rooms whose conditions were met
   // Conversations reached: "<x>_<y>/<npc tag or index>/<node>"
   std::set<std::string> talked;
+  int silver = 0;
+  std::set<std::pair<RoomPos, int>> looted; // enemies whose drops were taken
 };
 
 std::string TalkKey(RoomPos room, const std::string &npc, int node);

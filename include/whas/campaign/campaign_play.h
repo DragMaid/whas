@@ -138,6 +138,17 @@ private:
   std::vector<int> m_breakStart; // solid cells each Break region began with
   std::vector<bool> m_met;       // conditions met, last checked
   std::vector<bool> m_uncovered; // buried objects dug out this visit
+  // What beaten enemies leave behind, until picked up
+  struct Drop {
+    Vector2 pos; // cells
+    int enemy;
+    int silver;
+    std::vector<Spell> spells;
+  };
+  std::vector<Drop> m_drops;
+  void TickDrops(const Simulation &sim, float dt);
+  // Whether a node is a shop item already bought
+  bool Bought(int npc, int node) const;
   // Trials: time left, and where the room was entered (to start over)
   bool TrialRunning() const { return m_room.trial.on && !RoomOpen(); }
   float m_trialLeft = 0.0f;
