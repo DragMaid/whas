@@ -83,7 +83,7 @@ private:
   void DrawRoomMap(Simulation &sim);
   void DrawSelected(Simulation &sim, UI &ui);
   void DrawNpc(Campaign::NpcDef &npc, UI &ui);
-  void DrawRoomTab(Simulation &sim);
+  void DrawRoomTab(Simulation &sim, UI &ui);
   void DrawConditions();
   void DrawCampaignTab(UI &ui);
 

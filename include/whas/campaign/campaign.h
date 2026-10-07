@@ -110,6 +110,14 @@ struct ConditionDef {
   std::string hint; // shown to the player; a default is made when ""
 };
 
+// A trial: the room's conditions must be met in time and/or with only
+// some glyphs. Failing (time running out) starts the room over.
+struct TrialDef {
+  bool on = false;
+  float seconds = 0.0f;         // 0: no time limit
+  std::set<std::string> glyphs; // glyphs spells may use; empty: any
+};
+
 // Edges a room's conditions can seal
 enum Edge : int { EdgeLeft, EdgeRight, EdgeUp, EdgeDown, EDGES };
 
@@ -122,6 +130,7 @@ struct RoomDef {
   std::vector<NpcDef> npcs;
   std::vector<ConditionDef> conditions;
   std::array<bool, EDGES> sealed{}; // edges closed until the conditions hold
+  TrialDef trial;
 };
 
 struct CampaignDef {

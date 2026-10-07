@@ -90,6 +90,38 @@ bool GlyphCombo(const char *label, std::string &glyph, bool &sigil, UI &ui,
   return changed;
 }
 
+// Glyphs as toggles that wrap to the panel's width; true when changed
+bool GlyphChips(const char *id, std::set<std::string> &set, UI &ui) {
+  bool changed = false;
+  ImGui::PushID(id);
+  for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign}) {
+    ImGui::TextDisabled(kind == GlyphKind::Sigil ? "Sigils" : "Signs");
+    float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    bool first = true;
+    for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {
+      GlyphDocs::Info info = GlyphDocs::Get(a->id);
+      const char *name = info.name ? info.name : a->id.c_str();
+      float w = ImGui::CalcTextSize(name).x + ImGui::GetStyle().FramePadding.x * 2 +
+                ImGui::GetStyle().ItemSpacing.x;
+      if (!first && ImGui::GetItemRectMax().x + w < right)
+        ImGui::SameLine();
+      first = false;
+      bool has = set.count(a->id) > 0;
+      if (Widgets::SmallButton(TextFormat("%s##%s", name, a->id.c_str()), has)) {
+        if (has)
+          set.erase(a->id);
+        else
+          set.insert(a->id);
+        changed = true;
+      }
+      if (info.text && *info.text)
+        ImGui::SetItemTooltip("%s", info.text);
+    }
+  }
+  ImGui::PopID();
+  return changed;
+}
+
 } // namespace
 
 void CampaignEditor::OpenHub() {
@@ -709,7 +741,7 @@ void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Room")) {
-      DrawRoomTab(sim);
+      DrawRoomTab(sim, ui);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Campaign")) {
@@ -918,9 +950,24 @@ void CampaignEditor::DrawNpc(NpcDef &npc, UI &ui) {
     npc.dialogue.push_back({"...", {}, "", false});
 }
 
-void CampaignEditor::DrawRoomTab(Simulation &sim) {
+void CampaignEditor::DrawRoomTab(Simulation &sim, UI &ui) {
   Widgets::SectionHeader("To leave this room");
   DrawConditions();
+
+  Widgets::SectionHeader("Trial");
+  ImGui::Checkbox("This room is a trial", &m_room.trial.on);
+  if (m_room.trial.on) {
+    ImGui::TextDisabled("Meet the conditions above in time and/or with only\n"
+                        "some glyphs; when time runs out the room starts over.\n"
+                        "Mark its reward a Prize so it appears at the end.");
+    ImGui::SliderFloat("Time limit", &m_room.trial.seconds, 0.0f, 300.0f,
+                       m_room.trial.seconds <= 0.0f ? "none" : "%.0fs");
+    ImGui::TextDisabled("Glyphs spells may use (none lit: any):");
+    GlyphChips("trial", m_room.trial.glyphs, ui);
+    if (m_room.conditions.empty())
+      ImGui::TextColored(Theme::Vec(Tone::Oxblood),
+                         "A trial needs a condition to finish.");
+  }
 
   Widgets::SectionHeader("Background");
   ImGui::Text("%s", m_room.background.empty() ? "None" : m_room.background.c_str());
@@ -1047,21 +1094,7 @@ void CampaignEditor::DrawConditions() {
 
 void CampaignEditor::DrawCampaignTab(UI &ui) {
   Widgets::SectionHeader("Starting kit");
-  ImGui::TextDisabled("Glyphs a new game knows; shrines and people teach the rest.");
-  for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign}) {
-    int n = 0;
-    for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {
-      GlyphDocs::Info info = GlyphDocs::Get(a->id);
-      bool has = m_def.startingKit.count(a->id) > 0;
-      if (n++ % 2)
-        ImGui::SameLine(170 * View::UiScale());
-      if (ImGui::Checkbox(info.name ? info.name : a->id.c_str(), &has)) {
-        if (has)
-          m_def.startingKit.insert(a->id);
-        else
-          m_def.startingKit.erase(a->id);
-      }
-    }
-    ImGui::Separator();
-  }
+  ImGui::TextDisabled("Glyphs a new game knows (lit); shrines and people teach\n"
+                      "the rest. Click to switch.");
+  GlyphChips("kit", m_def.startingKit, ui);
 }

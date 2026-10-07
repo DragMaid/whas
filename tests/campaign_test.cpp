@@ -256,3 +256,16 @@ TEST_CASE("buried and prize objects survive a round trip", "[campaign]") {
   REQUIRE(back.objects[1].reward);
   REQUIRE_FALSE(back.objects[1].hidden);
 }
+
+TEST_CASE("trials survive a round trip", "[campaign]") {
+  RoomDef room = BlankRoom({0, 0});
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE_FALSE(back.trial.on);
+  room.trial = {true, 45.0f, {"fire", "wind"}};
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.trial.on);
+  REQUIRE(back.trial.seconds == 45.0f);
+  REQUIRE(back.trial.glyphs == std::set<std::string>{"fire", "wind"});
+}

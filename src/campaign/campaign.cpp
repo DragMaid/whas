@@ -234,7 +234,7 @@ json ToJson(const RoomDef &r) {
          {"amount", c.amount},
          {"node", c.node},
          {"hint", c.hint}});
-  return {{"pos", Pos(r.pos)},
+  json out{{"pos", Pos(r.pos)},
           {"terrain", Maps::ToJson(r.terrain)},
           {"background", r.background},
           {"objects", objects},
@@ -242,6 +242,9 @@ json ToJson(const RoomDef &r) {
           {"npcs", npcs},
           {"conditions", conditions},
           {"sealed", r.sealed}};
+  if (r.trial.on)
+    out["trial"] = {{"seconds", r.trial.seconds}, {"glyphs", r.trial.glyphs}};
+  return out;
 }
 
 bool FromJson(const json &j, RoomDef &r, std::string &error) {
@@ -316,6 +319,12 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       r.conditions.push_back(std::move(c));
     }
     r.sealed = j.value("sealed", std::array<bool, EDGES>{});
+    r.trial = {};
+    if (auto t = j.find("trial"); t != j.end()) {
+      r.trial.on = true;
+      r.trial.seconds = std::max(0.0f, t->value("seconds", 0.0f));
+      r.trial.glyphs = t->value("glyphs", std::set<std::string>{});
+    }
     return true;
   } catch (const std::exception &e) {
     error = std::string("bad room: ") + e.what();

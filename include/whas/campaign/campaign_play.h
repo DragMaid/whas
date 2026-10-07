@@ -138,6 +138,11 @@ private:
   std::vector<int> m_breakStart; // solid cells each Break region began with
   std::vector<bool> m_met;       // conditions met, last checked
   std::vector<bool> m_uncovered; // buried objects dug out this visit
+  // Trials: time left, and where the room was entered (to start over)
+  bool TrialRunning() const { return m_room.trial.on && !RoomOpen(); }
+  float m_trialLeft = 0.0f;
+  bool m_trialFailed = false;
+  Vector2 m_entryAt{0, 0};
   Simulation *m_warpSim = nullptr;
 
   std::string m_notice;

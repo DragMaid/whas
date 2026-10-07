@@ -50,6 +50,10 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 - **Sealed edges**: a room can seal some of its edges with a glowing
   barrier until its conditions hold (listed top right). Once met, they stay
   met in your save.
+- **Trials**: a room can be a trial, with a time limit and/or only some
+  glyphs allowed (spells using others won't cast there). When time runs out
+  the room starts over from where you came in. Meeting its conditions ends
+  it, and its prizes appear.
 - **Dying** puts you back at the last gate you touched (or the start), with
   everything you've learned.
 
@@ -128,10 +132,13 @@ instead.
     | Talk to someone | the NPC with the tag was talked to (up to a node, or at all) |
     | Take the shrine | the room's shrines are taken |
     Regions are drawn with "Draw region": drag a rectangle in the room.
+  - *Trial*: a time limit (or none) and the glyphs spells may use (none lit:
+    any). Make the reward a Prize.
   - *Background*: drop a PNG on the window or type its path. It's scaled
     to the world's size and copied into the campaign folder.
   - *Terrain*: copy a 1v1 map in, or clear to a bare earth floor.
-- **Campaign** tab: the starting kit, the glyphs a new game knows.
+- **Campaign** tab: the starting kit, the glyphs a new game knows (click a
+  glyph to switch it).
 - The wave icon lets the world settle (water and sand come to rest).
 - **Play this room** saves and starts there with every glyph unlocked,
   without touching the save. `Esc` comes back to the editor.

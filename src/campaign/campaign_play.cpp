@@ -240,6 +240,24 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   m_breakStart.assign(m_room.conditions.size(), 0);
   m_met.assign(m_room.conditions.size(), false);
   m_uncovered.assign(m_room.objects.size(), false);
+  m_entryAt = at;
+  m_trialLeft = m_room.trial.seconds;
+  m_trialFailed = false;
+  if (TrialRunning()) {
+    std::string what = "A trial";
+    if (m_room.trial.seconds > 0)
+      what += TextFormat(": %.0f seconds", m_room.trial.seconds);
+    if (!m_room.trial.glyphs.empty()) {
+      what += m_room.trial.seconds > 0 ? ", only " : ": only ";
+      bool first = true;
+      for (const std::string &g : m_room.trial.glyphs) {
+        GlyphDocs::Info info = GlyphDocs::Get(g);
+        what += (first ? "" : ", ") + std::string(info.name ? info.name : g.c_str());
+        first = false;
+      }
+    }
+    Notify(what, 4.0f);
+  }
   for (size_t i = 0; i < m_room.conditions.size(); ++i)
     if (m_room.conditions[i].kind == ConditionKind::Break)
       m_breakStart[i] = CountIn(sim, m_room.conditions[i].region, std::nullopt);
@@ -391,6 +409,10 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
     if (!m_active)
       return;
   }
+  if (m_trialFailed) {
+    EnterRoom(sim, m_room.pos, m_entryAt, false);
+    Notify("Time's up: the trial starts over", 3.0f);
+  }
   m_accumulator = std::min(m_accumulator, TurnController::TICK_DT);
   m_trail.Update(&m_player, 1, GetFrameTime());
 }
@@ -443,6 +465,20 @@ void CampaignPlay::Cast(Simulation &sim, UI &ui) {
   if (!spell) {
     Notify("Nothing in that slot: press B for your backpack", 2.0f);
     return;
+  }
+  if (TrialRunning() && !m_room.trial.glyphs.empty()) {
+    auto outside = [&](const std::vector<PlacedGlyph> &glyphs) {
+      return std::any_of(glyphs.begin(), glyphs.end(), [&](const PlacedGlyph &g) {
+        return !m_room.trial.glyphs.count(g.assetId);
+      });
+    };
+    bool bad = outside(spell->glyphs);
+    for (const SpellComponent &c : spell->components)
+      bad = bad || outside(c.glyphs);
+    if (bad) {
+      Notify("This trial doesn't allow that spell's glyphs", 2.0f);
+      return;
+    }
   }
   PlannedCast cast = PlannedCast::Local(*spell, target->aim);
   if (!cast.stats.valid) {
@@ -554,6 +590,11 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
   }
   if (m_tick % 10 == 0)
     CheckConditions(sim);
+  if (TrialRunning() && m_room.trial.seconds > 0) {
+    m_trialLeft -= dt;
+    if (m_trialLeft <= 0.0f)
+      m_trialFailed = true;
+  }
   CheckEdges(sim, input);
 }
 
@@ -711,6 +752,7 @@ std::string CampaignPlay::Hint(const ConditionDef &c) const {
 void CampaignPlay::CheckConditions(const Simulation &sim) {
   if (RoomOpen())
     return;
+
   bool all = true;
   for (int i = 0; i < static_cast<int>(m_room.conditions.size()); ++i) {
     m_met[i] = ConditionMet(sim, i);
@@ -930,6 +972,17 @@ void CampaignPlay::DrawHud(UI &ui) {
 
   // The map, and what opens this room under it
   float mapBottom = DrawMinimap(dl);
+  if (TrialRunning() && m_room.trial.seconds > 0) {
+    std::string line = TextFormat("Trial: %.0fs", std::ceil(m_trialLeft));
+    ImVec2 size = ImGui::CalcTextSize(line.c_str());
+    ImVec2 g{ImGui::GetIO().DisplaySize.x - 16 * s, mapBottom};
+    dl->AddRectFilled({g.x - size.x - 8, g.y - 2}, {g.x + 4, g.y + size.y + 2},
+                      Theme::U32(Tone::Ink, 0.75f));
+    dl->AddText({g.x - size.x - 4, g.y},
+                Theme::U32(m_trialLeft < 5.0f ? Tone::Oxblood : Tone::BrassBright),
+                line.c_str());
+    mapBottom += size.y + 6 * s;
+  }
   if (!RoomOpen()) {
     ImVec2 g{ImGui::GetIO().DisplaySize.x - 16 * s, mapBottom};
     for (size_t i = 0; i < m_room.conditions.size(); ++i) {
