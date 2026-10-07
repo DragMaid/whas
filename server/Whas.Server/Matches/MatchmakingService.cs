@@ -93,11 +93,11 @@ public sealed class MatchmakingService(
                 session.Error("that's your own lobby");
                 return;
             }
-            if (host.BuildId != session.BuildId)
-            {
-                session.Error("the host runs a different game build");
-                return;
-            }
+            // if (host.BuildId != session.BuildId)
+            // {
+            //     session.Error("the host runs a different game build");
+            //     return;
+            // }
             _lobbies.Remove(code);
         }
         await StartAsync(host, session, MatchMode.Lobby, options);

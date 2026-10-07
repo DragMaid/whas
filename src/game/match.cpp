@@ -94,7 +94,6 @@ void ApplyFields(const Simulation &sim, Character *chars, int count) {
 
 // Light bursts blind everyone close enough, the caster too: fully at the
 // burst, a quarter as long at its edge, and never for long
-constexpr float MAX_BLIND_SECONDS = 2.0f;
 constexpr float EDGE_BLIND = 0.25f;
 
 void ApplyFlashes(Simulation &sim, Character *chars, int count) {

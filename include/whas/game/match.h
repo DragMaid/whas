@@ -17,6 +17,7 @@ constexpr int PLAYERS = 2;
 constexpr int ROUNDS = 3; // best of 3
 constexpr float DAMAGE_PER_POWER = 0.03f;
 constexpr float MAX_HP = 100.0f;
+constexpr float MAX_BLIND_SECONDS = 2.0f; // the longest a light burst dazzles
 
 // Which player's plan is applied first each tick, from the match seed, so
 // neither slot always wins same-tick races
