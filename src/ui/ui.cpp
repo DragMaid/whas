@@ -118,20 +118,21 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
   }
 }
 
-void UI::Blind(float seconds, bool hold) {
-  m_blind = std::max(m_blind, seconds);
-  m_blindHold = hold && m_blind > 0.0f;
+void UI::Blind(float seconds) {
+  if (seconds <= m_blind)
+    return;
+  m_blind = seconds;
+  m_blindTotal = seconds;
 }
 
 void UI::DrawBlindness() {
   if (m_blind <= 0.0f)
     return;
-  if (!m_blindHold)
-    m_blind = std::max(0.0f, m_blind - GetFrameTime());
-  // Fully white until the last second, which fades
-  float alpha = m_blindHold ? 1.0f : std::min(1.0f, m_blind);
+  m_blind = std::max(0.0f, m_blind - GetFrameTime());
+  // A white glare that never quite hides the world and clears steadily
+  float alpha = 0.9f * std::sqrt(m_blind / m_blindTotal);
   DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                Color{255, 255, 248, static_cast<unsigned char>(alpha * 250)});
+                Color{255, 255, 248, static_cast<unsigned char>(alpha * 255)});
 }
 
 void UI::SelectSlot(int slot) {

@@ -25,8 +25,8 @@ constexpr Entry kEntries[] = {
                "lands as rock."}},
     {"light",
      {"Light", "Makes light: weightless and very fast, it breaks nothing. "
-               "Every mote bursts into a flash that blinds anyone close, you "
-               "included. With guidance and a human sigil it flies at your "
+               "Every mote bursts into a flash that dazzles anyone close, you "
+               "included, for up to two seconds. With guidance and a human sigil it flies at your "
                "opponent."}},
     {"wind",
      {"Wind", "Moves air and whatever it carries, players included. Needs a "

@@ -4,6 +4,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <span>
 
@@ -91,13 +92,21 @@ void ApplyFields(const Simulation &sim, Character *chars, int count) {
   }
 }
 
-// Light bursts blind everyone close enough, the caster too
+// Light bursts blind everyone close enough, the caster too: fully at the
+// burst, a quarter as long at its edge, and never for long
+constexpr float MAX_BLIND_SECONDS = 2.0f;
+constexpr float EDGE_BLIND = 0.25f;
+
 void ApplyFlashes(Simulation &sim, Character *chars, int count) {
   for (const Flash &flash : sim.GetParticleSystem().TakeFlashes()) {
     for (Character &c : std::span(chars, count)) {
       Vector2 d{c.Center().x - flash.pos.x, c.Center().y - flash.pos.y};
-      if (c.Alive() && d.x * d.x + d.y * d.y <= flash.radius * flash.radius)
-        c.flash = std::max(c.flash, flash.time);
+      float dist = std::sqrt(d.x * d.x + d.y * d.y);
+      if (!c.Alive() || dist > flash.radius)
+        continue;
+      float near = 1.0f - (1.0f - EDGE_BLIND) * dist / flash.radius;
+      c.flash = std::max(c.flash,
+                         std::min(MAX_BLIND_SECONDS, flash.time * near));
     }
   }
 }

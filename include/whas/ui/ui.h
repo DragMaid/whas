@@ -88,9 +88,9 @@ public:
   }
   void ClearMatchSpells() { m_hasMatchSpells = false; }
 
-  // Blinded by a light burst for `seconds` (the longest so far wins). While
-  // `hold` stays true the screen stays white; after that it fades out.
-  void Blind(float seconds, bool hold);
+  // Blinded by a light burst for `seconds` (the longest so far wins); the
+  // glare fades out over that time
+  void Blind(float seconds);
 
   // Extra ImGui windows (the play menu, replay controls) drawn each frame
   void SetOverlay(std::function<void()> draw) { m_overlay = std::move(draw); }
@@ -126,7 +126,7 @@ private:
   ImGuiStyle m_baseStyle;
   float m_uiScale = 0.0f;
   float m_blind = 0.0f; // seconds of blindness left
-  bool m_blindHold = false;
+  float m_blindTotal = 1.0f;
 
   // Bottom bar: time-stop button, Draw|Cast toggle, hotbar or materials,
   // deck picker (action_bar.cpp)

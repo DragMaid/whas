@@ -302,7 +302,7 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
   state.hideActionBar = true;
   state.matchRound = -1;
   m_noticeTime = std::max(0.0f, m_noticeTime - GetFrameTime());
-  ui.Blind(m_player.TakeFlash(), false);
+  ui.Blind(m_player.TakeFlash());
 
   bool keys = !ImGui::GetIO().WantCaptureKeyboard;
   if (keys && IsKeyPressed(KEY_ESCAPE)) {
