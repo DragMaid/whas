@@ -17,6 +17,7 @@ ElementUpdateArray ElementUpdateRegistry::s_updateFunctions = {
     ElementsImpl::UpdateGrass,
     ElementsImpl::UpdateSmoke,
     nullptr, // Light is never a cell
+    ElementsImpl::UpdateAcid,
 };
 
 void ElementUpdateRegistry::Update(Element element, int x, int y,

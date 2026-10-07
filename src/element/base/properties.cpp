@@ -257,6 +257,26 @@ constexpr ElementProperties MakeLight() {
           .restitution = 0.0f};
 }
 
+// Acid: a liquid a little heavier than water; its lifetime is its strength,
+// spent biting through ground (see acid.cpp), not ticking away
+constexpr ElementProperties MakeAcid() {
+  return {.mobile = true,
+          .solid = false,
+          .passable = false,
+          .rigidBody = false,
+          .rigidBodyCandidate = false,
+          .staticTerrain = false,
+          .defaultTemperature = 20.0f,
+          .defaultMass = 1.1f,
+          .defaultHardness = 0.0f,
+          .defaultLifetime = 8.0f,
+          .lifetimeDecay = 0.0f,
+          .defaultMoisture = 0.0f,
+          .thermal = {3.5f, 0.5f, 0.05f},
+          .density = 1100.0f,
+          .restitution = 0.1f};
+}
+
 SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::AIR)] = MakeAir();
   elements[static_cast<std::size_t>(Element::WATER)] = MakeWater();
@@ -271,4 +291,5 @@ SimulationConfig::SimulationConfig() {
   elements[static_cast<std::size_t>(Element::GRASS)] = MakeGrass();
   elements[static_cast<std::size_t>(Element::SMOKE)] = MakeSmoke();
   elements[static_cast<std::size_t>(Element::LIGHT)] = MakeLight();
+  elements[static_cast<std::size_t>(Element::ACID)] = MakeAcid();
 }

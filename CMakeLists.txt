@@ -101,6 +101,7 @@ set(SOURCES
     src/element/sand.cpp
     src/element/burning.cpp
     src/element/smoke.cpp
+    src/element/acid.cpp
 
     src/audio/audio_manager.cpp
     src/audio/audio_observer.cpp
@@ -244,6 +245,7 @@ if(WHAS_BUILD_TESTS)
     add_executable(whas_tests
         tests/determinism_test.cpp
         tests/burning_test.cpp
+        tests/hazard_test.cpp
         tests/match_test.cpp
         tests/spell_golden_test.cpp
         tests/spell_modifier_test.cpp

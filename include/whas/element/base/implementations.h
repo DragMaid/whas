@@ -13,4 +13,5 @@ namespace ElementsImpl
     void UpdateWood (int x, int y, ElementContext& ctx);
     void UpdateGrass(int x, int y, ElementContext& ctx);
     void UpdateSmoke(int x, int y, ElementContext& ctx);
+    void UpdateAcid (int x, int y, ElementContext& ctx);
 }

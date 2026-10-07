@@ -74,6 +74,8 @@ struct Layout {
   std::vector<int> strata; // per-column band offset; empty for none
   std::vector<bool> fertile = std::vector<bool>(GRID_W, true);
   int waterLevel = NO_WATER; // water fills rows from here down to the ground
+  // Acid pools: per column, the row acid fills from down to the ground
+  std::vector<int> acidTop = std::vector<int>(GRID_W, NO_WATER);
 };
 
 void ShapeMeadow(DetRng &rng, Layout &l) {
@@ -161,6 +163,28 @@ void ShapeCanyon(DetRng &rng, Layout &l) {
     l.fertile[x] = false; // desert
   }
   l.waterLevel = floor - 3; // a stream along the bottom
+}
+
+void ShapeMire(DetRng &rng, Layout &l) {
+  l.surface = Noise(rng, 30, 120, 132);
+  // Two or three pits between the spawns, each filled to just under its rim
+  int pits = 2 + static_cast<int>(rng.Below(2));
+  int span = (GRID_W - 180) / pits;
+  for (int p = 0; p < pits; ++p) {
+    int centre = 90 + span * p + span / 2 + Between(rng, -span / 5, span / 5);
+    int halfWidth = Between(rng, 14, 22);
+    int depth = Between(rng, 9, 15);
+    int x0 = std::max(0, centre - halfWidth), x1 = std::min(GRID_W - 1, centre + halfWidth);
+    // Dug down from the lower rim, so the pool fills the pit
+    int rim = std::max(l.surface[x0], l.surface[x1]);
+    for (int x = x0; x <= x1; ++x) {
+      l.surface[x] = std::max(l.surface[x], rim + depth * Bump(x, centre, halfWidth) / 256);
+      l.sandDepth[x] = 2;
+      l.fertile[x] = false;
+      if (l.surface[x] > rim + 1)
+        l.acidTop[x] = rim + 1;
+    }
+  }
 }
 
 void Outcrops(Simulation &sim, DetRng &rng, const Layout &l, int count) {
@@ -266,14 +290,20 @@ const char *BiomeName(Biome biome) {
     return "Lake";
   case Biome::Canyon:
     return "Canyon";
+  case Biome::Mire:
+    return "Mire";
   default:
     return "Unknown";
   }
 }
 
 Arena Generate(Simulation &sim, uint64_t seed) {
+  // The first four biomes are picked as they always were (so old seeds keep
+  // their maps); a stream of its own turns one seed in six into a mire
   DetRng rng(seed, 0xB10E);
-  auto biome = static_cast<Biome>(rng.Below(static_cast<uint32_t>(Biome::COUNT)));
+  auto biome = static_cast<Biome>(rng.Below(static_cast<uint32_t>(Biome::Mire)));
+  if (DetRng(seed, 0xAC1D).Below(6) == 0)
+    biome = Biome::Mire;
   return Generate(sim, seed, biome);
 }
 
@@ -304,6 +334,9 @@ Arena Generate(Simulation &sim, uint64_t seed, const Params &params) {
     break;
   case Biome::Canyon:
     ShapeCanyon(rng, l);
+    break;
+  case Biome::Mire:
+    ShapeMire(rng, l);
     break;
   default:
     ShapeMeadow(rng, l);
@@ -374,10 +407,13 @@ Arena Generate(Simulation &sim, uint64_t seed, const Params &params) {
       sim.Paint(x, y, Element::ROCK, 0);
   }
 
-  // Water over the low ground
-  for (int x = 0; x < GRID_W; ++x)
+  // Water over the low ground, acid in its pits
+  for (int x = 0; x < GRID_W; ++x) {
     for (int y = l.waterLevel; y < l.surface[x]; ++y)
       Set(sim, x, y, Element::WATER);
+    for (int y = l.acidTop[x]; y < l.surface[x]; ++y)
+      Set(sim, x, y, Element::ACID);
+  }
 
   const int rocks = params.rocks, plants = params.vegetation;
   auto grass = [&] {
@@ -401,6 +437,11 @@ Arena Generate(Simulation &sim, uint64_t seed, const Params &params) {
     break;
   case Biome::Canyon:
     Cacti(sim, rng, l, spawnX, Scaled(2 + static_cast<int>(rng.Below(4)), plants));
+    break;
+  case Biome::Mire:
+    Outcrops(sim, rng, l, Scaled(1 + static_cast<int>(rng.Below(2)), rocks));
+    grass();
+    Trees(sim, rng, l, spawnX, Scaled(1 + static_cast<int>(rng.Below(2)), plants));
     break;
   default:
     break;

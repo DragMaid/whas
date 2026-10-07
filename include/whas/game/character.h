@@ -45,6 +45,7 @@ struct Character {
   // Wet paper: seconds left before the spell paper dries. Only wind
   // underfoot can be cast while wet; riding it dries the paper faster.
   static constexpr float WET_SECONDS = 3.0f;
+  static constexpr float ACID_DPS = 12.0f; // standing in acid
   static constexpr float FLIGHT_DRY_RATE = 3.0f;
   float wet = 0.0f;
 

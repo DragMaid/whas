@@ -199,6 +199,11 @@ Color Renderer::BaseCellColor(const Cell &c) const {
     float t = Clamp01(c.lifetime / 3.0f);
     return Color{60, 58, 62, (unsigned char)(40 + 120 * t)};
   }
+  case Element::ACID: {
+    // Paler as it spends itself
+    float t = Clamp01(c.lifetime / 8.0f);
+    return LerpColor(Color{170, 200, 120, 230}, Color{130, 235, 40, 240}, t);
+  }
   default:
     return BLACK;
   }

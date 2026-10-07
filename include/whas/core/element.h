@@ -16,6 +16,8 @@ enum class Element : uint8_t {
   SMOKE = 11,
   // Only ever a spell projectile: it bursts into a flash instead of landing
   LIGHT = 12,
+  // A hazard: a liquid that eats ground and hurts characters
+  ACID = 13,
 
   COUNT
 };
@@ -48,6 +50,8 @@ inline const char *ElementName(Element element) {
     return "SMOKE";
   case Element::LIGHT:
     return "LIGHT";
+  case Element::ACID:
+    return "ACID";
   default:
     return "UNKNOWN";
   }
