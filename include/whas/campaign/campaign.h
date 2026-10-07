@@ -60,7 +60,10 @@ struct EnemyDef {
   std::vector<Spell> drops;
 };
 
-enum class ObjectKind : uint8_t { Gate, Workbench, Shrine };
+// Geysers and rockfalls are hazards: a geyser spouts its element straight
+// up every so often; a rockfall hangs from the ceiling and drops a stone on
+// whoever walks under it.
+enum class ObjectKind : uint8_t { Gate, Workbench, Shrine, Geyser, Rockfall, Count };
 const char *ObjectName(ObjectKind kind);
 
 struct ObjectDef {
@@ -78,6 +81,10 @@ struct ObjectDef {
   // Only there once the room's conditions are met (a trial's prize)
   bool reward = false;
   int silver = 0; // Shrine: silver it gives too
+  // Hazards: what a geyser spouts (water or fire) and the seconds between
+  // spouts, or before a rockfall is ready again
+  Element jet = Element::WATER;
+  float every = 3.0f;
 };
 // The cells an object takes up
 Rectangle ObjectBox(const ObjectDef &o);

@@ -89,6 +89,27 @@ void DrawCampaignObject(const ObjectDef &o, bool lit, const SvgLibrary &glyphs) 
     DrawLineEx({r.x, r.y + 30}, {r.x + r.width, r.y + 30}, 2, frame);
     break;
   }
+  case ObjectKind::Geyser: {
+    // TODO: geyser sprite; a stone vent with a dark mouth
+    Color stone{110, 100, 95, 255};
+    DrawRectangle((int)base.x - 20, (int)base.y - 10, 40, 10, stone);
+    DrawRectangle((int)base.x - 12, (int)base.y - 16, 24, 6, stone);
+    DrawRectangle((int)base.x - 6, (int)base.y - 16, 12, 4, Color{30, 25, 25, 255});
+    Color tint = o.jet == Element::FIRE ? Color{240, 120, 40, 200} : Color{90, 170, 230, 200};
+    DrawRectangle((int)base.x - 6, (int)base.y - 13, 12, 2, tint);
+    break;
+  }
+  case ObjectKind::Rockfall: {
+    // TODO: rockfall sprite; a cracked cluster hanging from the ceiling
+    Color rock{120, 115, 110, 255};
+    DrawCircleV({base.x - 7, base.y + 10}, 10, rock);
+    DrawCircleV({base.x + 8, base.y + 8}, 9, rock);
+    DrawCircleV({base.x, base.y + 22}, 11, rock);
+    Color crack{60, 55, 52, 255};
+    DrawLineEx({base.x - 4, base.y + 4}, {base.x + 2, base.y + 18}, 2, crack);
+    DrawLineEx({base.x + 2, base.y + 18}, {base.x - 3, base.y + 28}, 2, crack);
+    break;
+  }
   case ObjectKind::Workbench: {
     // TODO: workbench sprite
     Color wood{140, 95, 55, 255};
@@ -240,6 +261,9 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   m_breakStart.assign(m_room.conditions.size(), 0);
   m_met.assign(m_room.conditions.size(), false);
   m_uncovered.assign(m_room.objects.size(), false);
+  m_hazardIn.assign(m_room.objects.size(), 0.0f);
+  for (size_t i = 0; i < m_room.objects.size(); ++i)
+    m_hazardIn[i] = m_room.objects[i].every * 0.5f; // not all at once on entry
   m_drops.clear();
   m_entryAt = at;
   m_trialLeft = m_room.trial.seconds;
@@ -603,6 +627,7 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
     return;
   }
   TickDrops(sim, dt);
+  TickHazards(sim, dt);
   if (m_tick % 10 == 0)
     CheckConditions(sim);
   if (TrialRunning() && m_room.trial.seconds > 0) {
@@ -727,6 +752,46 @@ void CampaignPlay::ReachNode(int node) {
     m_noticeSpell = card;
   }
   SaveProgress();
+}
+
+// Geysers spout on their beat; a rockfall drops a stone when someone is
+// under it. Both are spells with no caster, so they hit everyone.
+void CampaignPlay::TickHazards(Simulation &sim, float dt) {
+  auto stats = [&](const char *sigil) {
+    Spell spell;
+    spell.glyphs = {{sigil, GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f}};
+    return SpellQuant::Canonical(spell);
+  };
+  for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
+    const ObjectDef &o = m_room.objects[i];
+    if (o.kind != ObjectKind::Geyser && o.kind != ObjectKind::Rockfall)
+      continue;
+    if (!Shown(i))
+      continue;
+    m_hazardIn[i] -= dt;
+    if (m_hazardIn[i] > 0.0f)
+      continue;
+    if (o.kind == ObjectKind::Geyser) {
+      SpellStats s = stats(o.jet == Element::FIRE ? "fire" : "water");
+      if (s.valid)
+        sim.CastSpell(s, {o.pos.x, o.pos.y - 5}, {0, -1}, -1);
+      m_hazardIn[i] = o.every;
+      continue;
+    }
+    // A rockfall waits for someone below it
+    auto under = [&](const Character &c) {
+      return c.Alive() && std::abs(c.Center().x - o.pos.x) < 10.0f && c.Center().y > o.pos.y;
+    };
+    bool someone = under(m_player);
+    for (const Enemies::Enemy &e : m_enemies)
+      someone = someone || under(e.body);
+    if (!someone)
+      continue;
+    SpellStats s = stats("earth");
+    if (s.valid)
+      sim.CastSpell(s, {o.pos.x, o.pos.y + 3}, {0, 1}, -1);
+    m_hazardIn[i] = o.every;
+  }
 }
 
 // Beaten enemies leave silver and pages the first time; they fall to the

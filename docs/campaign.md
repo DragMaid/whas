@@ -62,6 +62,10 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
   glyphs allowed (spells using others won't cast there). When time runs out
   the room starts over from where you came in. Meeting its conditions ends
   it, and its prizes appear.
+- **Hazards**: acid (a liquid that eats ground and hurts while you stand in
+  it; paint it in the editor), geysers that spout water or fire straight up
+  on a beat, and rockfalls that drop a stone on whoever walks under them.
+  They hit enemies too.
 - **Dying** puts you back at the last gate you touched (or the start), with
   everything you've learned.
 
@@ -117,6 +121,7 @@ rooms map and tabs for what's selected, the room and the campaign.
 | `G` / `W` / `H` | Gate / workbench / glyph shrine |
 | `N` | Someone to talk to |
 | `M` / `U` / `F` | Mage / undead / flyer |
+| `Z` | Hazard: a geyser (on the floor) or a rockfall (under the ceiling); pick which, its element and beat in the Selected tab |
 | `Ctrl+S` | Save |
 
 With a placing tool, clicking something already there selects and drags it
