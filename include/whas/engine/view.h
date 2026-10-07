@@ -19,6 +19,14 @@ void SetInsets(Insets insets);
 // Refit to the current window size; call once a frame before drawing
 void Update();
 
+// Zoomed in on a point (world pixels) instead of showing the whole world;
+// the view stays inside the world. zoom 1 shows it all. Applies at once.
+void Follow(Vector2 target, float zoom);
+void Unfollow();
+// Where the camera looks (world pixels), the middle of the world when not
+// following
+Vector2 Target();
+
 Camera2D Camera();
 // Screen pixels per world pixel
 float Scale();

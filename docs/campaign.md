@@ -19,6 +19,8 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 | Right click | Cast from the ground or wall nearest the cursor |
 | `E` | Use what you're standing at: a workbench, a gate |
 | `B` | Backpack: drag spells onto the three slots (or double-click one); drag a slot onto another to swap, or away to empty it |
+| `Tab` (hold) | The map of every room you've been through |
+| Wheel | Zoom the camera |
 | `Esc` | Close a panel, or leave (progress is saved) |
 
 - **Rooms**: walk, fly or fall off an edge to enter the room on that side.
@@ -48,6 +50,13 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
   everything you've learned.
 
 The world pauses while the backpack, the gate map or the workbench is open.
+The camera follows you, zoomed in (the wheel zooms between the whole room
+and 3x), a little ahead of where you're going and leaning toward the
+cursor; it never shows past the room's edges. The minimap (top right) shows
+the room you're in live, with you, enemies, gates (green once opened),
+shrines still to take and sealed edges; rooms you've been through are drawn
+from their files and rooms next to them that you haven't entered are "?".
+What opens the room is listed under it. Code: `campaign_map.cpp`.
 Health and the three slots sit at the bottom of the screen and fade while
 you (or the cursor) are behind them; the keys are listed top left for the
 first few seconds.

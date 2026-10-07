@@ -6,6 +6,7 @@
 #include "whas/game/rts.h"
 #include "whas/spell/spell_editor.h"
 #include "whas/spell/spell_library.h"
+#include "whas/engine/renderer.h"
 #include <future>
 #include <map>
 #include <memory>
@@ -13,6 +14,8 @@
 #include <string>
 
 class Simulation;
+struct ImDrawList;
+struct ImVec2;
 class SvgLibrary;
 class UI;
 struct UIState;
@@ -84,7 +87,21 @@ private:
   void DrawDialogue();
   void DrawSeals() const;
 
+  // The camera follows the player, a little ahead of where they're going
+  // and leaning toward the cursor; the wheel zooms
+  void UpdateCamera();
   void DrawHud(UI &ui);
+  // Maps (campaign_map.cpp): the current room live, rooms seen as pictures,
+  // rooms next to them as "?"
+  void UpdateMinimap(const Simulation &sim);
+  void ForgetMaps();
+  const Texture2D *RoomPicture(Campaign::RoomPos pos, bool load);
+  // The rooms in a box: around the current one, or (all) every room seen
+  // fitted in
+  void DrawMap(ImDrawList *dl, ImVec2 min, ImVec2 max, float roomW, bool all);
+  // Top right, with what opens the room under it; returns its bottom
+  float DrawMinimap(ImDrawList *dl);
+  void DrawBigMap();
   void DrawBackpack(UI &ui);
   void DrawWarp(Simulation *sim);
 
@@ -112,6 +129,7 @@ private:
   bool m_benchWasOpen = false;
   bool m_backpack = false;
   bool m_warp = false;
+  bool m_bigMap = false; // Tab held
   int m_talking = -1; // NPC being talked to
   int m_node = 0;
   bool m_talkFresh = false;
@@ -123,5 +141,19 @@ private:
   float m_noticeTime = 0.0f;
   std::optional<Spell> m_noticeSpell; // a blueprint just found, shown with the notice
   float m_hudAlpha = 1.0f;
+  Vector2 m_cam{0, 0};     // world pixels
+  Vector2 m_lookAhead{0, 0};
+  float m_zoom = 1.8f;     // times the whole-room view
+  bool m_camSnap = true;   // jump straight there (entering a room)
+
+  Renderer m_colors; // cell colours for the live map
+  std::vector<Color> m_livePixels;
+  Texture2D m_live{};
+  float m_liveAge = 1.0f;
+  struct Seen {
+    Texture2D picture{};
+    std::vector<Campaign::ObjectDef> objects; // for gates and shrines
+  };
+  std::map<Campaign::RoomPos, Seen> m_seen;
   float m_helpTime = 0.0f; // the key hints show this long after starting
 };

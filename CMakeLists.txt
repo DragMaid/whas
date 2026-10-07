@@ -159,6 +159,7 @@ set(SOURCES
     src/ui/editor_icons.cpp
     src/campaign/enemies.cpp
     src/campaign/campaign_play.cpp
+    src/campaign/campaign_map.cpp
     src/campaign/campaign_editor.cpp
     src/game/flight_trail.cpp
     src/game/replay.cpp

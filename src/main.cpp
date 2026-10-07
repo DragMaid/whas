@@ -197,6 +197,8 @@ int main(int argc, char **argv) {
     // Editors keep their own space clear (set while drawing their panels)
     if (!campaignEditor.Editing() && !mapEditor.IsOpen())
       View::SetInsets({});
+    if (!campaign.Active())
+      View::Unfollow();
     View::Update();
     // Campaign screens have their own keys and editors; E there is never
     // the library's spell editor

@@ -195,6 +195,7 @@ void CampaignPlay::Stop() {
   m_enemies.clear();
   m_bench.Close();
   m_backpack = m_warp = false;
+  ForgetMaps();
 }
 
 void CampaignPlay::Preload(RoomPos pos) {
@@ -248,6 +249,8 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   }
   m_player.Step(sim, {}, 0.0f);
   m_trail.Clear();
+  m_camSnap = true;
+  m_liveAge = 1.0f;
   m_save.visited.insert(pos);
 
   // Only this room and its neighbours stay read
@@ -336,7 +339,11 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
   m_noticeTime = std::max(0.0f, m_noticeTime - GetFrameTime());
   ui.Blind(m_player.TakeFlash());
 
+  UpdateCamera();
+  UpdateMinimap(sim);
+
   bool keys = !ImGui::GetIO().WantCaptureKeyboard;
+  m_bigMap = keys && IsKeyDown(KEY_TAB) && !PanelOpen();
   if (keys && IsKeyPressed(KEY_ESCAPE)) {
     if (m_bench.IsOpen())
       m_bench.Close();
@@ -385,6 +392,40 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
   }
   m_accumulator = std::min(m_accumulator, TurnController::TICK_DT);
   m_trail.Update(&m_player, 1, GetFrameTime());
+}
+
+void CampaignPlay::UpdateCamera() {
+  float dt = std::min(GetFrameTime(), 0.1f);
+  if (!PanelOpen() && !ImGui::GetIO().WantCaptureMouse)
+    m_zoom = std::clamp(m_zoom + GetMouseWheelMove() * 0.15f, 1.0f, 3.0f);
+  Vector2 body{m_player.Center().x * CELL_SIZE, m_player.Center().y * CELL_SIZE};
+  // Ahead of the motion (eased, so a turn doesn't whip the view round)
+  Vector2 ahead{std::clamp(m_player.vel.x * 0.5f, -40.0f, 40.0f) * CELL_SIZE,
+                std::clamp(m_player.vel.y * 0.25f, -25.0f, 25.0f) * CELL_SIZE};
+  float k = 1.0f - std::exp(-dt * 2.5f);
+  m_lookAhead.x += (ahead.x - m_lookAhead.x) * k;
+  m_lookAhead.y += (ahead.y - m_lookAhead.y) * k;
+  // Toward the cursor, measured on screen so it doesn't chase itself
+  Vector2 mouse = GetMousePosition();
+  Vector2 lean{(mouse.x - GetScreenWidth() * 0.5f) * 0.2f / View::Scale(),
+               (mouse.y - GetScreenHeight() * 0.5f) * 0.2f / View::Scale()};
+  if (PanelOpen())
+    lean = {0, 0};
+  Vector2 goal{body.x + m_lookAhead.x + lean.x, body.y + m_lookAhead.y + lean.y};
+  if (m_camSnap) {
+    m_cam = goal;
+    m_lookAhead = {0, 0};
+    m_camSnap = false;
+  } else {
+    float f = 1.0f - std::exp(-dt * 6.0f);
+    m_cam.x += (goal.x - m_cam.x) * f;
+    m_cam.y += (goal.y - m_cam.y) * f;
+  }
+  // Don't drift past the room's edges (the view clamps too; this keeps
+  // the follow from lagging when it comes back)
+  constexpr float W = GRID_W * CELL_SIZE, H = GRID_H * CELL_SIZE;
+  m_cam = {std::clamp(m_cam.x, 0.0f, W), std::clamp(m_cam.y, 0.0f, H)};
+  View::Follow(m_cam, m_zoom);
 }
 
 void CampaignPlay::Cast(Simulation &sim, UI &ui) {
@@ -803,6 +844,8 @@ void CampaignPlay::DrawPanels(UI &ui) {
     DrawBackpack(ui);
   if (m_warp)
     DrawWarp(m_warpSim);
+  if (m_bigMap)
+    DrawBigMap();
   m_bench.Draw();
 }
 
@@ -864,9 +907,10 @@ void CampaignPlay::DrawHud(UI &ui) {
     dl->AddText(bottom, Theme::U32(Tone::Brass),
                 "Testing from the editor: Esc to go back");
 
-  // What opens this room
+  // The map, and what opens this room under it
+  float mapBottom = DrawMinimap(dl);
   if (!RoomOpen()) {
-    ImVec2 g{ImGui::GetIO().DisplaySize.x - 16 * s, 16 * s};
+    ImVec2 g{ImGui::GetIO().DisplaySize.x - 16 * s, mapBottom};
     for (size_t i = 0; i < m_room.conditions.size(); ++i) {
       std::string line = (m_met.size() > i && m_met[i] ? "[x] " : "[ ] ") +
                          Hint(m_room.conditions[i]);

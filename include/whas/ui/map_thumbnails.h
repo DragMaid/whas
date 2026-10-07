@@ -17,7 +17,8 @@ public:
   MapThumbnails(const MapThumbnails &) = delete;
   MapThumbnails &operator=(const MapThumbnails &) = delete;
 
-  static Image Render(const MapDef &map);
+  // spawns: mark where the players start (not for campaign rooms)
+  static Image Render(const MapDef &map, bool spawns = true);
   // Render and write the PNG, and drop any cached texture
   void Save(const MapDef &map);
   void Forget(const std::string &id);
