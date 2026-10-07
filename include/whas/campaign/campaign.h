@@ -3,6 +3,7 @@
 #include "whas/game/map.h"
 #include "whas/spell/spell_types.h"
 #include <array>
+#include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <set>
@@ -164,6 +165,8 @@ struct CampaignDef {
   Vector2 startPos{GRID_W * 0.5f, GRID_H * 0.5f}; // top-left, cells
   // Glyph ids a new game starts with
   std::set<std::string> startingKit{"fire", "levitation"};
+  // The campaign's own words about glyphs, shown in the codex once known
+  std::map<std::string, std::string> lore;
 
   bool HasRoom(RoomPos p) const;
 };
@@ -182,6 +185,7 @@ struct Save {
   std::set<std::string> talked;
   int silver = 0;
   std::set<std::pair<RoomPos, int>> looted; // enemies whose drops were taken
+  std::map<std::string, std::string> met;   // "<x>_<y>/<npc>" -> their name
 };
 
 std::string TalkKey(RoomPos room, const std::string &npc, int node);

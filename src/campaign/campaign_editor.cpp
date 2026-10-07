@@ -1155,4 +1155,19 @@ void CampaignEditor::DrawCampaignTab(UI &ui) {
   ImGui::TextDisabled("Glyphs a new game knows (lit); shrines and people teach\n"
                       "the rest. Click to switch.");
   GlyphChips("kit", m_def.startingKit, ui);
+
+  Widgets::SectionHeader("Lore");
+  ImGui::TextDisabled("Your words about each glyph, shown in the player's\n"
+                      "codex (J) once they know it.");
+  for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign})
+    for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {
+      GlyphDocs::Info info = GlyphDocs::Get(a->id);
+      std::string &text = m_def.lore[a->id];
+      if (ImGui::TreeNode(a->id.c_str(), "%s%s", info.name ? info.name : a->id.c_str(),
+                          text.empty() ? "" : " *")) {
+        ImGui::InputTextMultiline("##lore", &text, {-1, 70 * View::UiScale()});
+        ImGui::TreePop();
+      }
+    }
+  std::erase_if(m_def.lore, [](const auto &kv) { return kv.second.empty(); });
 }

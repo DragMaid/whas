@@ -194,7 +194,7 @@ void CampaignPlay::Stop() {
   m_background = {};
   m_enemies.clear();
   m_bench.Close();
-  m_backpack = m_warp = false;
+  m_backpack = m_warp = m_codex = false;
   ForgetMaps();
 }
 
@@ -369,14 +369,18 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
       m_bench.Close();
     else if (m_talking >= 0)
       m_talking = -1;
-    else if (m_backpack || m_warp)
-      m_backpack = m_warp = false;
+    else if (m_backpack || m_warp || m_codex)
+      m_backpack = m_warp = m_codex = false;
     else
       m_exit = true;
   }
-  if (keys && !m_bench.IsOpen() && IsKeyPressed(KEY_B)) {
+  if (keys && !m_bench.IsOpen() && m_talking < 0 && IsKeyPressed(KEY_B)) {
     m_backpack = !m_backpack;
-    m_warp = false;
+    m_warp = m_codex = false;
+  }
+  if (keys && !m_bench.IsOpen() && m_talking < 0 && IsKeyPressed(KEY_J)) {
+    m_codex = !m_codex;
+    m_warp = m_backpack = false;
   }
   // Pick up what the bench saved once it's put away
   if (m_benchWasOpen && !m_bench.IsOpen())
@@ -639,6 +643,7 @@ void CampaignPlay::Interact(Simulation &sim) {
   if (int npc = NearNpc(); npc >= 0) {
     m_talking = npc;
     m_talkFresh = true;
+    m_save.met[TalkKey(m_room.pos, NpcKey(npc), -1)] = m_room.npcs[npc].name;
     ReachNode(0);
     return;
   }
@@ -1008,6 +1013,8 @@ void CampaignPlay::DrawPanels(UI &ui) {
     DrawWarp(m_warpSim);
   if (m_bigMap)
     DrawBigMap();
+  if (m_codex)
+    DrawCodex(ui);
   m_bench.Draw();
 }
 
@@ -1060,7 +1067,7 @@ void CampaignPlay::DrawHud(UI &ui) {
   m_helpTime = std::max(0.0f, m_helpTime - GetFrameTime());
   if (m_helpTime > 0.0f)
     dl->AddText(tl, Theme::U32(Tone::Parchment, std::min(1.0f, m_helpTime)),
-                "B backpack   E use   right click: cast from a surface   Esc leave");
+                "B backpack   J codex   E use   Tab map   right click: cast from a surface   Esc leave");
   else
     dl->AddText(tl, Theme::U32(Tone::Faint, 0.8f),
                 TextFormat("%d glyphs known   %d silver", (int)m_save.glyphs.size(),

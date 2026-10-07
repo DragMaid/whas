@@ -18,6 +18,7 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 | `1`-`3` | Select a slot |
 | Right click | Cast from the ground or wall nearest the cursor |
 | `E` | Use what you're standing at: a workbench, a gate |
+| `J` | Codex: every glyph (the known ones explained, with the campaign's lore), your blueprints, the people you've met |
 | `B` | Backpack: drag spells onto the three slots (or double-click one); drag a slot onto another to swap, or away to empty it |
 | `Tab` (hold) | The map of every room you've been through |
 | Wheel | Zoom the camera |
@@ -152,7 +153,8 @@ instead.
     to the world's size and copied into the campaign folder.
   - *Terrain*: copy a 1v1 map in, or clear to a bare earth floor.
 - **Campaign** tab: the starting kit, the glyphs a new game knows (click a
-  glyph to switch it).
+  glyph to switch it), and lore: your words about each glyph, shown in the
+  player's codex once they know it.
 - The wave icon lets the world settle (water and sand come to rest).
 - **Play this room** saves and starts there with every glyph unlocked,
   without touching the save. `Esc` comes back to the editor.
@@ -169,7 +171,7 @@ data/campaigns/<id>/
   backpack/*.json      spells drawn at workbenches (spell file format)
   save.json            glyphs known, rooms visited, gates opened, respawn,
                        shrines taken, slots, rooms cleared, conversations had,
-                       silver, enemies looted
+                       silver, enemies looted, people met
 ```
 
 `save.json` and `backpack/` are per player and ignored by git; the rest is

@@ -339,3 +339,21 @@ TEST_CASE("silver, drops and prices survive a round trip", "[campaign]") {
   REQUIRE(loaded.silver == 42);
   REQUIRE(loaded.looted == save.looted);
 }
+
+TEST_CASE("lore and the people met survive a round trip", "[campaign]") {
+  CampaignDef def;
+  def.id = "x";
+  def.name = "X";
+  def.rooms = {{0, 0}};
+  def.lore = {{"fire", "The first sigil anyone learns."}};
+  CampaignDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(def), back, error));
+  REQUIRE(back.lore == def.lore);
+
+  Save save;
+  save.met = {{"0_0/teacher/-1", "Qifrey"}};
+  Save loaded;
+  FromJson(ToJson(save), loaded);
+  REQUIRE(loaded.met == save.met);
+}

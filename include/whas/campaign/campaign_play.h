@@ -73,7 +73,7 @@ private:
   std::string Grant(const std::vector<Spell> &spells);
   const Spell *SlotSpell(int slot) const;
   bool PanelOpen() const {
-    return m_backpack || m_warp || m_bench.IsOpen() || m_talking >= 0;
+    return m_backpack || m_warp || m_codex || m_bench.IsOpen() || m_talking >= 0;
   }
   int NearObject(Campaign::ObjectKind kind) const;
   // Not buried (or dug out) and, for a prize, the room is done
@@ -104,6 +104,7 @@ private:
   // Top right, with what opens the room under it; returns its bottom
   float DrawMinimap(ImDrawList *dl);
   void DrawBigMap();
+  void DrawCodex(UI &ui); // campaign_codex.cpp
   void DrawBackpack(UI &ui);
   void DrawWarp(Simulation *sim);
 
@@ -132,6 +133,7 @@ private:
   bool m_backpack = false;
   bool m_warp = false;
   bool m_bigMap = false; // Tab held
+  bool m_codex = false;  // J: glyphs, blueprints, people
   int m_talking = -1; // NPC being talked to
   int m_node = 0;
   bool m_talkFresh = false;

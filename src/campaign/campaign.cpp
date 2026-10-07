@@ -121,7 +121,8 @@ json ToJson(const CampaignDef &c) {
           {"rooms", rooms},
           {"startRoom", Pos(c.startRoom)},
           {"startPos", Vec(c.startPos)},
-          {"startingKit", c.startingKit}};
+          {"startingKit", c.startingKit},
+          {"lore", c.lore}};
 }
 
 bool FromJson(const json &j, CampaignDef &c, std::string &error) {
@@ -137,6 +138,7 @@ bool FromJson(const json &j, CampaignDef &c, std::string &error) {
     c.startRoom = Pos(j.at("startRoom"));
     c.startPos = Vec(j.at("startPos"));
     c.startingKit = j.value("startingKit", std::set<std::string>{});
+    c.lore = j.value("lore", std::map<std::string, std::string>{});
     return true;
   } catch (const std::exception &e) {
     error = std::string("bad campaign: ") + e.what();
@@ -396,6 +398,7 @@ json ToJson(const Save &s) {
     cleared.push_back(Pos(p));
   j["cleared"] = cleared;
   j["silver"] = s.silver;
+  j["met"] = s.met;
   json looted = json::array();
   for (auto [room, i] : s.looted)
     looted.push_back({Pos(room), i});
@@ -422,6 +425,7 @@ void FromJson(const json &j, Save &s) {
     for (const json &p : j.value("cleared", json::array()))
       s.cleared.insert(Pos(p));
     s.silver = std::max(0, j.value("silver", 0));
+    s.met = j.value("met", std::map<std::string, std::string>{});
     for (const json &g : j.value("looted", json::array()))
       s.looted.insert({Pos(g.at(0)), g.at(1).get<int>()});
   } catch (const std::exception &) {
