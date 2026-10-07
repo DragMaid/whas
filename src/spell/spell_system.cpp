@@ -105,7 +105,9 @@ struct SpellTuning {
   float maxHoldTime = 6.0f;
   int minHoldWidth = 2;
   int maxHoldWidth = 24;
-  int maxHoldLength = 120;
+  int maxHoldLength = 160;
+  // A standing column raises this much more material than it would throw
+  float buildMaterialScale = 2.5f;
   // A standing column rises out of its base: cells/s, slower the bigger
   // the block (by the square root of its area against riseRefArea)
   float riseBase = 40.0f;
@@ -565,7 +567,11 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
                              kTuning.minHoldWidth, kTuning.maxHoldWidth);
       s.holdWidth = static_cast<float>(width);
       bool standing = c.magnitude <= 0.0f && speedBonus <= 0.0f;
-      int length = (s.particleCount + width - 1) / width;
+      int material = s.particleCount;
+      if (standing && s.crush == 0.0f)
+        material = static_cast<int>(
+            std::lround(material * kTuning.buildMaterialScale));
+      int length = (material + width - 1) / width;
       // A drill builds nothing: its column signs say how deep it digs
       if (standing && s.crush != 0.0f) {
         width = std::max(width, kTuning.minDrillWidth);
@@ -579,7 +585,11 @@ SpellStats Build(const Circle &c, const Modifiers &mods, float effect,
       if (standing) {
         s.speed = 0.0f;
         s.range = 0.0f;
+        // A wall goes by the material the spell throws, not the bigger
+        // block it raises, so it isn't slowed as much
         float area = s.holdLength * s.holdWidth;
+        if (s.crush == 0.0f)
+          area /= kTuning.buildMaterialScale;
         s.holdRise = std::max(
             kTuning.minRise, (kTuning.riseBase + kTuning.risePerSign * mods.column) *
                                  std::sqrt(kTuning.riseRefArea / area));
@@ -1063,9 +1073,15 @@ std::vector<BlockSpot> BlockCells(const SpellEffect &effect) {
   int width = std::max(1, static_cast<int>(s.holdWidth));
   int l0 = -(width / 2);
   std::vector<uint8_t> in(static_cast<size_t>(len) * width, 0);
-  // A drill builds nothing, so no material limits how much of it there is
-  bool drill = s.crush != 0.0f && s.holdRise > 0.0f;
-  for (auto [a, l] : BlockLayout(s, drill ? len * width : TotalParticles(effect)))
+  // A drill builds nothing, so no material limits how much of it there is;
+  // a standing column raises more than the spell throws
+  int material = TotalParticles(effect);
+  if (s.holdRise > 0.0f)
+    material = s.crush != 0.0f
+                   ? len * width
+                   : static_cast<int>(
+                         std::lround(material * kTuning.buildMaterialScale));
+  for (auto [a, l] : BlockLayout(s, material))
     in[a * width + l - l0] = 1;
   Vector2 d = effect.direction;
   Vector2 perp{-d.y, d.x};
