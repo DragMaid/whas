@@ -171,6 +171,10 @@ std::vector<Spell> SpellsFrom(const json &j, const char *key) {
 
 } // namespace
 
+Rectangle ObjectBox(const ObjectDef &o) {
+  return {o.pos.x - 6.0f, o.pos.y - 19.0f, 12.0f, 19.0f};
+}
+
 json ToJson(const RoomDef &r) {
   json objects = json::array();
   for (const ObjectDef &o : r.objects) {
@@ -181,6 +185,10 @@ json ToJson(const RoomDef &r) {
       if (!o.spells.empty())
         oj["spells"] = SpellsJson(o.spells);
     }
+    if (o.hidden)
+      oj["hidden"] = true;
+    if (o.reward)
+      oj["reward"] = true;
     objects.push_back(std::move(oj));
   }
   json enemies = json::array();
@@ -250,6 +258,8 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       o.glyph = oj.value("glyph", "");
       o.sigil = oj.value("sigil", false);
       o.spells = SpellsFrom(oj, "spells");
+      o.hidden = oj.value("hidden", false);
+      o.reward = oj.value("reward", false);
       r.objects.push_back(std::move(o));
     }
     r.enemies.clear();

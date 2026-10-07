@@ -45,10 +45,6 @@ Vector2 OnFloor(const Simulation &sim, Vector2 cell) {
   return {x + 0.5f, static_cast<float>(y)};
 }
 
-Rectangle ObjectBox(const ObjectDef &o) {
-  return {o.pos.x - 6.0f, o.pos.y - 19.0f, 12.0f, 19.0f};
-}
-
 Rectangle BodyBox(Vector2 pos) {
   return {pos.x, pos.y, Character::WIDTH, Character::HEIGHT};
 }
@@ -532,7 +528,8 @@ void CampaignEditor::Update(Simulation &sim) {
   if (m_dragging) {
     if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
       m_dragging = false;
-      if (m_selected.kind == Selection::Object)
+      if (m_selected.kind == Selection::Object &&
+          !m_room.objects[m_selected.index].hidden)
         SelectedPos() = OnFloor(sim, SelectedPos());
       return;
     }
@@ -573,9 +570,20 @@ void CampaignEditor::DrawWorld(const UI &ui) const {
     return m_selected.kind == kind && m_selected.index == i;
   };
   for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
-    DrawCampaignObject(m_room.objects[i], true, ui.Glyphs());
+    const ObjectDef &o = m_room.objects[i];
+    DrawCampaignObject(o, true, ui.Glyphs());
     if (selected(Selection::Object, i))
-      DrawRectangleLinesEx(px(ObjectBox(m_room.objects[i])), 2, mark);
+      DrawRectangleLinesEx(px(ObjectBox(o)), 2, mark);
+    if (o.hidden || o.reward) {
+      Rectangle r = px(ObjectBox(o));
+      Color c{150, 90, 220, 230};
+      if (!selected(Selection::Object, i))
+        DrawRectangleLinesEx(r, 1, c);
+      Theme::DrawText(Theme::RlBody(), o.hidden && o.reward ? "buried prize"
+                                       : o.hidden           ? "buried"
+                                                            : "prize",
+                      {r.x - 6, r.y + r.height + 2}, 14, c);
+    }
   }
   auto body = [&](Vector2 pos, Color tint, const char *label, bool sel) {
     Character c;
@@ -697,7 +705,7 @@ void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
     m_shown = m_selected;
     if (ImGui::BeginTabItem("Selected", nullptr,
                             picked ? ImGuiTabItemFlags_SetSelected : 0)) {
-      DrawSelected(ui);
+      DrawSelected(sim, ui);
       ImGui::EndTabItem();
     }
     if (ImGui::BeginTabItem("Room")) {
@@ -780,7 +788,7 @@ float CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
   return bottom;
 }
 
-void CampaignEditor::DrawSelected(UI &ui) {
+void CampaignEditor::DrawSelected(Simulation &sim, UI &ui) {
   switch (m_selected.kind) {
   case Selection::None:
     ImGui::TextDisabled("Nothing selected. Click something in the room.");
@@ -794,6 +802,14 @@ void CampaignEditor::DrawSelected(UI &ui) {
   case Selection::Object: {
     ObjectDef &o = m_room.objects[m_selected.index];
     Widgets::SectionHeader(ObjectName(o.kind));
+    if (ImGui::Checkbox("Buried", &o.hidden) && !o.hidden)
+      o.pos = OnFloor(sim, o.pos);
+    ImGui::SetItemTooltip("Hidden in the terrain until the player digs it out.\n"
+                          "Buried things stay where you put them, not on the floor.");
+    ImGui::SameLine();
+    ImGui::Checkbox("Prize", &o.reward);
+    ImGui::SetItemTooltip("Only appears once the room's conditions are met\n"
+                          "(see the Room tab), e.g. a trial's reward.");
     if (o.kind == ObjectKind::Gate)
       ImGui::TextWrapped("A checkpoint: touching it saves the way back, and E "
                          "travels between opened gates.");

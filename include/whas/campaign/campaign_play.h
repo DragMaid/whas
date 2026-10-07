@@ -76,6 +76,8 @@ private:
     return m_backpack || m_warp || m_bench.IsOpen() || m_talking >= 0;
   }
   int NearObject(Campaign::ObjectKind kind) const;
+  // Not buried (or dug out) and, for a prize, the room is done
+  bool Shown(int object) const;
   int NearNpc() const;
   std::string NpcKey(int npc) const;
   // Conditions: whether the room's seals are open, and each condition
@@ -135,6 +137,7 @@ private:
   bool m_talkFresh = false;
   std::vector<int> m_breakStart; // solid cells each Break region began with
   std::vector<bool> m_met;       // conditions met, last checked
+  std::vector<bool> m_uncovered; // buried objects dug out this visit
   Simulation *m_warpSim = nullptr;
 
   std::string m_notice;

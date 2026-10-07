@@ -240,3 +240,19 @@ TEST_CASE("shrine and dialogue blueprints survive a round trip", "[campaign]") {
   REQUIRE(back.objects[0].spells[0].name == Bolt().name);
   REQUIRE(back.npcs[0].dialogue[0].spells.size() == 1);
 }
+
+TEST_CASE("buried and prize objects survive a round trip", "[campaign]") {
+  RoomDef room = BlankRoom({0, 0});
+  ObjectDef shrine{ObjectKind::Shrine, {80, 120}, "fire", true};
+  shrine.hidden = true;
+  ObjectDef prize{ObjectKind::Shrine, {120, 200}, "water", true};
+  prize.reward = true;
+  room.objects = {shrine, prize};
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.objects[0].hidden);
+  REQUIRE_FALSE(back.objects[0].reward);
+  REQUIRE(back.objects[1].reward);
+  REQUIRE_FALSE(back.objects[1].hidden);
+}

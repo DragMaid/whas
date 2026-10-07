@@ -144,8 +144,15 @@ void CampaignPlay::DrawMap(ImDrawList *dl, ImVec2 min, ImVec2 max, float roomW,
     const std::vector<ObjectDef> *objects =
         here ? &m_room.objects
              : (m_seen.count(p) ? &m_seen[p].objects : nullptr);
+    bool secrets = false;
     for (int i = 0; objects && i < (int)objects->size(); ++i) {
       const ObjectDef &o = (*objects)[i];
+      bool taken = m_save.shrinesTaken.count({p, i}) > 0;
+      if (here ? !Shown(i) : (o.hidden || o.reward)) {
+        // Elsewhere, only a hint that something's still to be found
+        secrets |= !here && o.hidden && o.kind == ObjectKind::Shrine && !taken;
+        continue;
+      }
       ImVec2 c = mark(a, {o.pos.x, o.pos.y - 6});
       float r = std::clamp(roomW * 0.025f, 2.0f, 5.0f * s);
       if (o.kind == ObjectKind::Gate) {
@@ -158,6 +165,14 @@ void CampaignPlay::DrawMap(ImDrawList *dl, ImVec2 min, ImVec2 max, float roomW,
         dl->AddRectFilled({c.x - r, c.y - r * 0.6f}, {c.x + r, c.y + r * 0.6f},
                           IM_COL32(170, 120, 70, 255));
       }
+    }
+    if (secrets) {
+      // A faint four-pointed spark in the corner
+      ImVec2 c{b.x - 7 * s, a.y + 7 * s};
+      float r = 4 * s;
+      ImU32 col = Theme::U32(Tone::Brass, 0.8f);
+      dl->AddLine({c.x - r, c.y}, {c.x + r, c.y}, col);
+      dl->AddLine({c.x, c.y - r}, {c.x, c.y + r}, col);
     }
     if (here) {
       for (const Enemies::Enemy &e : m_enemies)

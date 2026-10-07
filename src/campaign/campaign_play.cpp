@@ -239,6 +239,7 @@ void CampaignPlay::EnterRoom(Simulation &sim, RoomPos pos, Vector2 at,
   m_talking = -1;
   m_breakStart.assign(m_room.conditions.size(), 0);
   m_met.assign(m_room.conditions.size(), false);
+  m_uncovered.assign(m_room.objects.size(), false);
   for (size_t i = 0; i < m_room.conditions.size(); ++i)
     if (m_room.conditions[i].kind == ConditionKind::Break)
       m_breakStart[i] = CountIn(sim, m_room.conditions[i].region, std::nullopt);
@@ -325,7 +326,7 @@ int CampaignPlay::NearObject(ObjectKind kind) const {
   for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
     const ObjectDef &o = m_room.objects[i];
     Vector2 c{o.pos.x, o.pos.y - Character::HEIGHT * 0.5f};
-    if (o.kind == kind && Dist(c, m_player.Center()) < REACH)
+    if (o.kind == kind && Shown(i) && Dist(c, m_player.Center()) < REACH)
       return i;
   }
   return -1;
@@ -503,6 +504,17 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
   // Shrines teach by touch; gates wake when walked through
   for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
     const ObjectDef &o = m_room.objects[i];
+    // Buried things show once most of the earth around them is gone
+    if (o.hidden && !m_uncovered[i]) {
+      Rectangle box = ObjectBox(o);
+      if (CountIn(sim, box, std::nullopt) <= box.width * box.height * 0.15f) {
+        m_uncovered[i] = true;
+        if (!m_save.shrinesTaken.count({m_room.pos, i}))
+          Notify("Something was buried here", 2.5f);
+      }
+    }
+    if (!Shown(i))
+      continue;
     Vector2 c{o.pos.x, o.pos.y - Character::HEIGHT * 0.5f};
     if (!m_player.Alive() || Dist(c, m_player.Center()) > REACH * 0.7f)
       continue;
@@ -588,6 +600,13 @@ void CampaignPlay::Interact(Simulation &sim) {
   }
 }
 
+bool CampaignPlay::Shown(int object) const {
+  const ObjectDef &o = m_room.objects[object];
+  if (o.hidden && !(object < (int)m_uncovered.size() && m_uncovered[object]))
+    return false;
+  return !o.reward || RoomOpen();
+}
+
 int CampaignPlay::NearNpc() const {
   for (int i = 0; i < static_cast<int>(m_room.npcs.size()); ++i) {
     Vector2 c{m_room.npcs[i].pos.x + Character::WIDTH * 0.5f,
@@ -661,9 +680,9 @@ bool CampaignPlay::ConditionMet(const Simulation &sim, int index) const {
     return true;
   case ConditionKind::TakeShrine:
     for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i)
-      if (m_room.objects[i].kind == ObjectKind::Shrine &&
+      if (m_room.objects[i].kind == ObjectKind::Shrine && !m_room.objects[i].reward &&
           !m_save.shrinesTaken.count({m_room.pos, i}))
-        return false;
+        return false; // a prize can't be what opens the room
     return true;
   default:
     return true;
@@ -720,6 +739,8 @@ void CampaignPlay::DrawWorld(const Simulation &sim, const UI &ui) const {
     return;
   for (int i = 0; i < static_cast<int>(m_room.objects.size()); ++i) {
     const ObjectDef &o = m_room.objects[i];
+    if (!Shown(i))
+      continue;
     std::pair<RoomPos, int> key{m_room.pos, i};
     bool lit = o.kind == ObjectKind::Gate
                    ? std::find(m_save.gates.begin(), m_save.gates.end(), key) !=

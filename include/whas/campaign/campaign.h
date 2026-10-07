@@ -54,7 +54,14 @@ struct ObjectDef {
   std::string glyph;
   bool sigil = false;
   std::vector<Spell> spells;
+  // Buried: hidden in the terrain (placed anywhere, not on the floor) until
+  // the player digs it out
+  bool hidden = false;
+  // Only there once the room's conditions are met (a trial's prize)
+  bool reward = false;
 };
+// The cells an object takes up
+Rectangle ObjectBox(const ObjectDef &o);
 
 // Talking: node 0 is where a conversation starts. A reply jumps to another
 // node, or ends it (next < 0). A node with no replies ends after it's read.

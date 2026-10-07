@@ -81,7 +81,7 @@ private:
   void DrawHub();
   float DrawToolbar(Simulation &sim, float panelWidth);
   void DrawRoomMap(Simulation &sim);
-  void DrawSelected(UI &ui);
+  void DrawSelected(Simulation &sim, UI &ui);
   void DrawNpc(Campaign::NpcDef &npc, UI &ui);
   void DrawRoomTab(Simulation &sim);
   void DrawConditions();

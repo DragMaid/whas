@@ -35,6 +35,10 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
   an empty slot). A blueprint doesn't teach its glyphs: you can cast it and
   change it at a workbench, but you can only save drawings made of glyphs
   you know. People can give blueprints too, once per dialogue node.
+- **Buried things** (usually shrines) are hidden in the terrain: dig most
+  of the earth around one away and it appears. The map marks rooms that
+  still hide one with a faint spark. **Prizes** only appear once the room's
+  conditions are met.
 - **Workbenches** (`E`) open the spell editor with only the glyphs you
   know. What you save goes into this campaign's backpack, not your main
   library.
@@ -108,7 +112,9 @@ instead.
   one), x takes one off, and "Draw a new spell for it" opens the spell
   editor and gives the mage what you save. **Spells** opens your library; a shrine's glyph; an NPC's name, tag
   and dialogue. A shrine teaches a glyph (or none) and gives blueprints,
-  picked like a mage's spells. Dialogue is a list of nodes: node 1 starts the talk, each
+  picked like a mage's spells. Any object can be *Buried* (placed inside
+  the terrain, where it stays) and/or a *Prize* (there once the room's
+  conditions are met); the editor labels them. Dialogue is a list of nodes: node 1 starts the talk, each
   node has a line, up to three replies (each leads to a node or ends the
   talk) and optionally a glyph it teaches and blueprints it gives.
 - **Room** tab:
