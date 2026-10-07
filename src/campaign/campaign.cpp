@@ -76,6 +76,12 @@ const char *ObjectName(ObjectKind kind) {
     return "Workbench";
   case ObjectKind::Shrine:
     return "Glyph shrine";
+  case ObjectKind::Geyser:
+    return "Geyser";
+  case ObjectKind::Rockfall:
+    return "Rockfall";
+  default:
+    break;
   }
   return "?";
 }
@@ -174,6 +180,10 @@ std::vector<Spell> SpellsFrom(const json &j, const char *key) {
 } // namespace
 
 Rectangle ObjectBox(const ObjectDef &o) {
+  if (o.kind == ObjectKind::Rockfall) // hangs down from pos
+    return {o.pos.x - 6.0f, o.pos.y, 12.0f, 10.0f};
+  if (o.kind == ObjectKind::Geyser)
+    return {o.pos.x - 6.0f, o.pos.y - 6.0f, 12.0f, 6.0f};
   return {o.pos.x - 6.0f, o.pos.y - 19.0f, 12.0f, 19.0f};
 }
 
@@ -191,6 +201,10 @@ json ToJson(const RoomDef &r) {
       oj["hidden"] = true;
     if (o.silver)
       oj["silver"] = o.silver;
+    if (o.kind == ObjectKind::Geyser || o.kind == ObjectKind::Rockfall) {
+      oj["jet"] = static_cast<int>(o.jet);
+      oj["every"] = o.every;
+    }
     if (o.reward)
       oj["reward"] = true;
     objects.push_back(std::move(oj));
@@ -283,7 +297,8 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
     r.objects.clear();
     for (const json &oj : j.value("objects", json::array())) {
       ObjectDef o;
-      o.kind = static_cast<ObjectKind>(std::clamp(oj.value("kind", 0), 0, 2));
+      o.kind = static_cast<ObjectKind>(
+          std::clamp(oj.value("kind", 0), 0, static_cast<int>(ObjectKind::Count) - 1));
       o.pos = Vec(oj.at("pos"));
       o.glyph = oj.value("glyph", "");
       o.sigil = oj.value("sigil", false);
@@ -291,6 +306,9 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       o.hidden = oj.value("hidden", false);
       o.reward = oj.value("reward", false);
       o.silver = std::max(0, oj.value("silver", 0));
+      o.jet = oj.value("jet", 1) == static_cast<int>(Element::FIRE) ? Element::FIRE
+                                                                     : Element::WATER;
+      o.every = std::clamp(oj.value("every", o.every), 0.5f, 30.0f);
       r.objects.push_back(std::move(o));
     }
     r.enemies.clear();

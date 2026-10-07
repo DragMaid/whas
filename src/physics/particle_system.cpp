@@ -265,6 +265,7 @@ Body BodyOf(Element e) {
   case Element::FIRE:
     return Body::Flame;
   case Element::WATER:
+  case Element::ACID:
     return Body::Liquid;
   default:
     return Body::Solid;
@@ -960,6 +961,9 @@ void ParticleSystem::Draw() {
         break;
       case Element::SMOKE:
         color = {110, 105, 105, 255};
+        break;
+      case Element::ACID:
+        color = {130, 235, 40, 255};
         break;
       case Element::LIGHT:
         color = {255, 250, 215, 255};

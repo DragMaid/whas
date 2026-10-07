@@ -357,3 +357,20 @@ TEST_CASE("lore and the people met survive a round trip", "[campaign]") {
   FromJson(ToJson(save), loaded);
   REQUIRE(loaded.met == save.met);
 }
+
+TEST_CASE("geysers and rockfalls survive a round trip", "[campaign]") {
+  RoomDef room = BlankRoom({0, 0});
+  ObjectDef geyser{ObjectKind::Geyser, {80, 200}};
+  geyser.jet = Element::FIRE;
+  geyser.every = 2.5f;
+  ObjectDef rocks{ObjectKind::Rockfall, {120, 40}};
+  room.objects = {geyser, rocks};
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.objects[0].kind == ObjectKind::Geyser);
+  REQUIRE(back.objects[0].jet == Element::FIRE);
+  REQUIRE(back.objects[0].every == 2.5f);
+  REQUIRE(back.objects[1].kind == ObjectKind::Rockfall);
+  REQUIRE(ObjectBox(back.objects[1]).y == 40.0f); // hangs down from its spot
+}

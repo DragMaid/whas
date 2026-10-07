@@ -57,6 +57,12 @@ void DrawEditorIcon(ImDrawList *dl, EditorIcon icon, ImVec2 c, float size,
     dl->AddCircleFilled(P(0.0f, -0.5f), h * 0.32f, col);
     dl->AddTriangleFilled(P(0.0f, -0.15f), P(-0.6f, 0.9f), P(0.6f, 0.9f), col);
     break;
+  case EditorIcon::Hazard:
+    // A warning triangle
+    dl->AddTriangle(P(0.0f, -0.85f), P(-0.85f, 0.75f), P(0.85f, 0.75f), col, t);
+    dl->AddLine(P(0.0f, -0.3f), P(0.0f, 0.2f), col, t * 1.2f);
+    dl->AddCircleFilled(P(0.0f, 0.45f), h * 0.09f, col);
+    break;
   case EditorIcon::Region:
     for (int i = 0; i < 4; ++i) {
       float a = -0.8f + i * 0.45f;

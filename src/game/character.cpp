@@ -224,6 +224,7 @@ void Character::UpdateBurn(const Simulation &sim, float dt) {
     return;
   bool inFire = false;
   bool inWater = false;
+  bool inAcid = false;
   int x0 = std::max(0, static_cast<int>(std::floor(pos.x)));
   int x1 = std::min(GRID_W - 1, static_cast<int>(std::floor(pos.x + WIDTH)));
   int y0 = std::max(0, static_cast<int>(std::floor(pos.y)));
@@ -235,8 +236,12 @@ void Character::UpdateBurn(const Simulation &sim, float dt) {
         inFire = true;
       else if (c.element == Element::WATER)
         inWater = true;
+      else if (c.element == Element::ACID)
+        inAcid = true;
     }
   }
+  if (inAcid)
+    hp = std::max(0.0f, hp - ACID_DPS * dt);
   // Loose fire and water in the air count too (flying spell particles are
   // handled as hits)
   Rectangle box = Bounds();

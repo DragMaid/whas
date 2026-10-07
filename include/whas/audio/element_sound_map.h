@@ -38,6 +38,7 @@ constexpr ElementSoundMap kElementSounds = [] {
   set(Element::SMOKE, {SoundProfile::Wind, 0.4f, true, false});
   // Never a cell: bursts are read from the particle system
   set(Element::LIGHT, {});
+  set(Element::ACID, {SoundProfile::Water, 0.8f, true, true});
   return map;
 }();
 

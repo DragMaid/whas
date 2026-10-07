@@ -7,8 +7,8 @@ class Simulation;
 
 // Builds a duel arena from a seed with integer-only noise, so every client
 // paints the exact same cells. The seed also picks the map: rolling meadow
-// hills, a mountain between the players, a lake in a sandy basin or a desert
-// canyon. All of them stand on deep earth over a rock bed.
+// hills, a mountain between the players, a lake in a sandy basin, a desert
+// canyon or (now and then) a mire of acid pools. All of them stand on deep earth over a rock bed.
 namespace ArenaGen {
 
 // Arena terrain stays above this row; the bottom of the screen is the
@@ -20,6 +20,7 @@ enum class Biome : uint8_t {
   Mountain, // an earth-skinned rock peak between the spawns
   Lake,     // grassy banks around a water-filled sandy basin
   Canyon,   // sandy plateaus split by a deep gorge with a stream
+  Mire,     // low boggy ground pitted with pools of acid
   COUNT
 };
 

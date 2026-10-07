@@ -13,7 +13,8 @@ namespace {
 // Keys 1-9, in palette order; the eraser is E
 constexpr Element kPalette[] = {Element::EARTH, Element::ROCK,  Element::SAND,
                                 Element::GRASS, Element::WOOD,  Element::WATER,
-                                Element::ICE,   Element::CLOUD, Element::FIRE};
+                                Element::ICE,   Element::CLOUD, Element::FIRE,
+                                Element::ACID}; // past 9: click only
 constexpr int UNDO_STEPS = 20;
 
 const char *Label(Element e) {
@@ -38,6 +39,8 @@ const char *Label(Element e) {
     return "Cloud";
   case Element::FIRE:
     return "Fire";
+  case Element::ACID:
+    return "Acid";
   default:
     return ElementName(e);
   }
@@ -65,6 +68,8 @@ Color TerrainBrush::Swatch(Element e) {
     return {225, 225, 235, 255};
   case Element::FIRE:
     return {240, 110, 20, 255};
+  case Element::ACID:
+    return {130, 235, 40, 255};
   default:
     return {245, 235, 210, 255}; // the eraser: bare paper
   }
@@ -162,7 +167,7 @@ void TerrainBrush::DrawPalette() {
                 3 * s, 0, selected ? 3.0f * s : 1.0f);
     dl->AddText({p.x + 3 * s, p.y + 1 * s}, IM_COL32(255, 255, 255, 220), key);
     if (hovered)
-      ImGui::SetTooltip("%s  (%s)", Label(e), key);
+      ImGui::SetTooltip(*key ? "%s  (%s)" : "%s", Label(e), key);
     if (picked)
       element = e;
     ImGui::PopID();
@@ -172,6 +177,8 @@ void TerrainBrush::DrawPalette() {
     char key[2] = {static_cast<char>('1' + i), 0};
     swatch(kPalette[i], key);
   }
+  for (size_t i = 9; i < std::size(kPalette); ++i)
+    swatch(kPalette[i], "");
   swatch(Element::AIR, "E");
   ImGui::SameLine(0, 12 * s);
   WrapToolbar(110 * s);

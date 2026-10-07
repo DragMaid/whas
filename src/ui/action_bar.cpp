@@ -327,6 +327,7 @@ void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
       {Element::ROCK, "Rock", {90, 90, 90, 255}},
       {Element::WOOD, "Wood", {120, 78, 40, 255}},
       {Element::GRASS, "Grass", {70, 150, 55, 255}},
+      {Element::ACID, "Acid", {130, 235, 40, 255}},
       {Element::AIR, "Erase", {55, 55, 60, 255}},
   };
   constexpr int count = static_cast<int>(std::size(kMaterials));

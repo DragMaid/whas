@@ -149,6 +149,8 @@ private:
   };
   std::vector<Drop> m_drops;
   void TickDrops(const Simulation &sim, float dt);
+  void TickHazards(Simulation &sim, float dt);
+  std::vector<float> m_hazardIn; // seconds until each hazard goes off
   // Whether a node is a shop item already bought
   bool Bought(int npc, int node) const;
   // Trials: time left, and where the room was entered (to start over)

@@ -7,7 +7,7 @@ namespace Whas.Server.Spells;
 public enum Element : byte
 {
     Air = 0, Water = 1, Earth = 2, Fire = 3, Steam = 4, Cloud = 5, Ice = 6,
-    Sand = 7, Rock = 8, Wood = 9, Grass = 10, Smoke = 11, Light = 12,
+    Sand = 7, Rock = 8, Wood = 9, Grass = 10, Smoke = 11, Light = 12, Acid = 13,
 }
 
 public enum SpellKind : byte { None = 0, Element = 1, Flight = 2, Field = 3, Compound = 4 }

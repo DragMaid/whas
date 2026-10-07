@@ -58,6 +58,7 @@ private:
     Mage,
     Undead,
     Flyer,
+    Hazard, // geysers and rockfalls
     Region, // drawing a condition's region
   };
   struct Selection {

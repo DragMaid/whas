@@ -15,6 +15,7 @@ enum class EditorIcon {
   Npc,
   Region,
   Settle,
+  Hazard,
 };
 
 void DrawEditorIcon(ImDrawList *dl, EditorIcon icon, ImVec2 centre, float size,

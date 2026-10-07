@@ -45,6 +45,25 @@ Vector2 OnFloor(const Simulation &sim, Vector2 cell) {
   return {x + 0.5f, static_cast<float>(y)};
 }
 
+// Rockfalls hang from the ceiling: just under the first solid cell at or
+// above the point (or the point itself in open sky)
+Vector2 OnCeiling(const Simulation &sim, Vector2 cell) {
+  int x = std::clamp(static_cast<int>(cell.x), 0, GRID_W - 1);
+  int y = std::clamp(static_cast<int>(cell.y), 0, GRID_H - 1);
+  int top = y;
+  while (top > 0 && !Solid(sim, x, top - 1))
+    --top;
+  return {x + 0.5f, top > 0 ? static_cast<float>(top) : cell.y};
+}
+
+// Where an object rests: on the floor, under the ceiling, or (buried) where
+// it was put
+Vector2 Rest(const Simulation &sim, const ObjectDef &o, Vector2 cell) {
+  if (o.hidden)
+    return cell;
+  return o.kind == ObjectKind::Rockfall ? OnCeiling(sim, cell) : OnFloor(sim, cell);
+}
+
 Rectangle BodyBox(Vector2 pos) {
   return {pos.x, pos.y, Character::WIDTH, Character::HEIGHT};
 }
@@ -395,7 +414,7 @@ void CampaignEditor::Place(const Simulation &sim, Vector2 cell) {
   auto object = [&](ObjectKind kind) {
     ObjectDef o;
     o.kind = kind;
-    o.pos = OnFloor(sim, cell);
+    o.pos = Rest(sim, o, cell);
     if (kind == ObjectKind::Shrine) {
       o.glyph = "water";
       o.sigil = true;
@@ -428,6 +447,9 @@ void CampaignEditor::Place(const Simulation &sim, Vector2 cell) {
     break;
   case Tool::Shrine:
     object(ObjectKind::Shrine);
+    break;
+  case Tool::Hazard:
+    object(ObjectKind::Geyser);
     break;
   case Tool::Npc: {
     NpcDef n;
@@ -492,7 +514,7 @@ void CampaignEditor::HandleShortcuts(Simulation &sim) {
       {KEY_B, Tool::Paint},  {KEY_V, Tool::Select},    {KEY_T, Tool::Start},
       {KEY_G, Tool::Gate},   {KEY_W, Tool::Workbench}, {KEY_H, Tool::Shrine},
       {KEY_N, Tool::Npc},    {KEY_M, Tool::Mage},      {KEY_U, Tool::Undead},
-      {KEY_F, Tool::Flyer},
+      {KEY_F, Tool::Flyer},  {KEY_Z, Tool::Hazard},
   };
   for (const Key &k : keys)
     if (IsKeyPressed(k.key)) {
@@ -560,9 +582,8 @@ void CampaignEditor::Update(Simulation &sim) {
   if (m_dragging) {
     if (!IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
       m_dragging = false;
-      if (m_selected.kind == Selection::Object &&
-          !m_room.objects[m_selected.index].hidden)
-        SelectedPos() = OnFloor(sim, SelectedPos());
+      if (m_selected.kind == Selection::Object)
+        SelectedPos() = Rest(sim, m_room.objects[m_selected.index], SelectedPos());
       return;
     }
     SelectedPos() = {cell.x - m_dragOffset.x, cell.y - m_dragOffset.y};
@@ -778,6 +799,7 @@ float CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
       {Tool::Mage, EditorIcon::Mage, "Mage: casts its spells at you (M)"},
       {Tool::Undead, EditorIcon::Undead, "Undead: charges and knocks back (U)"},
       {Tool::Flyer, EditorIcon::Flyer, "Flyer: flies around walls to you (F)"},
+      {Tool::Hazard, EditorIcon::Hazard, "Hazard: a geyser or a rockfall (Z)"},
   };
   int n = 0;
   for (const Entry &e : kTools) {
@@ -835,7 +857,7 @@ void CampaignEditor::DrawSelected(Simulation &sim, UI &ui) {
     ObjectDef &o = m_room.objects[m_selected.index];
     Widgets::SectionHeader(ObjectName(o.kind));
     if (ImGui::Checkbox("Buried", &o.hidden) && !o.hidden)
-      o.pos = OnFloor(sim, o.pos);
+      o.pos = Rest(sim, o, o.pos);
     ImGui::SetItemTooltip("Hidden in the terrain until the player digs it out.\n"
                           "Buried things stay where you put them, not on the floor.");
     ImGui::SameLine();
@@ -847,7 +869,32 @@ void CampaignEditor::DrawSelected(Simulation &sim, UI &ui) {
                          "travels between opened gates.");
     else if (o.kind == ObjectKind::Workbench)
       ImGui::TextWrapped("E opens the spell editor (unlocked glyphs only).");
-    else {
+    else if (o.kind == ObjectKind::Geyser || o.kind == ObjectKind::Rockfall) {
+      bool geyser = o.kind == ObjectKind::Geyser;
+      if (Widgets::SmallButton("Geyser", geyser) && !geyser) {
+        o.kind = ObjectKind::Geyser;
+        o.pos = Rest(sim, o, o.pos);
+      }
+      ImGui::SameLine();
+      if (Widgets::SmallButton("Rockfall", !geyser) && geyser) {
+        o.kind = ObjectKind::Rockfall;
+        o.pos = Rest(sim, o, o.pos);
+      }
+      if (o.kind == ObjectKind::Geyser) {
+        ImGui::TextWrapped("Spouts straight up every so often. Water soaks (no "
+                           "casting while wet), fire burns.");
+        if (Widgets::SmallButton("Water", o.jet == Element::WATER))
+          o.jet = Element::WATER;
+        ImGui::SameLine();
+        if (Widgets::SmallButton("Fire", o.jet == Element::FIRE))
+          o.jet = Element::FIRE;
+        ImGui::SliderFloat("Every", &o.every, 0.5f, 15.0f, "%.1fs");
+      } else {
+        ImGui::TextWrapped("Hangs from the ceiling and drops a stone on whoever "
+                           "walks under it.");
+        ImGui::SliderFloat("Ready again after", &o.every, 0.5f, 15.0f, "%.1fs");
+      }
+    } else {
       GlyphCombo("Teaches", o.glyph, o.sigil, ui, true);
       Widgets::SectionHeader("Blueprints it gives");
       ImGui::TextDisabled("Ready-made spells for the backpack. They don't\n"
