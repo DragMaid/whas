@@ -35,7 +35,9 @@ say how it behaves. The editor (`E`) shows what a spell does as you draw;
 
 A column spell doesn't stream. It lays its element out as a rectangle
 along the aim, `holdLength` cells long and `holdWidth` wide (the beam's
-width). A standing column is done once it's built; a launched one is held
+width). A standing column (a wall) raises 2.5x the material the spell
+would throw, up to 160 cells long; a drill or a launched block uses the
+spell's own. A standing column is done once it's built; a launched one is held
 for `holdTime` seconds where it lands (more and bigger column signs hold
 longer).
 
@@ -43,7 +45,8 @@ longer).
   turns the block off its base direction, up to 60 degrees, the same way
   levitation turns a flight.
 - **No levitation**: the block rises out of its base at `holdRise` cells/s:
-  `(40 + 30 x column signs) x sqrt(60 / area)`, at least 8. The base is
+  `(40 + 30 x column signs) x sqrt(60 / area)`, at least 8, where a wall's
+  area is divided by 2.5 (it goes by the material thrown). The base is
   where the aim line leaves the caster's body, or, cast from a surface
   (right click), the surface itself, rising straight out of it. Air and
   gases are taken, loose cells (sand, water) are carried off ahead of the
