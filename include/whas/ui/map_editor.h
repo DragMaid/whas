@@ -38,7 +38,8 @@ private:
   void ApplySettings(Simulation &sim);
   bool Save(Simulation &sim, bool asCopy);
   void DrawGenerate(Simulation &sim);
-  void DrawToolbar(Simulation &sim, float panelWidth);
+  // Returns where the toolbar ends on screen
+  float DrawToolbar(Simulation &sim, float panelWidth);
   void DrawSettings(Simulation &sim);
   int SpawnAt(Vector2 cell) const;
 

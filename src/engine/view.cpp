@@ -7,17 +7,20 @@ namespace View {
 
 namespace {
 Camera2D g_camera{{0, 0}, {0, 0}, 0.0f, 1.0f};
+Insets g_insets;
 } // namespace
 
+void SetInsets(Insets insets) { g_insets = insets; }
+
 void Update() {
-  float sw = static_cast<float>(GetScreenWidth());
-  float sh = static_cast<float>(GetScreenHeight());
+  float sw = std::max(1.0f, GetScreenWidth() - g_insets.left - g_insets.right);
+  float sh = std::max(1.0f, GetScreenHeight() - g_insets.top - g_insets.bottom);
   constexpr float worldW = GRID_W * CELL_SIZE;
   constexpr float worldH = GRID_H * CELL_SIZE;
   float scale = std::max(0.1f, std::min(sw / worldW, sh / worldH));
   g_camera.zoom = scale;
-  g_camera.offset = {(sw - worldW * scale) * 0.5f,
-                     (sh - worldH * scale) * 0.5f};
+  g_camera.offset = {g_insets.left + (sw - worldW * scale) * 0.5f,
+                     g_insets.top + (sh - worldH * scale) * 0.5f};
 }
 
 Camera2D Camera() { return g_camera; }

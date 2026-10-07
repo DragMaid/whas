@@ -119,4 +119,6 @@ private:
 
   std::string m_notice;
   float m_noticeTime = 0.0f;
+  float m_hudAlpha = 1.0f;
+  float m_helpTime = 0.0f; // the key hints show this long after starting
 };

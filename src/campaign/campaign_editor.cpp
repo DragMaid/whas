@@ -636,7 +636,9 @@ void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
 
   float s = View::UiScale();
   float panelW = 380.0f * s;
-  DrawToolbar(sim, panelW);
+  float toolbarBottom = DrawToolbar(sim, panelW);
+  // The room fits between the toolbar and the panel, not under them
+  View::SetInsets({8 * s, toolbarBottom + 8 * s, panelW + 16 * s, 8 * s});
 
   ImGui::SetNextWindowPos({GetScreenWidth() - 8.0f * s, 8.0f * s},
                           ImGuiCond_Always, {1.0f, 0.0f});
@@ -695,8 +697,9 @@ void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
   ImGui::End();
 }
 
-// Tools along the top, and the paint palette when painting
-void CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
+// Tools along the top, and the paint palette when painting; returns where
+// the toolbar ends on screen
+float CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
   float s = View::UiScale();
   ImGui::SetNextWindowPos({8 * s, 8 * s}, ImGuiCond_Always);
   ImGui::SetNextWindowSize({GetScreenWidth() - panelWidth - 24 * s, 0}, ImGuiCond_Always);
@@ -756,7 +759,9 @@ void CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
                             ? "Click to select, drag to move, Delete removes"
                             : "Click to place, click something to move it, Delete removes");
   }
+  float bottom = ImGui::GetWindowPos().y + ImGui::GetWindowHeight();
   ImGui::End();
+  return bottom;
 }
 
 void CampaignEditor::DrawSelected(UI &ui) {

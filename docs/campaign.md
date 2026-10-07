@@ -6,7 +6,8 @@ glyphs and learn more from shrines; you draw spells at workbenches and
 carry three of them.
 
 Open it from the menu: **Campaign**, or `--open campaigns`.
-`--open campaign:<id>` jumps straight into one (continuing its save).
+`--open campaign:<id>` jumps straight into one (continuing its save);
+`--open campaign-edit:<id>` opens it in the editor.
 
 ## Playing
 

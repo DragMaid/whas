@@ -140,6 +140,7 @@ bool CampaignPlay::Start(Simulation &sim, UI &ui, const CampaignDef &def,
       [this](const std::string &id) { return m_testing || m_save.glyphs.count(id) > 0; });
 
   m_active = true;
+  m_helpTime = 8.0f;
   m_player = Character{};
   m_player.id = PLAYER_ID;
   Respawn(sim);
@@ -162,6 +163,7 @@ bool CampaignPlay::StartTest(Simulation &sim, UI &ui, const CampaignDef &def,
   m_bench.SetThumbnails(&ui.Thumbnails());
   m_bench.SetGlyphFilter([](const std::string &) { return true; });
   m_active = true;
+  m_helpTime = 8.0f;
   m_player = Character{};
   m_player.id = PLAYER_ID;
   m_player.maxHp = m_player.hp = Match::MAX_HP;
@@ -759,42 +761,59 @@ void CampaignPlay::DrawPanels(UI &ui) {
 void CampaignPlay::DrawHud(UI &ui) {
   float s = View::UiScale();
   ImDrawList *dl = ImGui::GetForegroundDrawList();
-  ImVec2 at{16 * s, 16 * s};
-  // Health
-  float w = 220 * s, h = 12 * s;
-  dl->AddRectFilled(at, {at.x + w, at.y + h}, Theme::U32(Tone::Ink, 0.85f));
+  ImVec2 screen = ImGui::GetIO().DisplaySize;
+  // A hotbar along the bottom middle: health over the three slots. It
+  // fades when the player or the cursor is behind it.
+  float slot = 56 * s, gap = 6 * s, h = 8 * s;
+  float w = SLOTS * slot + (SLOTS - 1) * gap;
+  ImVec2 at{(screen.x - w) * 0.5f, screen.y - slot - h - 18 * s};
+  Rectangle bar{at.x - 8 * s, at.y - 8 * s, w + 16 * s, slot + h + 24 * s};
+  Vector2 body = View::WorldToScreen(
+      {m_player.Center().x * CELL_SIZE, m_player.Center().y * CELL_SIZE});
+  bool behind = CheckCollisionPointRec(body, bar) ||
+                CheckCollisionPointRec(GetMousePosition(), bar);
+  m_hudAlpha += ((behind ? 0.3f : 1.0f) - m_hudAlpha) * std::min(1.0f, GetFrameTime() * 10);
+  float a = m_hudAlpha;
+
+  dl->AddRectFilled(at, {at.x + w, at.y + h}, Theme::U32(Tone::Ink, 0.85f * a));
   dl->AddRectFilled(at, {at.x + w * (m_player.hp / m_player.maxHp), at.y + h},
-                    IM_COL32(150, 176, 98, 255));
-  dl->AddRect(at, {at.x + w, at.y + h}, Theme::U32(Tone::BrassDim));
-  at.y += h + 8 * s;
+                    IM_COL32(150, 176, 98, (int)(255 * a)));
+  dl->AddRect(at, {at.x + w, at.y + h}, Theme::U32(Tone::BrassDim, a));
+  at.y += h + 6 * s;
 
   // The three slots, with their cooldowns and the wet paper
-  float slot = 64 * s;
   for (int i = 0; i < SLOTS; ++i) {
-    ImVec2 p0{at.x + i * (slot + 8 * s), at.y};
+    ImVec2 p0{at.x + i * (slot + gap), at.y};
     ImVec2 p1{p0.x + slot, p0.y + slot};
-    dl->AddRectFilled(p0, p1, Theme::U32(Tone::Ink, 0.85f));
-    dl->AddRect(p0, p1, Theme::U32(i == m_slot ? Tone::BrassBright : Tone::BrassDim),
+    dl->AddRectFilled(p0, p1, Theme::U32(Tone::Ink, 0.85f * a));
+    dl->AddRect(p0, p1, Theme::U32(i == m_slot ? Tone::BrassBright : Tone::BrassDim, a),
                 0.0f, 0, i == m_slot ? 2.5f : 1.0f);
     const Spell *spell = SlotSpell(i);
-    if (spell)
+    if (spell && a > 0.5f)
       ui.Thumbnails().Draw(dl, *spell, {p0.x + 3, p0.y + 3}, {p1.x - 3, p1.y - 3});
     float cool = m_cooldowns.Remaining(i, m_tick);
     if (cool > 0.0f)
-      dl->AddRectFilled({p0.x, p1.y - slot * cool}, p1, Theme::U32(Tone::Ink, 0.7f));
+      dl->AddRectFilled({p0.x, p1.y - slot * cool}, p1, Theme::U32(Tone::Ink, 0.7f * a));
     if (spell && m_player.Wet() && !SpellQuant::Canonical(*spell).HasFlight()) {
       float left = m_player.wet / Character::WET_SECONDS;
-      dl->AddRectFilled({p0.x, p1.y - slot * left}, p1, IM_COL32(60, 130, 210, 110));
+      dl->AddRectFilled({p0.x, p1.y - slot * left}, p1, IM_COL32(60, 130, 210, (int)(110 * a)));
     }
     char key[2] = {static_cast<char>('1' + i), 0};
-    dl->AddText({p0.x + 4 * s, p0.y + 2 * s}, Theme::U32(Tone::Parchment), key);
+    dl->AddText({p0.x + 4 * s, p0.y + 2 * s}, Theme::U32(Tone::Parchment, a), key);
   }
-  at.y += slot + 6 * s;
-  dl->AddText(at, Theme::U32(Tone::Faint),
-              TextFormat("%d glyphs known   B backpack   E use   right click: cast from a surface",
-                         (int)m_save.glyphs.size()));
+
+  // Keys, for a little while after starting, then only the glyph count
+  ImVec2 tl{16 * s, 16 * s};
+  m_helpTime = std::max(0.0f, m_helpTime - GetFrameTime());
+  if (m_helpTime > 0.0f)
+    dl->AddText(tl, Theme::U32(Tone::Parchment, std::min(1.0f, m_helpTime)),
+                "B backpack   E use   right click: cast from a surface   Esc leave");
+  else
+    dl->AddText(tl, Theme::U32(Tone::Faint, 0.8f),
+                TextFormat("%d glyphs known", (int)m_save.glyphs.size()));
+  ImVec2 bottom{tl.x, tl.y + 18 * s};
   if (m_testing)
-    dl->AddText({at.x, at.y + 18 * s}, Theme::U32(Tone::Brass),
+    dl->AddText(bottom, Theme::U32(Tone::Brass),
                 "Testing from the editor: Esc to go back");
 
   // What opens this room

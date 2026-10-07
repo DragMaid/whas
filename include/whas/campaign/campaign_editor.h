@@ -20,6 +20,8 @@ public:
   void CloseHub() { m_hub = false; }
   bool HubOpen() const { return m_hub; }
   bool Editing() const { return m_editing; }
+  // Open this campaign in the editor (on the next panel draw)
+  void Edit(const Campaign::CampaignDef &def) { m_editRequest = def; }
 
   // Mouse in the world, file drops, letting the world settle
   void Update(Simulation &sim);
@@ -77,7 +79,7 @@ private:
   void HandleShortcuts(Simulation &sim);
 
   void DrawHub();
-  void DrawToolbar(Simulation &sim, float panelWidth);
+  float DrawToolbar(Simulation &sim, float panelWidth);
   void DrawRoomMap(Simulation &sim);
   void DrawSelected(UI &ui);
   void DrawNpc(Campaign::NpcDef &npc, UI &ui);

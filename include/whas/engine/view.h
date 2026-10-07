@@ -9,6 +9,13 @@
 // pixels on top.
 namespace View {
 
+// Screen pixels kept clear around the world (editors put their toolbars
+// and panels there); the world fits into what's left
+struct Insets {
+  float left = 0, top = 0, right = 0, bottom = 0;
+};
+void SetInsets(Insets insets);
+
 // Refit to the current window size; call once a frame before drawing
 void Update();
 

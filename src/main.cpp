@@ -134,7 +134,8 @@ int main(int argc, char **argv) {
       grimoire.Reset();
   });
 
-  // --open sandbox|duel|rts|spells|spell-editor|maps|map-editor|campaigns|campaign:<id>
+  // --open sandbox|duel|rts|spells|spell-editor|maps|map-editor|campaigns|
+  //        campaign:<id>|campaign-edit:<id>
   // starts on that screen
   bool startDuel = false, startRts = false;
   if (const char *screen = Arg(argc, argv, "--open")) {
@@ -166,6 +167,11 @@ int main(int argc, char **argv) {
       for (const Campaign::CampaignDef &def : Campaign::LoadAll())
         if (def.id == screen + 9)
           campaign.Start(sim, ui, def, false, campaignError);
+    } else if (std::strncmp(screen, "campaign-edit:", 14) == 0) {
+      menu.Close();
+      for (const Campaign::CampaignDef &def : Campaign::LoadAll())
+        if (def.id == screen + 14)
+          campaignEditor.Edit(def);
     }
   }
 
@@ -188,9 +194,14 @@ int main(int argc, char **argv) {
   while (!WindowShouldClose()) {
     if (IsKeyPressed(KEY_F11))
       ToggleBorderlessWindowed();
+    // Editors keep their own space clear (set while drawing their panels)
+    if (!campaignEditor.Editing() && !mapEditor.IsOpen())
+      View::SetInsets({});
     View::Update();
-    uiState.keysTaken =
-        campaign.Active() || campaignEditor.Editing() || mapEditor.IsOpen();
+    // Campaign screens have their own keys and editors; E there is never
+    // the library's spell editor
+    uiState.keysTaken = campaign.Active() || campaignEditor.Editing() ||
+                        campaignEditor.HubOpen() || mapEditor.IsOpen();
     ui.HandleInput(uiState, sim);
 
     if (uiState.menuRequested) {

@@ -78,7 +78,7 @@ cmake --build build --target whas_tests  # the tests only
 |---|---|
 | `--server ws://host:8080/ws` | Connect to a server at start-up (`wss://` works too, for TLS tunnels like ngrok) |
 | `--identity data/guest-2.json` | Use another guest identity file. Lets two copies on one machine play as different players; a second copy picks a free one on its own. |
-| `--open SCREEN` | Start on a screen instead of the menu: `sandbox`, `duel` (solo planned duel), `rts` (solo real-time duel), `spells` (library), `spell-editor`, `maps` (gallery), `map-editor`, `campaigns` (list), `campaign:<id>` (continue that campaign) |
+| `--open SCREEN` | Start on a screen instead of the menu: `sandbox`, `duel` (solo planned duel), `rts` (solo real-time duel), `spells` (library), `spell-editor`, `maps` (gallery), `map-editor`, `campaigns` (list), `campaign:<id>` (continue that campaign), `campaign-edit:<id>` (edit it) |
 | `--watch replay.json` | Open a saved replay, for example one from `data/replays/` |
 | `--screenshot shot.png` | Save the screen after one second and quit (for checking screens without clicking through them) |
 | `--replay match.json --verify` | No window: re-simulate a replay and check every turn against the hashes the players reported. Exits 0 when everything matches. |

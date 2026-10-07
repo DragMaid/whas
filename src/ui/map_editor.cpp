@@ -194,10 +194,14 @@ void MapEditor::DrawPanel(Simulation &sim) {
     if (Widgets::Button("Show map editor (Tab)"))
       m_panelHidden = false;
     ImGui::End();
+    View::SetInsets({});
     return;
   }
   float scale = View::UiScale();
-  DrawToolbar(sim, 340.0f * scale);
+  float toolbarBottom = DrawToolbar(sim, 340.0f * scale);
+  // The map fits between the toolbar and the panel, not under them
+  View::SetInsets({8 * scale, toolbarBottom + 8 * scale, 352.0f * scale + 8 * scale,
+                   8 * scale});
   ImGui::SetNextWindowPos({GetScreenWidth() - 12.0f * scale, 12.0f * scale},
                           ImGuiCond_Always, {1.0f, 0.0f});
   ImGui::SetNextWindowSize({340.0f * scale, GetScreenHeight() - 24.0f * scale},
@@ -279,7 +283,7 @@ void MapEditor::DrawGenerate(Simulation &sim) {
 }
 
 // Paint palette and world controls along the top
-void MapEditor::DrawToolbar(Simulation &sim, float panelWidth) {
+float MapEditor::DrawToolbar(Simulation &sim, float panelWidth) {
   float s = View::UiScale();
   ImGui::SetNextWindowPos({8 * s, 8 * s}, ImGuiCond_Always);
   ImGui::SetNextWindowSize({GetScreenWidth() - panelWidth - 24 * s, 0}, ImGuiCond_Always);
@@ -304,7 +308,9 @@ void MapEditor::DrawToolbar(Simulation &sim, float panelWidth) {
   ImGui::TextWrapped("Left paints, right erases, wheel or [ ] sizes, 1-9 pick, "
                      "E eraser. Drag I and II to move the spawns. Tab hides the panel.");
   ImGui::PopStyleColor();
+  float bottom = ImGui::GetWindowPos().y + ImGui::GetWindowHeight();
   ImGui::End();
+  return bottom;
 }
 
 void MapEditor::DrawSettings(Simulation &sim) {
