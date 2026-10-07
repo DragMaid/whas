@@ -1,6 +1,7 @@
 #include "whas/spell/spell_editor.h"
 #include "whas/audio/audio_manager.h"
 #include "whas/engine/view.h"
+#include "whas/game/match.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"
 #include "whas/spell/spell_geometry.h"
@@ -200,8 +201,8 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
                   stats.particleCount);
   }
   if (stats.flashRadius > 0.0f)
-    ImGui::Text("Flash: blinds within %.0f cells for %.1fs", stats.flashRadius,
-                stats.flashTime);
+    ImGui::Text("Flash: dazzles within %.0f cells for up to %.1fs",
+                stats.flashRadius, std::min(Match::MAX_BLIND_SECONDS, stats.flashTime));
   if (stats.steerTime > 0.0f)
     ImGui::Text("Sights set: follows your cursor for %.1fs (%.0f deg/s)",
                 stats.steerTime, stats.steerRate * RAD2DEG);

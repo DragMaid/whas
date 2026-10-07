@@ -1113,7 +1113,8 @@ TEST_CASE("a standing column is done once built: earth stays, water falls",
     REQUIRE(Held(sim, e) == 0);
     REQUIRE(sim.GetActiveSpellEffects().empty());
     int built = Count(sim, e) - floor;
-    REQUIRE(built >= stats.particleCount * 3 / 4);
+    // A wall raises well more than the spell would throw
+    REQUIRE(built >= stats.particleCount * 2);
     Step(sim, 60);
     bool standing = true;
     for (int y = GRID_H - 25; y < GRID_H - 20; ++y)

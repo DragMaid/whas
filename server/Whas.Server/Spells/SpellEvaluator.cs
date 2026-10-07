@@ -8,7 +8,7 @@ namespace Whas.Server.Spells;
 public static class SpellEvaluator
 {
     // Bump together with SpellQuant::EVALUATOR_VERSION
-    public const int Version = 10;
+    public const int Version = 11;
 
     public const int StatScale = 1024;
     public const int AngleScale = 65536;
@@ -60,7 +60,8 @@ public static class SpellEvaluator
     const float MaxHoldTime = 6.0f;
     const int MinHoldWidth = 2;
     const int MaxHoldWidth = 24;
-    const int MaxHoldLength = 120;
+    const int MaxHoldLength = 160;
+    const float BuildMaterialScale = 2.5f;
     const float RiseBase = 40.0f;
     const float RisePerSign = 30.0f;
     const float RiseRefArea = 60.0f;
@@ -491,7 +492,10 @@ public static class SpellEvaluator
                                            MinHoldWidth, MaxHoldWidth);
                     s.HoldWidth = width;
                     bool standing = c.Magnitude <= 0.0f && speedBonus <= 0.0f;
-                    int length = (s.ParticleCount + width - 1) / width;
+                    int material = s.ParticleCount;
+                    if (standing && s.Crush == 0.0f)
+                        material = (int)MathF.Round(material * BuildMaterialScale, MidpointRounding.AwayFromZero);
+                    int length = (material + width - 1) / width;
                     // A drill builds nothing: its column signs say how deep it digs
                     if (standing && s.Crush != 0.0f)
                     {
@@ -506,6 +510,8 @@ public static class SpellEvaluator
                         s.Speed = 0.0f;
                         s.Range = 0.0f;
                         float area = s.HoldLength * s.HoldWidth;
+                        if (s.Crush == 0.0f)
+                            area /= BuildMaterialScale;
                         s.HoldRise = MathF.Max(MinRise, (RiseBase + RisePerSign * mods.Column) *
                                                         MathF.Sqrt(RiseRefArea / area));
                     }
