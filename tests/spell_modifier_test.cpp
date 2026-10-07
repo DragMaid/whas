@@ -264,6 +264,7 @@ TEST_CASE("light is fast, weightless and blinds whoever it bursts near",
     Match::ApplyEffects(sim, chars, 2);
   }
   REQUIRE(chars[1].flash > 0.0f);
+  REQUIRE(chars[1].flash <= 2.0f); // a glare, not a knockout
   REQUIRE(chars[0].flash == 0.0f); // far from every burst
   REQUIRE(Count(sim, Element::LIGHT) == 0); // never lands as a cell
 }

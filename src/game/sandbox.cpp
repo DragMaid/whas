@@ -118,7 +118,7 @@ void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
 
 void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
   // Light bursts fade at once here (and a match's hold is let go)
-  ui.Blind(m_avatar.TakeFlash(), false);
+  ui.Blind(m_avatar.TakeFlash());
   EnsureAvatar(sim);
   state.matchRound = -1;
 
