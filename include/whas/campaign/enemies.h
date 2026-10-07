@@ -27,6 +27,8 @@ struct Enemy {
   Vector2 lastPos{0, 0};
   float stuckFor = 0.0f;
   int wander = 1; // walkers that lost sight of the player pace this way
+  int phase = 0;  // a boss's phases entered so far
+  bool phaseChanged = false; // since the last look (for the notice)
 };
 
 // The room's enemies, freshly spawned (replacing any from before)

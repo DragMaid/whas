@@ -85,6 +85,11 @@ does.
 Health, speed and touch damage are set per enemy in the editor; a mage's
 spells are picked from your library and copied into the room.
 
+**Bosses**: any enemy can be made a boss. It wears a crown, its name and
+health run across the top of the screen, and it can have phases: under a
+share of its health it takes on a new speed, touch damage and (a mage) cast
+rate and spells. The bar marks where each phase starts.
+
 TODO: enemies and NPCs use the player's sprite, tinted, with a marker (hat, wings,
 eyes). Gates and workbenches are drawn shapes. Swap in real art when there
 is some (`Enemies::Draw`, `DrawCampaignObject`).

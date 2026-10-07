@@ -510,8 +510,13 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
   ++m_tick;
   m_player.Unbury(sim);
   m_player.Step(sim, m_player.Alive() ? input : CharacterInput{}, dt);
-  for (Enemies::Enemy &e : m_enemies)
+  for (Enemies::Enemy &e : m_enemies) {
     Enemies::Tick(e, sim, m_player, m_rng, dt);
+    if (std::exchange(e.phaseChanged, false))
+      Notify(e.def.name + (e.phase == (int)e.def.phases.size() ? " is furious"
+                                                                : " grows stronger"),
+             2.5f);
+  }
 
   std::vector<Hurtbox> boxes;
   if (m_player.Alive())
@@ -969,6 +974,26 @@ void CampaignPlay::DrawHud(UI &ui) {
   if (m_testing)
     dl->AddText(bottom, Theme::U32(Tone::Brass),
                 "Testing from the editor: Esc to go back");
+
+  // A boss's health across the top
+  for (const Enemies::Enemy &e : m_enemies) {
+    if (!e.def.boss || !e.body.Alive())
+      continue;
+    float bw = std::min(520 * s, ImGui::GetIO().DisplaySize.x * 0.4f), bh = 10 * s;
+    ImVec2 b0{(ImGui::GetIO().DisplaySize.x - bw) * 0.5f, 34 * s};
+    ImVec2 ts = ImGui::CalcTextSize(e.def.name.c_str());
+    dl->AddText({(ImGui::GetIO().DisplaySize.x - ts.x) * 0.5f, b0.y - ts.y - 4 * s},
+                Theme::U32(Tone::Parchment), e.def.name.c_str());
+    dl->AddRectFilled(b0, {b0.x + bw, b0.y + bh}, Theme::U32(Tone::Ink, 0.85f));
+    dl->AddRectFilled(b0, {b0.x + bw * e.body.hp / e.body.maxHp, b0.y + bh},
+                      Theme::U32(Tone::Oxblood));
+    // Where its phases start
+    for (const auto &p : e.def.phases)
+      dl->AddLine({b0.x + bw * p.below, b0.y}, {b0.x + bw * p.below, b0.y + bh},
+                  Theme::U32(Tone::Parchment, 0.6f));
+    dl->AddRect(b0, {b0.x + bw, b0.y + bh}, Theme::U32(Tone::BrassDim));
+    break;
+  }
 
   // The map, and what opens this room under it
   float mapBottom = DrawMinimap(dl);

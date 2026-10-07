@@ -40,6 +40,19 @@ struct EnemyDef {
   // depend on the editor's library
   std::vector<Spell> spells;
   float castEvery = 1.6f; // seconds between a mage's casts
+
+  // A boss: named, with its health across the top of the screen, and
+  // phases it moves into as its health drops
+  bool boss = false;
+  std::string name = "The Brimmed Hat";
+  struct Phase {
+    float below = 0.5f; // starts when health falls under this share
+    float speed = 30.0f;
+    float damage = 12.0f;
+    float castEvery = 1.0f;
+    std::vector<Spell> spells; // a mage's new spells; empty keeps the old
+  };
+  std::vector<Phase> phases; // highest `below` first
 };
 
 enum class ObjectKind : uint8_t { Gate, Workbench, Shrine };

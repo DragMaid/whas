@@ -269,3 +269,42 @@ TEST_CASE("trials survive a round trip", "[campaign]") {
   REQUIRE(back.trial.seconds == 45.0f);
   REQUIRE(back.trial.glyphs == std::set<std::string>{"fire", "wind"});
 }
+
+TEST_CASE("a boss moves into its phases as it weakens", "[campaign]") {
+  Simulation sim;
+  Floor(sim);
+  RoomDef room = BlankRoom({0, 0});
+  EnemyDef boss;
+  boss.kind = EnemyKind::Undead;
+  boss.pos = {100, 150};
+  boss.boss = true;
+  boss.name = "Brim";
+  boss.hp = 100;
+  boss.phases = {{0.6f, 50.0f, 20.0f, 1.0f, {}}, {0.25f, 70.0f, 30.0f, 1.0f, {}}};
+  room.enemies = {boss};
+
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.enemies[0].boss);
+  REQUIRE(back.enemies[0].name == "Brim");
+  REQUIRE(back.enemies[0].phases.size() == 2);
+
+  std::vector<Enemies::Enemy> enemies;
+  Enemies::Spawn(back, sim, enemies);
+  Enemies::Enemy &e = enemies[0];
+  Character player;
+  player.pos = {300, 150};
+  std::mt19937 rng(1);
+  Enemies::Tick(e, sim, player, rng, DT);
+  REQUIRE(e.phase == 0);
+  e.body.hp = 50;
+  Enemies::Tick(e, sim, player, rng, DT);
+  REQUIRE(e.phase == 1);
+  REQUIRE(e.def.speed == 50.0f);
+  REQUIRE(e.phaseChanged);
+  e.body.hp = 10;
+  Enemies::Tick(e, sim, player, rng, DT);
+  REQUIRE(e.phase == 2);
+  REQUIRE(e.def.damage == 30.0f);
+}

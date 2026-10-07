@@ -203,6 +203,21 @@ json ToJson(const RoomDef &r) {
       ej["castEvery"] = e.castEvery;
       ej["spells"] = SpellsJson(e.spells);
     }
+    if (e.boss) {
+      ej["boss"] = true;
+      ej["name"] = e.name;
+      json phases = json::array();
+      for (const EnemyDef::Phase &p : e.phases) {
+        json pj{{"below", p.below},
+                {"speed", p.speed},
+                {"damage", p.damage},
+                {"castEvery", p.castEvery}};
+        if (!p.spells.empty())
+          pj["spells"] = SpellsJson(p.spells);
+        phases.push_back(std::move(pj));
+      }
+      ej["phases"] = phases;
+    }
     enemies.push_back(std::move(ej));
   }
   json npcs = json::array();
@@ -276,6 +291,19 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       e.castEvery = ej.value("castEvery", e.castEvery);
       e.tag = ej.value("tag", "");
       e.spells = SpellsFrom(ej, "spells");
+      e.boss = ej.value("boss", false);
+      e.name = ej.value("name", e.name);
+      for (const json &pj : ej.value("phases", json::array())) {
+        EnemyDef::Phase p;
+        p.below = std::clamp(pj.value("below", p.below), 0.01f, 0.99f);
+        p.speed = pj.value("speed", p.speed);
+        p.damage = pj.value("damage", p.damage);
+        p.castEvery = pj.value("castEvery", p.castEvery);
+        p.spells = SpellsFrom(pj, "spells");
+        e.phases.push_back(std::move(p));
+      }
+      std::sort(e.phases.begin(), e.phases.end(),
+                [](const auto &a, const auto &b) { return a.below > b.below; });
       r.enemies.push_back(std::move(e));
     }
     r.npcs.clear();

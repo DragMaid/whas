@@ -865,21 +865,65 @@ void CampaignEditor::DrawSelected(Simulation &sim, UI &ui) {
     ImGui::SliderFloat("Health", &e.hp, 5.0f, 300.0f, "%.0f");
     ImGui::SliderFloat("Speed", &e.speed, 5.0f, 80.0f, "%.0f cells/s");
     ImGui::SliderFloat("Touch damage", &e.damage, 0.0f, 50.0f, "%.0f");
-    if (e.kind != EnemyKind::Mage)
-      break;
-    ImGui::SliderFloat("Casts every", &e.castEvery, 0.4f, 6.0f, "%.1fs");
-    Widgets::SectionHeader("Spells it casts");
-    ImGui::TextDisabled("It picks one at random each cast.");
-    SpellPicker::Draw("mage", e.spells, ui.Library(), ui.Thumbnails());
-    if (Widgets::SmallButton("Draw a new spell for it")) {
-      m_drawFor = m_selected.index;
-      ui.OpenNewSpell();
+    bool mage = e.kind == EnemyKind::Mage;
+    if (mage) {
+      ImGui::SliderFloat("Casts every", &e.castEvery, 0.4f, 6.0f, "%.1fs");
+      Widgets::SectionHeader("Spells it casts");
+      ImGui::TextDisabled("It picks one at random each cast.");
+      SpellPicker::Draw("mage", e.spells, ui.Library(), ui.Thumbnails());
+      if (Widgets::SmallButton("Draw a new spell for it")) {
+        m_drawFor = m_selected.index;
+        ui.OpenNewSpell();
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Opens the spell editor; what you save goes into your\n"
+                          "library and onto this mage.");
+      if (e.spells.empty())
+        ImGui::TextColored(Theme::Vec(Tone::Oxblood), "With no spells it only walks.");
     }
-    if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("Opens the spell editor; what you save goes into your\n"
-                        "library and onto this mage.");
-    if (e.spells.empty())
-      ImGui::TextColored(Theme::Vec(Tone::Oxblood), "With no spells it only walks.");
+
+    Widgets::SectionHeader("Boss");
+    ImGui::Checkbox("A boss", &e.boss);
+    ImGui::SetItemTooltip("Named, with a crown and its health across the top of\n"
+                          "the screen; it can change as it weakens.");
+    if (!e.boss)
+      break;
+    ImGui::InputText("Name", &e.name);
+    int remove = -1;
+    for (int i = 0; i < (int)e.phases.size(); ++i) {
+      EnemyDef::Phase &p = e.phases[i];
+      ImGui::PushID(i);
+      if (ImGui::TreeNodeEx("phase", ImGuiTreeNodeFlags_DefaultOpen, "Under %.0f%% health",
+                            p.below * 100)) {
+        float pct = p.below * 100;
+        if (ImGui::SliderFloat("Starts under", &pct, 5.0f, 95.0f, "%.0f%% health"))
+          p.below = pct / 100;
+        ImGui::SliderFloat("Speed##p", &p.speed, 5.0f, 80.0f, "%.0f cells/s");
+        ImGui::SliderFloat("Touch damage##p", &p.damage, 0.0f, 50.0f, "%.0f");
+        if (mage) {
+          ImGui::SliderFloat("Casts every##p", &p.castEvery, 0.3f, 6.0f, "%.1fs");
+          ImGui::TextDisabled("Its spells from now on (none: keep the old ones):");
+          SpellPicker::Draw("phase spells", p.spells, ui.Library(), ui.Thumbnails());
+        }
+        if (Widgets::SmallButton("Remove phase"))
+          remove = i;
+        ImGui::TreePop();
+      }
+      ImGui::PopID();
+    }
+    if (remove >= 0)
+      e.phases.erase(e.phases.begin() + remove);
+    if (Widgets::SmallButton("+ Phase")) {
+      EnemyDef::Phase p;
+      p.below = e.phases.empty() ? 0.5f : e.phases.back().below * 0.5f;
+      p.speed = e.speed * 1.3f;
+      p.damage = e.damage * 1.5f;
+      p.castEvery = e.castEvery * 0.7f;
+      e.phases.push_back(p);
+    }
+    // Phases run from the highest health down
+    std::stable_sort(e.phases.begin(), e.phases.end(),
+                     [](const auto &a, const auto &b) { return a.below > b.below; });
     break;
   }
   }

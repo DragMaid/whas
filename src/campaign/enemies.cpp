@@ -251,6 +251,22 @@ void Tick(Enemy &e, Simulation &sim, Character &player, std::mt19937 &rng,
     return;
   e.touchIn = std::max(0.0f, e.touchIn - dt);
   e.body.Unbury(sim);
+  // A boss changes as it weakens
+  while (e.phase < static_cast<int>(e.def.phases.size()) &&
+         e.body.hp <= e.body.maxHp * e.def.phases[e.phase].below) {
+    const Campaign::EnemyDef::Phase &p = e.def.phases[e.phase++];
+    e.def.speed = p.speed;
+    e.def.damage = p.damage;
+    e.def.castEvery = p.castEvery;
+    if (!p.spells.empty()) {
+      e.spells.clear();
+      for (const Spell &spell : p.spells)
+        if (SpellStats s = SpellQuant::Canonical(spell); s.valid)
+          e.spells.push_back(std::move(s));
+      e.castIn = std::min(e.castIn, 0.5f);
+    }
+    e.phaseChanged = true;
+  }
   switch (e.def.kind) {
   case Campaign::EnemyKind::Mage:
     TickMage(e, sim, player, rng, dt);
@@ -389,6 +405,17 @@ void Draw(const Enemy &e) {
   Rectangle r{e.body.pos.x * CELL_SIZE, e.body.pos.y * CELL_SIZE,
               Character::WIDTH * CELL_SIZE, Character::HEIGHT * CELL_SIZE};
   float cx = r.x + r.width * 0.5f;
+  if (e.def.boss) {
+    // A crown over whatever else it wears; redder each phase
+    Color gold{240, 200, 90, 255};
+    if (e.phase > 0)
+      gold = {240, static_cast<unsigned char>(std::max(60, 200 - 60 * e.phase)), 70, 255};
+    float y = r.y - (e.def.kind == Campaign::EnemyKind::Mage ? 32 : 12);
+    DrawRectangle(static_cast<int>(cx - 12), static_cast<int>(y), 24, 6, gold);
+    for (int i = -1; i <= 1; ++i)
+      DrawTriangle({cx + i * 9.0f, y - 9}, {cx + i * 9.0f - 4, y},
+                   {cx + i * 9.0f + 4, y}, gold);
+  }
   if (e.def.kind == Campaign::EnemyKind::Mage) {
     // A pointed hat
     DrawTriangle({cx, r.y - 22}, {cx - 12, r.y - 4}, {cx + 12, r.y - 4}, tint);
