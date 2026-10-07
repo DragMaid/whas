@@ -205,7 +205,8 @@ void LockstepClient::Leave() {
 // Upload every spell, then the decks used for the three rounds, then do
 // what was asked (queue / host / join)
 void LockstepClient::StartSync(const char *then) {
-  if (m_phase != Phase::Ready)
+  // After a match the connection is free again
+  if (m_phase != Phase::Ready && m_phase != Phase::MatchOver)
     return;
   m_afterSync = then;
   m_phase = Phase::Syncing;

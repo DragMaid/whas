@@ -237,6 +237,20 @@ public class MatchFlowTests(ServerFixture server)
     }
 
     [Fact]
+    public async Task PlayersCanOpenARoomRightAfterAMatch()
+    {
+        var (p0, p1, _) = await StartMatchAsync();
+        await p1.Client.SendAsync(new { type = "leave" });
+        await p0.Client.ExpectAsync("matchEnd");
+        await p1.Client.ExpectAsync("matchEnd");
+
+        await p0.Client.SendAsync(new { type = "createLobby" });
+        await p0.Client.ExpectAsync("lobbyCreated");
+        await p1.Client.SendAsync(new { type = "queue" });
+        await p1.Client.ExpectAsync("queued");
+    }
+
+    [Fact]
     public async Task NotComingBackForfeitsTheMatch()
     {
         var (p0, p1, matchId) = await StartMatchAsync();
