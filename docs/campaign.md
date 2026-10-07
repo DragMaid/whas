@@ -18,7 +18,7 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 | `1`-`3` | Select a slot |
 | Right click | Cast from the ground or wall nearest the cursor |
 | `E` | Use what you're standing at: a workbench, a gate |
-| `B` | Backpack: put your spells in the three slots |
+| `B` | Backpack: drag spells onto the three slots (or double-click one); drag a slot onto another to swap, or away to empty it |
 | `Esc` | Close a panel, or leave (progress is saved) |
 
 - **Rooms**: walk, fly or fall off an edge to enter the room on that side.
@@ -44,6 +44,9 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
   everything you've learned.
 
 The world pauses while the backpack, the gate map or the workbench is open.
+Health and the three slots sit at the bottom of the screen and fade while
+you (or the cursor) are behind them; the keys are listed top left for the
+first few seconds.
 
 ## Enemies
 

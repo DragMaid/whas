@@ -15,9 +15,10 @@ namespace SpellPicker {
 constexpr const char *PAYLOAD = "WHAS_SPELL_PTR";
 
 // A card as an invisible button (the last item afterwards, so callers can
-// ask if it was clicked or hovered). Dragging it carries the spell.
+// ask if it was clicked or hovered). Dragging it carries the spell, unless
+// the caller makes its own drag source.
 void Card(const Spell &spell, ImVec2 size, SpellThumbnails &thumbs,
-          bool selected = false, bool dim = false);
+          bool selected = false, bool dim = false, bool draggable = true);
 // What the spell is: its name, glyphs and cast time
 void Tooltip(const Spell &spell);
 // A spell dropped on the last item, if any

@@ -35,12 +35,12 @@ bool Matches(const std::string &name, const std::string &search) {
 } // namespace
 
 void Card(const Spell &spell, ImVec2 size, SpellThumbnails &thumbs, bool selected,
-          bool dim) {
+          bool dim, bool draggable) {
   ImVec2 p0 = ImGui::GetCursorScreenPos();
   ImVec2 p1{p0.x + size.x, p0.y + size.y};
   ImGui::InvisibleButton("##card", size);
   bool hovered = ImGui::IsItemHovered();
-  if (ImGui::BeginDragDropSource()) {
+  if (draggable && ImGui::BeginDragDropSource()) {
     const Spell *ptr = &spell;
     ImGui::SetDragDropPayload(PAYLOAD, &ptr, sizeof ptr);
     ImVec2 at = ImGui::GetCursorScreenPos();

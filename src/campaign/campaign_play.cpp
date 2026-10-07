@@ -9,6 +9,7 @@
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"
 #include "whas/spell/spell_quant.h"
+#include "whas/ui/spell_picker.h"
 #include "whas/ui/spell_thumbnails.h"
 #include "whas/ui/theme.h"
 #include "whas/ui/ui.h"
@@ -846,11 +847,12 @@ void CampaignPlay::DrawHud(UI &ui) {
   }
 }
 
-// The backpack (B): every spell made at a workbench; click one to put it in
-// the selected slot
+// The backpack (B): every spell made at a workbench. Drag one onto a slot
+// (or double-click it), drag slots onto each other to swap, drag one off
+// to empty it.
 void CampaignPlay::DrawBackpack(UI &ui) {
   float s = View::UiScale();
-  ImGui::SetNextWindowSize({560 * s, 420 * s}, ImGuiCond_Appearing);
+  ImGui::SetNextWindowSize({600 * s, 480 * s}, ImGuiCond_Appearing);
   ImGui::SetNextWindowPos(
       {ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.5f},
       ImGuiCond_Appearing, {0.5f, 0.5f});
@@ -858,47 +860,108 @@ void CampaignPlay::DrawBackpack(UI &ui) {
     ImGui::End();
     return;
   }
-  ImGui::TextDisabled("Pick a slot, then a spell. New spells are drawn at workbenches.");
+  constexpr const char *SLOT_PAYLOAD = "WHAS_CAMPAIGN_SLOT";
+  bool changed = false;
+  auto put = [&](int slot, const Spell &spell) {
+    std::string ref = m_backpackSpells.RefOf(spell);
+    // A spell sits in one slot at a time: the old one moves to where it was
+    for (int i = 0; i < SLOTS; ++i)
+      if (i != slot && m_save.slots[i] == ref)
+        m_save.slots[i] = m_save.slots[slot];
+    m_save.slots[slot] = ref;
+    m_slot = slot;
+    changed = true;
+  };
+
+  // The three slots
+  ImVec2 big{104 * s, 104 * s + ImGui::GetTextLineHeight()};
   for (int i = 0; i < SLOTS; ++i) {
     if (i)
-      ImGui::SameLine();
+      ImGui::SameLine(0, 12 * s);
+    ImGui::PushID(i);
+    ImVec2 p0 = ImGui::GetCursorScreenPos();
+    ImVec2 p1{p0.x + big.x, p0.y + big.y};
     const Spell *spell = SlotSpell(i);
-    std::string label = TextFormat("%d: %s##slot%d", i + 1,
-                                   spell ? spell->name.c_str() : "empty", i);
-    if (ImGui::Selectable(label.c_str(), m_slot == i, 0, {160 * s, 0}))
+    if (spell) {
+      SpellPicker::Card(*spell, big, ui.Thumbnails(), i == m_slot, false, false);
+    } else {
+      ImGui::InvisibleButton("##empty", big);
+      ImDrawList *dl = ImGui::GetWindowDrawList();
+      dl->AddRectFilled(p0, p1, Theme::U32(Tone::Ink, 0.6f), 6.0f);
+      dl->AddRect(p0, p1, Theme::U32(i == m_slot ? Tone::BrassBright : Tone::BrassDim),
+                  6.0f, 0, i == m_slot ? 2.5f : 1.0f);
+      const char *text = "drop a spell";
+      ImVec2 ts = ImGui::CalcTextSize(text);
+      dl->AddText({p0.x + (big.x - ts.x) * 0.5f, p0.y + (big.y - ts.y) * 0.5f},
+                  Theme::U32(Tone::Faint), text);
+    }
+    if (ImGui::IsItemClicked())
       m_slot = i;
+    if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && spell) {
+      m_save.slots[i].clear();
+      changed = true;
+    }
+    // A filled slot drags as a slot (to swap or empty), not as a spell
+    if (spell && ImGui::BeginDragDropSource()) {
+      ImGui::SetDragDropPayload(SLOT_PAYLOAD, &i, sizeof i);
+      ImGui::Text("%s", spell->name.c_str());
+      ImGui::EndDragDropSource();
+    }
+    if (const Spell *dropped = SpellPicker::AcceptDrop())
+      put(i, *dropped);
+    if (ImGui::BeginDragDropTarget()) {
+      if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(SLOT_PAYLOAD)) {
+        int from = *static_cast<const int *>(p->Data);
+        std::swap(m_save.slots[from], m_save.slots[i]);
+        m_slot = i;
+        changed = true;
+      }
+      ImGui::EndDragDropTarget();
+    }
+    ImGui::GetWindowDrawList()->AddText({p0.x + 6 * s, p0.y + 4 * s},
+                                        Theme::U32(Tone::Parchment),
+                                        TextFormat("%d", i + 1));
+    ImGui::PopID();
   }
-  if (ImGui::Button("Empty this slot")) {
-    m_save.slots[m_slot].clear();
-    SaveProgress();
-  }
+  ImGui::TextDisabled("Drag a spell onto a slot, or double-click it. Drag a slot\n"
+                      "away (or right-click it) to empty it.");
   ImGui::Separator();
+
+  // Everything drawn at workbenches; dropping a slot here empties it
   ImGui::BeginChild("spells");
-  float card = 96 * s;
-  int columns = std::max(1, (int)(ImGui::GetContentRegionAvail().x / (card + 8 * s)));
+  ImVec2 card{92 * s, 92 * s + ImGui::GetTextLineHeight()};
+  float gap = ImGui::GetStyle().ItemSpacing.x;
+  int columns = std::max(1, (int)(ImGui::GetContentRegionAvail().x / (card.x + gap)));
   int n = 0;
   for (const Spell &spell : m_backpackSpells.All()) {
     if (n++ % columns)
       ImGui::SameLine();
     ImGui::PushID(spell.name.c_str());
-    ImVec2 p = ImGui::GetCursorScreenPos();
     std::string ref = m_backpackSpells.RefOf(spell);
     bool equipped = std::find(m_save.slots.begin(), m_save.slots.end(), ref) !=
                     m_save.slots.end();
-    if (ImGui::Selectable("##card", equipped, 0, {card, card + 18 * s})) {
-      m_save.slots[m_slot] = ref;
-      SaveProgress();
+    SpellPicker::Card(spell, card, ui.Thumbnails(), false, equipped);
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+      auto empty = std::find(m_save.slots.begin(), m_save.slots.end(), "");
+      put(empty != m_save.slots.end() ? (int)(empty - m_save.slots.begin()) : m_slot,
+          spell);
     }
-    ImDrawList *dl = ImGui::GetWindowDrawList();
-    ui.Thumbnails().Draw(dl, spell, {p.x + 8, p.y}, {p.x + card - 8, p.y + card - 16});
-    dl->AddText({p.x + 4, p.y + card - 12}, Theme::U32(Tone::Parchment),
-                spell.name.c_str());
     ImGui::PopID();
   }
   if (m_backpackSpells.All().empty())
     ImGui::TextDisabled("Empty. Find a workbench (E) to draw your first spell.");
+  ImGui::Dummy(ImGui::GetContentRegionAvail());
   ImGui::EndChild();
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload *p = ImGui::AcceptDragDropPayload(SLOT_PAYLOAD)) {
+      m_save.slots[*static_cast<const int *>(p->Data)].clear();
+      changed = true;
+    }
+    ImGui::EndDragDropTarget();
+  }
   ImGui::End();
+  if (changed)
+    SaveProgress();
 }
 
 // Travelling between gates: the rooms seen so far, gates marked; click one
