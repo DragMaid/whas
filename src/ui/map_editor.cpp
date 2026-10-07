@@ -6,18 +6,15 @@
 #include "whas/engine/view.h"
 #include "whas/game/character.h"
 #include "whas/game/turn_controller.h"
+#include "whas/ui/editor_icons.h"
 #include "whas/ui/map_thumbnails.h"
+#include "whas/ui/theme.h"
 #include "whas/ui/widgets.h"
 #include <algorithm>
 #include <cstring>
 #include <random>
 
 namespace {
-
-constexpr Element kBrushElements[] = {
-    Element::EARTH, Element::ROCK,  Element::SAND,  Element::GRASS,
-    Element::WOOD,  Element::WATER, Element::ICE,   Element::CLOUD,
-    Element::STEAM, Element::FIRE,  Element::AIR};
 
 constexpr Color kSpawnColors[2] = {{230, 200, 120, 255}, {170, 190, 210, 255}};
 
@@ -69,6 +66,7 @@ void MapEditor::Open(Simulation &sim, std::optional<MapDef> map) {
   m_running = false;
   m_dragging = -1;
   m_status.clear();
+  m_brush.ClearHistory();
   if (map) {
     m_map = std::move(*map);
     m_config = m_map.Config();
@@ -87,6 +85,7 @@ void MapEditor::Generate(Simulation &sim) {
   sim.GetConfig() = m_config;
   sim.Restart(m_map.genSeed);
   m_map.spawns = ArenaGen::Generate(sim, m_map.genSeed, m_map.gen).spawns;
+  m_brush.ClearHistory();
 }
 
 void MapEditor::ApplySettings(Simulation &sim) {
@@ -118,8 +117,10 @@ void MapEditor::Update(Simulation &sim) {
       m_map.spawns[m_dragging] = Settle(sim, m_map.spawns[m_dragging]);
       m_dragging = -1;
     }
-  } else if (!overUi) {
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+  } else {
+    if (!ImGui::GetIO().WantCaptureKeyboard)
+      m_brush.HandleKeys(sim);
+    if (!overUi && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
       int spawn = SpawnAt(cell);
       if (spawn >= 0) {
         m_dragging = spawn;
@@ -127,16 +128,8 @@ void MapEditor::Update(Simulation &sim) {
                         cell.y - m_map.spawns[spawn].y};
       }
     }
-    if (m_dragging < 0) {
-      int cx = static_cast<int>(cell.x), cy = static_cast<int>(cell.y);
-      if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-        sim.Paint(cx, cy, m_brushElement, m_brush);
-      if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
-        sim.Erase(cx, cy, m_brush);
-    }
-    float wheel = GetMouseWheelMove();
-    if (wheel != 0)
-      m_brush = std::clamp(m_brush + static_cast<int>(wheel), 0, 20);
+    if (m_dragging < 0)
+      m_brush.Paint(sim, cell, overUi);
   }
 
   if (m_running) {
@@ -162,12 +155,8 @@ void MapEditor::DrawWorld() const {
     DrawText(i == 0 ? "I" : "II", static_cast<int>(r.x + r.width / 2 - 4),
              static_cast<int>(r.y - 22), 20, c);
   }
-  if (m_dragging < 0 && !ImGui::GetIO().WantCaptureMouse) {
-    Vector2 m = View::MouseCells();
-    DrawCircleLinesV({(std::floor(m.x) + 0.5f) * CELL_SIZE,
-                      (std::floor(m.y) + 0.5f) * CELL_SIZE},
-                     (m_brush + 0.5f) * CELL_SIZE, Fade(RAYWHITE, 0.6f));
-  }
+  if (m_dragging < 0 && !ImGui::GetIO().WantCaptureMouse)
+    m_brush.DrawCursor(View::MouseCells());
 }
 
 bool MapEditor::Save(Simulation &sim, bool asCopy) {
@@ -208,6 +197,7 @@ void MapEditor::DrawPanel(Simulation &sim) {
     return;
   }
   float scale = View::UiScale();
+  DrawToolbar(sim, 340.0f * scale);
   ImGui::SetNextWindowPos({GetScreenWidth() - 12.0f * scale, 12.0f * scale},
                           ImGuiCond_Always, {1.0f, 0.0f});
   ImGui::SetNextWindowSize({340.0f * scale, GetScreenHeight() - 24.0f * scale},
@@ -237,23 +227,17 @@ void MapEditor::DrawPanel(Simulation &sim) {
   if (!m_status.empty())
     ImGui::TextWrapped("%s", m_status.c_str());
 
-  if (ImGui::CollapsingHeader("Generate", ImGuiTreeNodeFlags_DefaultOpen))
-    DrawGenerate(sim);
-  if (ImGui::CollapsingHeader("Paint", ImGuiTreeNodeFlags_DefaultOpen))
-    DrawBrush();
-  if (ImGui::CollapsingHeader("World settings", ImGuiTreeNodeFlags_DefaultOpen))
-    DrawSettings(sim);
-
-  ImGui::Separator();
-  if (Widgets::Button(m_running ? "Freeze the world" : "Let it settle"))
-    m_running = !m_running;
-  ImGui::SameLine();
-  ImGui::TextDisabled("(?)");
-  if (ImGui::IsItemHovered())
-    ImGui::SetTooltip("Runs the world so water, sand and steam come to rest.\n"
-                      "The map is saved as it stands.");
-  ImGui::TextDisabled("Drag the I and II markers to move the spawns.");
-  ImGui::TextDisabled("Tab hides this panel.");
+  if (ImGui::BeginTabBar("tabs")) {
+    if (ImGui::BeginTabItem("Generate")) {
+      DrawGenerate(sim);
+      ImGui::EndTabItem();
+    }
+    if (ImGui::BeginTabItem("World settings")) {
+      DrawSettings(sim);
+      ImGui::EndTabItem();
+    }
+    ImGui::EndTabBar();
+  }
   ImGui::End();
 }
 
@@ -282,31 +266,45 @@ void MapEditor::DrawGenerate(Simulation &sim) {
   ImGui::SliderInt("Rocks %", &m_map.gen.rocks, 0, 400);
   if (Widgets::Button("Generate (replaces the painting)", {-1, 0}))
     Generate(sim);
-  if (Widgets::Button("Clear to bare rock", {-1, 0})) {
+  if (Widgets::Button("Clear to bare earth", {-1, 0})) {
     sim.GetConfig() = m_config;
     sim.Restart(m_map.genSeed);
     for (int y = ArenaGen::FLOOR_BOTTOM - 3; y < GRID_H; ++y)
       for (int x = 0; x < GRID_W; ++x)
-        sim.Paint(x, y, Element::ROCK, 0);
+        sim.Paint(x, y, Element::EARTH, 0);
     for (int i = 0; i < 2; ++i)
       m_map.spawns[i] = Settle(sim, m_map.spawns[i]);
+    m_brush.ClearHistory();
   }
 }
 
-void MapEditor::DrawBrush() {
-  int n = 0;
-  for (Element e : kBrushElements) {
-    ImGui::PushID(static_cast<int>(e));
-    const char *label = e == Element::AIR ? "Erase" : ElementName(e);
-    if (Widgets::Button(label, {96.0f * View::UiScale(), 0}, m_brushElement == e))
-      m_brushElement = e;
-    ImGui::PopID();
-    if (++n % 3 != 0)
-      ImGui::SameLine();
-  }
-  ImGui::NewLine();
-  ImGui::SliderInt("Brush", &m_brush, 0, 20);
-  ImGui::TextDisabled("Left paints, right erases, wheel resizes");
+// Paint palette and world controls along the top
+void MapEditor::DrawToolbar(Simulation &sim, float panelWidth) {
+  float s = View::UiScale();
+  ImGui::SetNextWindowPos({8 * s, 8 * s}, ImGuiCond_Always);
+  ImGui::SetNextWindowSize({GetScreenWidth() - panelWidth - 24 * s, 0}, ImGuiCond_Always);
+  ImGui::Begin("##mapToolbar", nullptr,
+               ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+                   ImGuiWindowFlags_AlwaysAutoResize);
+  if (IconButton("##settle", EditorIcon::Settle, m_running,
+                 m_running ? "Freeze the world"
+                           : "Let it settle: run the world so water and sand come to rest"))
+    m_running = !m_running;
+  ImGui::SameLine(0, 12 * s);
+  m_brush.DrawPalette();
+  ImGui::SameLine();
+  WrapToolbar(60 * s);
+  ImGui::BeginDisabled(!m_brush.CanUndo());
+  if (Widgets::SmallButton("Undo"))
+    m_brush.Undo(sim);
+  ImGui::EndDisabled();
+  if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+    ImGui::SetTooltip("Ctrl+Z");
+  ImGui::PushStyleColor(ImGuiCol_Text, Theme::Vec(Theme::Tone::Faint));
+  ImGui::TextWrapped("Left paints, right erases, wheel or [ ] sizes, 1-9 pick, "
+                     "E eraser. Drag I and II to move the spawns. Tab hides the panel.");
+  ImGui::PopStyleColor();
+  ImGui::End();
 }
 
 void MapEditor::DrawSettings(Simulation &sim) {

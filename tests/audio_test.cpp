@@ -4,6 +4,7 @@
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
 #include <catch2/catch_test_macros.hpp>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -35,7 +36,8 @@ TEST_CASE("every sounding element maps to a real profile", "[audio]") {
     CHECK((sound.onMove || sound.onSettle));
   }
   CHECK(SoundOf(Element::SAND).profile == SoundProfile::Sand);
-  CHECK(SoundOf(Element::ROCK).profile == SoundProfile::Earth);
+  CHECK(SoundOf(Element::EARTH).profile == SoundProfile::Earth);
+  CHECK(SoundOf(Element::ROCK).profile == SoundProfile::None); // bodies thump
   CHECK(SoundOf(Element::WATER).profile == SoundProfile::Water);
   CHECK(SoundOf(Element::AIR).profile == SoundProfile::None);
 }
@@ -65,6 +67,37 @@ TEST_CASE("casts and their impacts are logged for sound, not hashed",
   CHECK(cast);
   CHECK(impact);
   CHECK(logged.StateHash() == plain.StateHash());
+}
+
+TEST_CASE("a falling rock is heard as one body, not its cells", "[audio]") {
+  Simulation sim;
+  sim.Restart(5);
+  for (int x = 0; x < GRID_W; ++x)
+    for (int y = GRID_H - 6; y < GRID_H; ++y)
+      sim.Paint(x, y, Element::EARTH, 0);
+  for (int x = 100; x < 112; ++x)
+    for (int y = 60; y < 70; ++y)
+      sim.Paint(x, y, Element::ROCK, 0);
+
+  int hits = 0, rockNoises = 0;
+  float strongest = 0.0f;
+  for (int i = 0; i < 600; ++i) {
+    sim.Update(DT);
+    for (const ParticleNoise &n : sim.GetParticleSystem().TakeNoises()) {
+      if (n.kind == ParticleNoise::BodyHit) {
+        ++hits;
+        strongest = std::max(strongest, n.strength);
+        CHECK(n.element == Element::ROCK);
+        CHECK(n.heft > 0.0f);
+      } else if (n.element == Element::ROCK) {
+        ++rockNoises;
+      }
+    }
+  }
+  CHECK(hits >= 1);
+  CHECK(hits < 10); // a landing and a bounce or two, not a rattle
+  CHECK(strongest > 0.5f);
+  CHECK(rockNoises == 0);
 }
 
 TEST_CASE("the bus never clips under a flood of events", "[audio]") {

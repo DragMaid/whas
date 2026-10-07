@@ -8,7 +8,7 @@ namespace Whas.Server.Spells;
 public static class SpellEvaluator
 {
     // Bump together with SpellQuant::EVALUATOR_VERSION
-    public const int Version = 6;
+    public const int Version = 11;
 
     public const int StatScale = 1024;
     public const int AngleScale = 65536;
@@ -55,6 +55,19 @@ public static class SpellEvaluator
     const float SteerBaseRate = 1.6f;
     const float SteerRatePerSign = 0.2f;
     const float MaxSteerRate = 2.5f;
+    const float HoldBaseTime = 1.5f;
+    const float HoldTimePerSign = 1.0f;
+    const float MaxHoldTime = 6.0f;
+    const int MinHoldWidth = 2;
+    const int MaxHoldWidth = 24;
+    const int MaxHoldLength = 160;
+    const float BuildMaterialScale = 2.5f;
+    const float RiseBase = 40.0f;
+    const float RisePerSign = 30.0f;
+    const float RiseRefArea = 60.0f;
+    const float MinRise = 8.0f;
+    const float DrillDepthPerSign = 16.0f;
+    const int MinDrillWidth = 10;
     const float MinPull = 0.25f;
     const float MaxPull = 2.5f;
     const float GustBaseDuration = 0.35f;
@@ -156,7 +169,9 @@ public static class SpellEvaluator
     struct Modifiers
     {
         public float Convergence, Crush, Repetition, Cooling, Strengthening,
-                     Collection, Expansion, Pull, Sights;
+                     Collection, Expansion, Pull, Sights, Column;
+        // Column signs point the block like thrust
+        public float ColumnX, ColumnY;
         // Summed scales of each shape's trigger glyphs, by SpellShape
         public float[] Shapes;
 
@@ -171,6 +186,9 @@ public static class SpellEvaluator
             Expansion = a.Expansion + b.Expansion,
             Pull = a.Pull + b.Pull,
             Sights = a.Sights + b.Sights,
+            Column = a.Column + b.Column,
+            ColumnX = a.ColumnX + b.ColumnX,
+            ColumnY = a.ColumnY + b.ColumnY,
             Shapes = a.Shapes.Zip(b.Shapes, (x, y) => x + y).ToArray(),
         };
     }
@@ -191,6 +209,22 @@ public static class SpellEvaluator
     }
 
     static readonly int ShapeCount = Enum.GetValues<SpellShape>().Length;
+
+    static (float X, float Y) SignForward(Glyph glyph)
+    {
+        float rad = glyph.Rotation * Deg2Rad;
+        return (MathF.Sin(rad), -MathF.Cos(rad));
+    }
+
+    // How far a net sign vector turns the spell off its aim
+    static float SteerOffset(float netX, float netY, float magnitude)
+    {
+        if (magnitude <= 0.0f)
+            return 0.0f;
+        float maxOffset = MaxOffsetDeg * Deg2Rad;
+        return Math.Clamp(MathF.Atan2(netX, MathF.Max(0.0f, magnitude - netY)),
+                          -maxOffset, maxOffset);
+    }
 
     static Circle ReadCircle(IReadOnlyList<Glyph> glyphs)
     {
@@ -233,16 +267,23 @@ public static class SpellEvaluator
                 case "expansion": c.Mods.Expansion += sign; break;
                 case "pulling": c.Mods.Pull += sign; break;
                 case "sights_set": c.Mods.Sights += glyph.Scale; break;
-                default:
-                    // Column: a thrust vector
-                    float rad = glyph.Rotation * Deg2Rad;
-                    float fx = MathF.Sin(rad);
-                    float fy = -MathF.Cos(rad);
+                case "column":
+                {
+                    var (cx, cy) = SignForward(glyph);
+                    c.Mods.Column += glyph.Scale;
+                    c.Mods.ColumnX += cx * glyph.Scale;
+                    c.Mods.ColumnY += cy * glyph.Scale;
+                    break;
+                }
+                case "levitation":
+                    // Levitation: a thrust vector
+                    var (fx, fy) = SignForward(glyph);
                     c.NetX += fx * glyph.Scale;
                     c.NetY += fy * glyph.Scale;
                     c.Magnitude += glyph.Scale;
                     c.ThrustSigns++;
                     break;
+                default: break;
             }
         }
 
@@ -442,8 +483,40 @@ public static class SpellEvaluator
                     s.SteerRate = MathF.Min(MaxSteerRate, SteerBaseRate + SteerRatePerSign * mods.Sights);
                 }
 
-                s.Power = 0.5f * s.Density * s.Speed * s.Speed * PowerScale;
                 s.ParticleCount = Math.Clamp((int)(count * effect), 1, MaxParticles);
+                // Column: a held block; standing still without levitation
+                if (mods.Column > 0.0f && s.Element != Element.Light)
+                {
+                    s.HoldTime = MathF.Min(MaxHoldTime, HoldBaseTime + HoldTimePerSign * mods.Column);
+                    int width = Math.Clamp((int)MathF.Round(s.Diameter, MidpointRounding.AwayFromZero),
+                                           MinHoldWidth, MaxHoldWidth);
+                    s.HoldWidth = width;
+                    bool standing = c.Magnitude <= 0.0f && speedBonus <= 0.0f;
+                    int material = s.ParticleCount;
+                    if (standing && s.Crush == 0.0f)
+                        material = (int)MathF.Round(material * BuildMaterialScale, MidpointRounding.AwayFromZero);
+                    int length = (material + width - 1) / width;
+                    // A drill builds nothing: its column signs say how deep it digs
+                    if (standing && s.Crush != 0.0f)
+                    {
+                        width = Math.Max(width, MinDrillWidth);
+                        length = (int)MathF.Round(DrillDepthPerSign * mods.Column, MidpointRounding.AwayFromZero);
+                    }
+                    s.HoldWidth = width;
+                    s.HoldLength = Math.Clamp(length, 2, MaxHoldLength);
+                    s.OffsetRad += SteerOffset(mods.ColumnX, mods.ColumnY, mods.Column);
+                    if (standing)
+                    {
+                        s.Speed = 0.0f;
+                        s.Range = 0.0f;
+                        float area = s.HoldLength * s.HoldWidth;
+                        if (s.Crush == 0.0f)
+                            area /= BuildMaterialScale;
+                        s.HoldRise = MathF.Max(MinRise, (RiseBase + RisePerSign * mods.Column) *
+                                                        MathF.Sqrt(RiseRefArea / area));
+                    }
+                }
+                s.Power = 0.5f * s.Density * s.Speed * s.Speed * PowerScale;
                 break;
             }
             case SpellKind.Flight:
@@ -527,6 +600,8 @@ public static class SpellEvaluator
         (byte)s.HomeTarget, (byte)s.HomeElement,
         Q(s.HomeTurnRate, StatScale), Q(s.HomeRadius, StatScale),
         Q(s.SteerTime, StatScale), Q(s.SteerRate, StatScale),
+        Q(s.HoldTime, StatScale), Q(s.HoldLength, StatScale), Q(s.HoldWidth, StatScale),
+        Q(s.HoldRise, StatScale),
         s.Parts.Count == 0 ? null : s.Parts.Select(Quantize).ToList());
 
     public static QuantizedStats EvaluateQuantized(IReadOnlyList<Glyph> glyphs) =>

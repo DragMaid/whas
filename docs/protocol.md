@@ -25,9 +25,9 @@ the clients report.
 | Cast time | Integer formula `max(1, (180 + 3*particles + 5) / 10)` on both sides. A layered spell takes its slowest part, plus half the other parts rounded up, plus `8 + 2*(parts-1)`. |
 | Tuning sliders | Online matches use the default config (ruleset 1) |
 
-`tests/fixtures/spells.json` holds 686 golden spells (evaluator version 5).
+`tests/fixtures/spells.json` holds 731 golden spells (evaluator version 7).
 They cover plain spells, modifier signs, pulling fields, light, guidance, the
-dragon sigil and layered spells.
+dragon sigil, columns and layered spells.
 The C++ and C# evaluators must produce exactly the listed quantized stats
 (`whas_tests`, `dotnet test`).
 
@@ -53,9 +53,10 @@ A glyph has the same shape as the spell files:
 `inverted` is only sent when it is true, and only `crushing`, `expansion`
 and `pulling` may set it.
 
-- Signs: `column` (thrust), plus the modifiers `convergence`, `crushing`,
-  `repetition`, `cooling`, `strengthening`, `collection`, `expansion`,
-  `orb`, `pulling` and `sights_set`.
+- Signs: `levitation` (thrust), plus the modifiers `column` (hold the
+  element as a block), `convergence`, `crushing`, `repetition`, `cooling`,
+  `strengthening`, `collection`, `expansion`, `orb`, `pulling` and
+  `sights_set`.
 - Sigils: the elements (`fire`, `water`, `earth`, `light`), `wind` (only
   with a pulling sign: a field), `wind_underfoot` (flight), plus:
   - `dragon`, a shape sigil that needs an element sigil beside it;
@@ -66,6 +67,11 @@ and `pulling` may set it.
   `wind` for today's `wind_underfoot` and `gust` for today's `wind`. The
   server renames them when it re-evaluates a stored spell; client spell
   files are marked `"format": 2` from then on.
+- Evaluator version 7 renamed the thrust sign `column` to `levitation`;
+  `column` is now the hold sign. A data migration renames stored glyphs, the
+  server's re-evaluation renames any it missed, and client spell files from
+  before `"format": 3` are renamed on load. Column stats travel as
+  `holdTime`, `holdLength`, `holdWidth` (only when set).
 - Uploads are rejected unless the evaluator makes a valid spell of them.
 
 A layered spell also has `components`: 1 to 64 entries of
@@ -239,7 +245,10 @@ collapsed into runs, and casts carry the server spell id:
 
 `in` is a bit field: 1 = left, 2 = right, 4 = jump, 8 = down (dive while airborne). `c` is where the
 player's cursor was, in 1/8 cells, for sights set spells (two int16s); a
-run without it keeps the last one. The server rejects a plan
+run without it keeps the last one. A placed cast (right click, drawn on the ground or a
+wall) also carries `"px","py"`: where it is drawn, from the caster's centre in
+1/8 cells, at most 48 cells away. Wind underfoot ignores it and always leaves
+the body. The server rejects a plan
 (`server/Whas.Server/Matches/PlanValidator.cs`) if any of these hold:
 
 - it runs past 180 ticks,
@@ -248,7 +257,8 @@ run without it keeps the last one. The server rejects a plan
 - it casts a spell that isn't in that round's deck, or an invalid one,
 - an aim isn't a unit vector (±2%),
 - it has more than one wind underfoot cast in a pause,
-- a cursor isn't two int16s.
+- a cursor isn't two int16s,
+- a placed cast is more than 48 cells from the caster.
 
 ## REST
 

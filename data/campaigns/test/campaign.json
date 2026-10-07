@@ -1,0 +1,33 @@
+{
+ "format": 1,
+ "name": "test",
+ "rooms": [
+  [
+   0,
+   0
+  ],
+  [
+   1,
+   0
+  ]
+ ],
+ "startPos": [
+  291.66180419921875,
+  210.86880493164063
+ ],
+ "startRoom": [
+  0,
+  0
+ ],
+ "startingKit": [
+  "column",
+  "crushing",
+  "earth",
+  "fire",
+  "guidance",
+  "levitation",
+  "light",
+  "orb",
+  "pulling"
+ ]
+}

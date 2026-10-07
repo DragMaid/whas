@@ -9,6 +9,7 @@ struct CharacterInput {
   bool right = false;
   bool jump = false;
   bool down = false; // fall faster while in the air
+  float walk = 1.0f; // walking speed multiplier; only campaign enemies change it
 
   bool Any() const { return left || right || jump || down; }
   bool operator==(const CharacterInput &) const = default;
@@ -41,6 +42,12 @@ struct Character {
   int burnStacks = 0;
   int burnExposure = 0; // ticks in fire towards the next stack
 
+  // Wet paper: seconds left before the spell paper dries. Only wind
+  // underfoot can be cast while wet; riding it dries the paper faster.
+  static constexpr float WET_SECONDS = 3.0f;
+  static constexpr float FLIGHT_DRY_RATE = 3.0f;
+  float wet = 0.0f;
+
   // Seconds of blindness from light bursts nearby. Deterministic, but only
   // the game's screen reads it (it doesn't change what happens), so it's
   // left out of the match hash; the game takes it with TakeFlash.
@@ -64,6 +71,15 @@ struct Character {
   // Advance one step against the current grid. Deterministic for a given grid,
   // so planning and execution produce the same motion on unchanged terrain.
   void Step(const Simulation &sim, CharacterInput input, float dt);
+  // How far Step will slip a body out of terrain that grew into it
+  static constexpr int UNSTUCK_REACH = 3;
+  // Throw loose grains (sand) inside the body out of it as particles, the way
+  // a body shoves through powder. Call before Step with the live world.
+  void Unbury(Simulation &sim);
+  // Spawning: rise out of whatever is here, however deep, then settle
+  void PlaceClear(const Simulation &sim);
+  // Whether a body with its top-left here is clear of terrain
+  static bool Fits(const Simulation &sim, Vector2 pos);
 
   // Add velocity from a flight spell, gust or knockback
   void Launch(Vector2 velocity);
@@ -79,6 +95,13 @@ struct Character {
   // Called at the end of every turn
   void CoolBurn() { burnStacks = burnStacks > 2 ? burnStacks - 2 : 0; }
   bool Burning() const { return burnStacks > 0; }
+  // Fire touched the body: catch fire (and dry off) building towards a stack
+  void Ignite(int exposureTicks);
+  // Water touched the body: put out, and the paper is soaked
+  void Soak();
+  bool Wet() const { return wet > 0.0f; }
+  // Whether a spell with these stats can leave the paper right now
+  bool CanCast(bool hasFlight) const { return !Wet() || hasFlight; }
 
   Rectangle Bounds() const { return {pos.x, pos.y, WIDTH, HEIGHT}; }
   Vector2 Center() const {

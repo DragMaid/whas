@@ -11,6 +11,8 @@
 class SpellLibrary {
 public:
   void Load();
+  // Keep the spells in another folder (call before Load)
+  void SetDirectory(std::string dir) { m_store.SetDirectory(std::move(dir)); }
 
   const std::vector<Spell> &All() const { return m_spells; }
   const Spell *Find(const std::string &ref) const;

@@ -47,6 +47,7 @@ Particle *ParticleSystem::Spawn(Vector2 pos, Vector2 vel, Element element,
       p.pathS = 0.0f;
       p.pathL = 0.0f;
       p.castId = -1;
+      p.lastHit = -1;
       return &p;
     }
   }
@@ -95,7 +96,8 @@ float RandomUnit(ElementContext &ctx) {
 bool TryImpact(Particle &p, Grid &grid, ElementContext &ctx, int tx, int ty) {
   Cell &target = grid.Get(tx, ty);
   const auto &props = ctx.config.elements[static_cast<size_t>(target.element)];
-  bool granular = props.mobile && props.solid;
+  // A crushing spell clears grains out of its hole like the rubble
+  bool granular = props.mobile && props.solid && p.crush <= 0.0f;
   float cost = granular ? target.hardness * kImpact.granularCostScale
                         : target.hardness;
   if (p.power < cost)
@@ -146,6 +148,9 @@ void Deposit(Particle &p, Grid &grid, ElementContext &ctx) {
     return;
   if (p.castId >= 0)
     ctx.particles.Note({ParticleNoise::Impact, p.element, p.pos});
+  // A crushing spell only works what it hits; it leaves nothing of its own
+  if (p.crush != 0.0f)
+    return;
 
   int px = static_cast<int>(std::floor(p.pos.x));
   int py = static_cast<int>(std::floor(p.pos.y));
@@ -188,6 +193,11 @@ struct ModifierTuning {
   float reformChancePerSign = 0.25f;
   float radiusPerSign = 1.0f; // cells beyond the one that was hit
   int maxRadius = 4;
+  // Crushed grit is thrown back the way the spell came, out of the hole
+  float debrisSpeedMin = 25.0f; // cells/s
+  float debrisSpeedMax = 60.0f;
+  float debrisSpreadDeg = 20.0f;
+  float debrisLift = 6.0f;
 };
 
 constexpr ModifierTuning kModifier;
@@ -205,7 +215,7 @@ void ReplaceCell(Grid &grid, ElementContext &ctx, int x, int y,
   ctx.chunks.WakeChunkAt(x, y, ctx.frameIndex, wasStatic || isStatic);
 }
 
-// Crushing grinds rock and earth into sand; inverted, it packs sand back into
+// Crushing grinds rock and earth into sand thrown out of the hole; inverted, it packs sand back into
 // earth. Repetition puts cells back the way the world made them: default
 // temperature and hardness, no longer burning.
 void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
@@ -221,14 +231,12 @@ void ApplyHitModifiers(const Particle &p, Grid &grid, ElementContext &ctx,
       if (dx * dx + dy * dy > r * r || !grid.InBounds(x, y))
         continue;
       Cell &c = grid.Get(x, y);
-      if (p.crush > 0.0f &&
-          (c.element == Element::ROCK || c.element == Element::EARTH) &&
+      if (p.crush > 0.0f && ParticleSystem::Crushable(c, 1.0f) &&
           RandomUnit(ctx) < p.crush * kModifier.crushChancePerSign) {
-        ctx.particles.Note({ParticleNoise::Break, c.element, {x + 0.5f, y + 0.5f}});
-        ReplaceCell(grid, ctx, x, y, Element::SAND);
-      } else if (p.crush < 0.0f && c.element == Element::SAND &&
+        ParticleSystem::Crush(ctx, x, y, {-p.vel.x, -p.vel.y});
+      } else if (p.crush < 0.0f && ParticleSystem::Crushable(c, -1.0f) &&
                  RandomUnit(ctx) < -p.crush * kModifier.reformChancePerSign) {
-        ReplaceCell(grid, ctx, x, y, Element::EARTH);
+        ParticleSystem::Crush(ctx, x, y, {}, true);
       }
       if (p.restore > 0.0f && c.element != Element::AIR) {
         const auto &props =
@@ -397,6 +405,42 @@ bool MeetCell(Particle &p, Grid &grid, ElementContext &ctx, int x, int y) {
 }
 
 } // namespace
+
+bool ParticleSystem::Crushable(const Cell &c, float crush) {
+  if (crush < 0.0f)
+    return c.element == Element::SAND;
+  return c.element == Element::ROCK || c.element == Element::EARTH;
+}
+
+void ParticleSystem::Crush(ElementContext &ctx, int x, int y, Vector2 back,
+                           bool invert) {
+  Grid &grid = ctx.grid;
+  if (invert) {
+    ReplaceCell(grid, ctx, x, y, Element::EARTH);
+    return;
+  }
+  ctx.particles.Note(
+      {ParticleNoise::Break, grid.Get(x, y).element, {x + 0.5f, y + 0.5f}});
+  Fling(ctx, x, y, back, Element::SAND);
+}
+
+void ParticleSystem::Fling(ElementContext &ctx, int x, int y, Vector2 back,
+                           Element as) {
+  ReplaceCell(ctx.grid, ctx, x, y, Element::AIR);
+  float len = std::sqrt(back.x * back.x + back.y * back.y);
+  Vector2 out = len > 0.0f ? Vector2{back.x / len, back.y / len}
+                           : Vector2{0.0f, -1.0f};
+  float spread = (RandomUnit(ctx) * 2.0f - 1.0f) * kModifier.debrisSpreadDeg *
+                 DEG2RAD;
+  float cs = std::cos(spread), sn = std::sin(spread);
+  out = {out.x * cs - out.y * sn, out.x * sn + out.y * cs};
+  float speed = kModifier.debrisSpeedMin +
+                RandomUnit(ctx) *
+                    (kModifier.debrisSpeedMax - kModifier.debrisSpeedMin);
+  ParticleSystem::SpawnFrom(
+      ctx, {x + 0.5f, y + 0.5f},
+      {out.x * speed, out.y * speed - kModifier.debrisLift}, as);
+}
 
 namespace {
 
@@ -754,13 +798,21 @@ void ParticleSystem::Burst(Particle &p) {
   m_lastBurstPos = p.pos;
 }
 
-bool ParticleSystem::HitHurtbox(const Particle &p) {
+bool ParticleSystem::HitHurtbox(Particle &p) {
+  int side = -1;
+  for (const Hurtbox &box : m_hurtboxes)
+    if (box.id == p.owner)
+      side = box.team;
   for (const Hurtbox &box : m_hurtboxes) {
-    if (box.id == p.owner || !CheckCollisionPointRec(p.pos, box.bounds))
+    if (box.id == p.owner || box.id == p.lastHit ||
+        (side >= 0 && box.team == side) ||
+        !CheckCollisionPointRec(p.pos, box.bounds))
       continue;
     m_hits.push_back({box.id, p.owner, p.power, p.element});
     Note({ParticleNoise::Impact, p.element, p.pos});
-    return true;
+    p.lastHit = box.id;
+    // Flame has no body to stop it: it sets the target alight on its way
+    return p.element != Element::FIRE;
   }
   return false;
 }
@@ -851,6 +903,10 @@ void ParticleSystem::Update(Grid &grid, ElementContext &ctx, float dt) {
         if (p.remainingDistance <= 0.0f) {
           if (light) {
             Burst(p); // light doesn't fall: it goes off where it stops
+            break;
+          }
+          if (p.crush != 0.0f) {
+            p.active = false; // spent: crushing makes no material
             break;
           }
           // Out of range: the spell lets go and the element falls naturally

@@ -83,6 +83,18 @@ void DrawCharacterBody(const Character &c, Color color, bool drawHp) {
     EndBlendMode();
   }
 
+  // Wet paper: a drop over the head with a ring that empties as it dries
+  if (c.Wet()) {
+    Vector2 d{r.x + r.width * 0.5f + 10.0f, dst.y + 2.0f};
+    float left = c.wet / Character::WET_SECONDS;
+    unsigned char a = static_cast<unsigned char>(230 * color.a / 255);
+    DrawRing(d, 5.0f, 6.5f, -90.0f, -90.0f + 360.0f * left, 24,
+             Color{120, 190, 255, a});
+    DrawCircleV({d.x, d.y + 1.0f}, 2.5f, Color{60, 140, 230, a});
+    DrawTriangle({d.x, d.y - 3.5f}, {d.x - 2.4f, d.y + 0.5f},
+                 {d.x + 2.4f, d.y + 0.5f}, Color{60, 140, 230, a});
+  }
+
   // The cells the body actually collides with, separate from the sprite
   if (g_showHitbox)
     DrawRectangleLinesEx(r, 1.0f, Color{255, 60, 200, color.a});

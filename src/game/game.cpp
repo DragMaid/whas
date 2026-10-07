@@ -226,28 +226,45 @@ CharacterInput Game::RtsInput() const {
   return input;
 }
 
-void Game::QueueRtsCast(UI &ui, int tick) {
-  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || ui.IsBlockingWorldInput())
-    return;
+std::optional<PlannedCast> Game::TakeCast(const Simulation &sim, UI &ui,
+                                          const Character &from) {
+  const char *blocked = nullptr;
+  auto target =
+      CastTargeting::Update(sim, from.Center(), View::MouseCells(),
+                         !ui.IsBlockingWorldInput(), from.facing, &blocked);
+  if (blocked)
+    Notify(blocked, 1.5f);
+  if (!target)
+    return std::nullopt;
   const Spell *spell = ui.GetSelectedSpell();
   if (!spell) {
     Notify("Pick a spell from the hotbar first (1-6)", 2.0f);
-    return;
+    return std::nullopt;
   }
-  const Character &me = m_match.characters[Local()];
-  Vector2 mouse = View::MouseCells();
-  Vector2 aim{mouse.x - me.Center().x, mouse.y - me.Center().y};
-  float len = std::hypot(aim.x, aim.y);
-  aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
-                     : Vector2{(float)me.facing, 0.0f};
-  PlannedCast cast = MakeCast(*spell, aim);
+  PlannedCast cast = MakeCast(*spell, target->aim);
   if (!cast.stats.valid) {
+    // Notify keeps the pointer: hold the text in the game
     m_noticeText = SpellSystem::Problem(*spell);
     Notify(m_noticeText.empty() ? "That spell can't be cast here"
                                 : m_noticeText.c_str(),
            2.5f);
-    return;
+    return std::nullopt;
   }
+  if (!from.CanCast(cast.stats.HasFlight())) {
+    Notify("Your spell paper is wet: only wind underfoot works", 1.5f);
+    return std::nullopt;
+  }
+  if (target->at && !cast.stats.HasFlight())
+    cast.PlaceAt(*target->at, from.Center(), target->normal);
+  return cast;
+}
+
+void Game::QueueRtsCast(const Simulation &sim, UI &ui, int tick) {
+  std::optional<PlannedCast> taken =
+      TakeCast(sim, ui, m_match.characters[Local()]);
+  if (!taken)
+    return;
+  PlannedCast &cast = *taken;
   int64_t key = Rts::CooldownKey(cast, ui.GetSelectedSlot());
   switch (m_rts.QueueCast(std::move(cast), key, tick)) {
   case Rts::Controller::CastResult::Queued:
@@ -273,7 +290,7 @@ void Game::UpdateOnlineRts(Simulation &sim, UI &ui) {
     m_rtsAccumulator = 0.0f;
   }
   m_waiting = false;
-  QueueRtsCast(ui, client.RtsInputTick());
+  QueueRtsCast(sim, ui, client.RtsInputTick());
 
   constexpr int MAX_TICKS_PER_FRAME = 3; // a little catching up after a stall
   m_rtsAccumulator += std::min(GetFrameTime(), 0.1f);
@@ -297,7 +314,7 @@ void Game::UpdateRts(Simulation &sim, UI &ui) {
     Notify("Opponent reset", 1.5f);
   }
   m_waiting = false;
-  QueueRtsCast(ui, m_rtsTick);
+  QueueRtsCast(sim, ui, m_rtsTick);
 
   // A slow frame catches up a little, then the time is dropped rather than
   // owed: owing it makes every later frame slower still
@@ -333,7 +350,8 @@ void Game::ResetOpponent(Simulation &sim) {
   c.hp = c.maxHp;
   c.burnStacks = 0;
   c.burnExposure = 0;
-  c.Step(sim, {}, 0.0f);
+  c.wet = 0.0f;
+  c.PlaceClear(sim);
 }
 
 void Game::BeginPlanning(Simulation &sim) {
@@ -471,6 +489,12 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
   state.clockProgress = TurnProgress();
   state.ticksFree = IsRts() ? TurnController::TURN_TICKS : TicksFree();
   state.matchRound = m_match.round;
+  // Planning shows the ghost's paper, otherwise the body's
+  const Character &me =
+      !IsRts() && m_turn.GetPhase() == TurnController::Phase::Planning
+          ? m_turn.LocalPreview().end
+          : m_match.characters[Local()];
+  state.wet = me.wet / Character::WET_SECONDS;
   state.cooldowns = {};
   if (IsRts()) {
     int tick = m_online ? m_online->RtsInputTick() : m_rtsTick;
@@ -483,10 +507,7 @@ void Game::Update(Simulation &sim, UI &ui, UIState &state) {
     }
   }
 
-  // Flashed during the turn: blind for the rest of it, then the white
-  // fades through the next planning phase
-  bool executing = GetClockState() == ClockState::Executing;
-  ui.Blind(LocalCharacter().TakeFlash(), executing);
+  ui.Blind(LocalCharacter().TakeFlash());
 }
 
 void Game::Update(Simulation &sim, UI &ui) {
@@ -547,34 +568,19 @@ void Game::UpdatePlanning(Simulation &sim, UI &ui) {
   if (IsKeyPressed(KEY_SPACE))
     ToggleTime(sim);
 
-  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && !ui.IsBlockingWorldInput()) {
-    const Spell *spell = ui.GetSelectedSpell();
-    const Character &ghost = m_turn.LocalPreview().end;
-    if (!spell) {
-      Notify("Pick a spell from the hotbar first (1-6)", 2.0f);
-    } else if (!SpellSystem::Evaluate(*spell).valid) {
-      // Notify keeps the pointer: hold the text in the game
-      m_noticeText = SpellSystem::Problem(*spell);
-      Notify(m_noticeText.c_str(), 3.0f);
-    } else {
-      Vector2 origin = ghost.Center();
-      Vector2 mouse = View::MouseCells();
-      Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
-      float len = std::hypot(aim.x, aim.y);
-      aim = len > 0.001f ? Vector2{aim.x / len, aim.y / len}
-                         : Vector2{(float)ghost.facing, 0.0f};
-      switch (m_turn.QueueCast(MakeCast(*spell, aim))) {
-      case TurnController::CastResult::Queued:
-        if (AudioManager *audio = AudioManager::Instance())
-          audio->PlayUi(UiSound::SpellPlan);
-        break;
-      case TurnController::CastResult::NoTime:
-        Notify("Not enough time left in this turn to cast that", 2.0f);
-        break;
-      case TurnController::CastResult::SecondFlight:
-        Notify("Only one wind underfoot (movement) cast per pause", 2.0f);
-        break;
-      }
+  if (std::optional<PlannedCast> cast =
+          TakeCast(sim, ui, m_turn.LocalPreview().end)) {
+    switch (m_turn.QueueCast(std::move(*cast))) {
+    case TurnController::CastResult::Queued:
+      if (AudioManager *audio = AudioManager::Instance())
+        audio->PlayUi(UiSound::SpellPlan);
+      break;
+    case TurnController::CastResult::NoTime:
+      Notify("Not enough time left in this turn to cast that", 2.0f);
+      break;
+    case TurnController::CastResult::SecondFlight:
+      Notify("Only one wind underfoot (movement) cast per pause", 2.0f);
+      break;
     }
   }
 
@@ -664,9 +670,10 @@ void Game::Draw(const Simulation &sim, const UI &ui) const {
   // Live aim from where the local player will be when this cast would fire
   bool aiming = planning || (rts && m_state == RoundState::Playing);
   if (aiming && !ui.IsBlockingWorldInput()) {
+    Vector2 origin = rts ? m_match.characters[Local()].Center()
+                         : m_turn.LocalPreview().end.Center();
+    CastTargeting::DrawWorld(sim, origin, View::MouseCells());
     if (const Spell *spell = ui.GetSelectedSpell()) {
-      Vector2 origin = rts ? m_match.characters[Local()].Center()
-                           : m_turn.LocalPreview().end.Center();
       Vector2 mouse = View::MouseCells();
       Vector2 aim{mouse.x - origin.x, mouse.y - origin.y};
       float len = std::hypot(aim.x, aim.y);
@@ -710,7 +717,7 @@ void Game::DrawPendingCasts(const Simulation &sim, const UI &ui) const {
   Vector2 origin = m_turn.LocalPreview().end.Center();
   for (const PlannedCast &cast : m_turn.PendingCasts()) {
     Vector2 dir = SpellSystem::ResolveDirection(cast.stats, cast.aim);
-    ui.DrawSpellBeam(cast.stats, origin, dir,
+    ui.DrawSpellBeam(cast.stats, cast.Origin(origin), dir,
                      WithAlpha(ui.GetSpellColor(cast.spell), 230),
                      WorldGravity(sim));
   }

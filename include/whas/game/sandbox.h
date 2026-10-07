@@ -1,6 +1,7 @@
 #pragma once
 #include "whas/game/character.h"
 #include "whas/game/flight_trail.h"
+#include "whas/game/placement.h"
 #include "whas/game/turn_controller.h"
 #include <vector>
 
@@ -12,7 +13,7 @@ struct UIState;
 // (Cast tool), never both at once. Time runs in real time; the time-stop
 // button freezes it so several casts can be queued and fired together,
 // spaced by their cast times like in a match. The avatar doesn't walk: drag
-// it, or right-click to put it somewhere.
+// it, or Shift + right click to put it somewhere.
 class Sandbox {
 public:
   void Update(Simulation &sim, UI &ui, UIState &state);

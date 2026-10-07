@@ -8,6 +8,9 @@ constexpr uint8_t CELL_CHARRED = 1 << 1; // scorched by fire (drawn darker)
 // Rigid material laid down as terrain (an arena's rock): held in place like
 // static terrain instead of becoming a body that settles and wobbles
 constexpr uint8_t CELL_ANCHORED = 1 << 2;
+// Held in shape by a column spell: it doesn't move, fall or get pushed aside
+// until the spell lets go
+constexpr uint8_t CELL_HELD = 1 << 3;
 
 struct Cell {
   Element element = Element::AIR;

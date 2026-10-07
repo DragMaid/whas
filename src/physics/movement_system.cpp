@@ -6,7 +6,7 @@
 
 bool MovementSystem::CanDisplace(const Cell &source, const Cell &target,
                                  const ElementContext &ctx) {
-  if (source.element == target.element)
+  if (source.element == target.element || (target.flags & CELL_HELD))
     return false;
 
   const auto &sourceProps =

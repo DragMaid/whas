@@ -27,9 +27,11 @@ constexpr ElementSoundMap kElementSounds = [] {
   set(Element::FIRE, {SoundProfile::Fire, 1.0f, true, false});
   set(Element::STEAM, {SoundProfile::Wind, 0.6f, true, false});
   set(Element::CLOUD, {SoundProfile::Wind, 0.3f, true, false});
-  set(Element::ICE, {SoundProfile::Earth, 0.7f, false, true});
+  // Rock and ice are heard as whole bodies striking (BodyHit noises), not
+  // cell by cell
+  set(Element::ICE, {});
   set(Element::SAND, {SoundProfile::Sand, 1.0f, true, true});
-  set(Element::ROCK, {SoundProfile::Earth, 1.4f, false, true});
+  set(Element::ROCK, {});
   // Wood and grass only sound when burning (see AudioObserver)
   set(Element::WOOD, {});
   set(Element::GRASS, {});

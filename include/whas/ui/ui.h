@@ -40,11 +40,16 @@ struct UIState {
   int matchRound = -1;        // >= 0 in a match: that round's deck is locked
   // Real-time matches: how much of each slot's cooldown is left (0..1)
   std::array<float, DECK_SLOTS> cooldowns{};
+  // Share of the wet paper's drying time left (0 = dry): only flight casts
+  float wet = 0.0f;
 
   // Online matches play by the default rules: tuning sliders are hidden
   bool configLocked = false;
   // The map editor has the screen: no action bar
   bool hideActionBar = false;
+  // A campaign (playing or editing) has the keys: no hotbar, editor or menu
+  // shortcuts
+  bool keysTaken = false;
 
   // Requests from the bar, handled by main
   bool menuRequested = false;
@@ -83,15 +88,16 @@ public:
   }
   void ClearMatchSpells() { m_hasMatchSpells = false; }
 
-  // Blinded by a light burst for `seconds` (the longest so far wins). While
-  // `hold` stays true the screen stays white; after that it fades out.
-  void Blind(float seconds, bool hold);
+  // Blinded by a light burst for `seconds` (the longest so far wins); the
+  // glare fades out over that time
+  void Blind(float seconds);
 
   // Extra ImGui windows (the play menu, replay controls) drawn each frame
   void SetOverlay(std::function<void()> draw) { m_overlay = std::move(draw); }
 
   SpellLibrary &Library() { return m_library; }
   SpellThumbnails &Thumbnails() { return *m_thumbnails; }
+  const SvgLibrary &Glyphs() const { return m_spellEditor.Glyphs(); }
   DeckBook &Decks() { return m_decks; }
   // Beam preview plus aim-vs-cast arrows, origin in (fractional) cells.
   // worldGravity is the config's world gravity, for the falling arcs.
@@ -112,13 +118,15 @@ private:
   void DrawElementPropertyEditor(SimulationConfig &config);
   void DrawInspector(Simulation &sim);
   void DrawActiveFields(const Simulation &sim) const;
+  // Columns at work: their outline and how long they hold
+  void DrawActiveColumns(const Simulation &sim) const;
   void DrawBlindness();
   // Restyle ImGui when the UI scale changes
   void ApplyUiScale();
   ImGuiStyle m_baseStyle;
   float m_uiScale = 0.0f;
   float m_blind = 0.0f; // seconds of blindness left
-  bool m_blindHold = false;
+  float m_blindTotal = 1.0f;
 
   // Bottom bar: time-stop button, Draw|Cast toggle, hotbar or materials,
   // deck picker (action_bar.cpp)

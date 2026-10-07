@@ -34,12 +34,13 @@ bool Contains(Rectangle r, Vector2 p) {
 void Sandbox::EnsureAvatar(Simulation &sim) {
   if (m_hasAvatar)
     return;
-  // The bottom rows sit behind the action bar: give the world a rock bed
-  // there (as arenas have) so nothing rests out of sight
+  // The bottom rows sit behind the action bar: give the world an earth bed
+  // there so nothing rests out of sight. Earth, not loose rock: a rock floor
+  // becomes one huge body that wobbles and thumps
   for (int y = ArenaGen::FLOOR_BOTTOM - 3; y < GRID_H; ++y)
     for (int x = 0; x < GRID_W; ++x)
       if (sim.GetCell(x, y).element == Element::AIR)
-        sim.Paint(x, y, Element::ROCK, 0);
+        sim.Paint(x, y, Element::EARTH, 0);
   m_avatar = {};
   m_avatar.id = 1;
   m_avatar.maxHp = m_avatar.hp = Match::MAX_HP;
@@ -57,7 +58,7 @@ void Sandbox::PlaceAvatar(const Simulation &sim, Vector2 cellPos) {
       std::clamp(m_avatar.pos.y, 0.0f, GRID_H - Character::HEIGHT);
   m_avatar.vel = {0, 0};
   m_avatar.pushX = 0;
-  m_avatar.Step(sim, {}, 0.0f);
+  m_avatar.PlaceClear(sim);
   m_home = m_avatar.pos;
 }
 
@@ -68,7 +69,8 @@ void Sandbox::ResetAvatar(const Simulation &sim) {
   m_avatar.hp = m_avatar.maxHp;
   m_avatar.burnStacks = 0;
   m_avatar.burnExposure = 0;
-  m_avatar.Step(sim, {}, 0.0f);
+  m_avatar.wet = 0.0f;
+  m_avatar.PlaceClear(sim);
 }
 
 int Sandbox::QueuedTicks() const {
@@ -102,7 +104,12 @@ Vector2 Sandbox::AimAtMouse() const {
 }
 
 void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
-  sim.CastSpell(cast.stats, m_avatar.Center(), cast.aim, m_avatar.id);
+  if (!m_avatar.CanCast(cast.stats.HasFlight()))
+    return;
+  if (cast.stats.HasFlight())
+    m_avatar.wet = 0.0f;
+  sim.CastSpell(cast.stats, cast.Origin(m_avatar.Center()), cast.aim,
+                m_avatar.id, cast.placed);
   if (cast.stats.HasFlight()) {
     m_avatar.LaunchFlight(SpellSystem::FlightVelocity(cast.stats, cast.aim));
     AudioManager::EmitFlightLaunch(m_avatar.Center().x);
@@ -111,7 +118,7 @@ void Sandbox::Fire(Simulation &sim, const PlannedCast &cast) {
 
 void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
   // Light bursts fade at once here (and a match's hold is let go)
-  ui.Blind(m_avatar.TakeFlash(), false);
+  ui.Blind(m_avatar.TakeFlash());
   EnsureAvatar(sim);
   state.matchRound = -1;
 
@@ -152,6 +159,7 @@ void Sandbox::Update(Simulation &sim, UI &ui, UIState &state) {
       m_stopped ? std::min(1.0f, QueuedTicks() / (float)TurnController::TURN_TICKS)
                 : 0.0f;
   state.ticksFree = TurnController::TURN_TICKS;
+  state.wet = m_avatar.wet / Character::WET_SECONDS;
 }
 
 void Sandbox::HandleDraw(Simulation &sim, UI &ui, UIState &state) {
@@ -182,12 +190,13 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   if (ui.IsBlockingWorldInput())
     return;
 
-  if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
+  // Shift + right click moves the dummy (right click alone casts from a
+  // surface)
+  bool shift = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+  if (shift && IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) {
     PlaceAvatar(sim, mouse);
     return;
   }
-  if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
-    return;
 
   // Grab the avatar (a little slack so it's easy to hit)
   Rectangle grab = m_avatar.Bounds();
@@ -195,16 +204,22 @@ void Sandbox::HandleCast(Simulation &sim, UI &ui) {
   grab.y -= 1;
   grab.width += 2;
   grab.height += 2;
-  if (Contains(grab, mouse)) {
+  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+      Contains(grab, mouse)) {
     m_dragging = true;
     m_dragOffset = {mouse.x - m_avatar.pos.x, mouse.y - m_avatar.pos.y};
     return;
   }
 
+  const char *blocked = nullptr;
+  auto target = CastTargeting::Update(sim, m_avatar.Center(), mouse, true,
+                                   m_avatar.facing, &blocked);
   const Spell *spell = ui.GetSelectedSpell();
-  if (!spell || !SpellSystem::Evaluate(*spell).valid)
+  if (!target || !spell || !SpellSystem::Evaluate(*spell).valid)
     return;
-  PlannedCast cast = PlannedCast::Local(*spell, AimAtMouse());
+  PlannedCast cast = PlannedCast::Local(*spell, target->aim);
+  if (target->at)
+    cast.PlaceAt(*target->at, m_avatar.Center(), target->normal);
   if (m_stopped) {
     m_queued.push_back(std::move(cast));
     if (AudioManager *audio = AudioManager::Instance())
@@ -224,8 +239,10 @@ void Sandbox::Tick(Simulation &sim, bool isPainting) {
     }
   }
 
-  if (!m_dragging)
+  if (!m_dragging) {
+    m_avatar.Unbury(sim);
     m_avatar.Step(sim, {}, TurnController::TICK_DT);
+  }
   sim.GetParticleSystem().SetHurtboxes({{m_avatar.id, m_avatar.Bounds()}});
   // Sights set follows the live cursor here (casts without the avatar
   // have no owner)
@@ -250,7 +267,7 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
   for (const PlannedCast &cast : m_queued) {
     Vector2 dir = SpellSystem::ResolveDirection(cast.stats, cast.aim);
     Color c = ui.GetSpellColor(cast.spell);
-    ui.DrawSpellBeam(cast.stats, m_avatar.Center(), dir,
+    ui.DrawSpellBeam(cast.stats, cast.Origin(m_avatar.Center()), dir,
                      Color{c.r, c.g, c.b, 200}, gravity);
   }
 
@@ -267,6 +284,7 @@ void Sandbox::Draw(const Simulation &sim, const UI &ui,
                     Theme::Rl(Tone::Brass, 0.85f));
     return;
   }
+  CastTargeting::DrawWorld(sim, m_avatar.Center(), MouseCell());
   if (const Spell *spell = ui.GetSelectedSpell())
     ui.DrawAimIndicator(*spell, m_avatar.Center(), AimAtMouse(), gravity);
   if (m_stopped)

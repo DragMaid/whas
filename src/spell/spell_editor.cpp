@@ -1,6 +1,7 @@
 #include "whas/spell/spell_editor.h"
 #include "whas/audio/audio_manager.h"
 #include "whas/engine/view.h"
+#include "whas/game/match.h"
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"
 #include "whas/spell/spell_geometry.h"
@@ -200,8 +201,8 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
                   stats.particleCount);
   }
   if (stats.flashRadius > 0.0f)
-    ImGui::Text("Flash: blinds within %.0f cells for %.1fs", stats.flashRadius,
-                stats.flashTime);
+    ImGui::Text("Flash: dazzles within %.0f cells for up to %.1fs",
+                stats.flashRadius, std::min(Match::MAX_BLIND_SECONDS, stats.flashTime));
   if (stats.steerTime > 0.0f)
     ImGui::Text("Sights set: follows your cursor for %.1fs (%.0f deg/s)",
                 stats.steerTime, stats.steerRate * RAD2DEG);
@@ -216,14 +217,26 @@ void SpellEditor::DrawStats(const SpellStats &stats, const char *problem) {
   if (stats.hardnessScale != 1.0f)
     ImGui::Text("Lands x%.2f as hard", stats.hardnessScale);
   if (stats.crush > 0.0f)
-    ImGui::Text("Crushes what it hits to sand (%.1f)", stats.crush);
+    ImGui::Text("Digs (%.1f): leaves no %s; rock and earth burst out as "
+                "sand, %d cells around the hit",
+                stats.crush, ElementName(stats.element),
+                std::min(4, static_cast<int>(stats.crush)));
   else if (stats.crush < 0.0f)
-    ImGui::Text("Reforms sand into earth (%.1f)", -stats.crush);
+    ImGui::Text("Packs sand into earth (%.1f); leaves no %s", -stats.crush,
+                ElementName(stats.element));
   if (stats.restore > 0.0f)
     ImGui::Text("Restores what it hits (%.1f)", stats.restore);
   if (stats.collectMax > 0)
     ImGui::Text("Collects up to %d cells within %.0f", stats.collectMax,
                 stats.collectRadius);
+  if (stats.holdTime > 0.0f && stats.holdRise > 0.0f)
+    ImGui::Text("Column: a %.0f x %.0f %s rising %.0f cells/s",
+                stats.holdLength, stats.holdWidth,
+                stats.crush != 0.0f ? "drill" : "block", stats.holdRise);
+  else if (stats.holdTime > 0.0f)
+    ImGui::Text("Column: a %.0f x %.0f block held %.1fs, launched by "
+                "levitation",
+                stats.holdLength, stats.holdWidth, stats.holdTime);
 }
 
 
@@ -857,9 +870,9 @@ void SpellEditor::DrawVectorOverlay(ImDrawList *dl, ImVec2 canvasOrigin,
                         {aimMark.x + 6.0f, aimMark.y + 4.0f},
                         Theme::U32(Tone::Verdigris, 0.8f));
 
-  // Only column signs push; the other signs have no direction
+  // Only levitation signs push; the other signs have no direction
   for (const auto &glyph : m_currentSpell.glyphs) {
-    if (glyph.kind != GlyphKind::Sign || glyph.assetId != "column")
+    if (glyph.kind != GlyphKind::Sign || glyph.assetId != "levitation")
       continue;
     float rad = glyph.rotationDeg * DEG2RAD;
     ImVec2 dir{std::sin(rad), -std::cos(rad)};
@@ -927,6 +940,8 @@ void SpellEditor::DrawGlyphGrid(GlyphKind kind) {
   int columns = std::max(1, (int)(ImGui::GetContentRegionAvail().x / cell));
   ImGui::Columns(columns, nullptr, false);
   for (const SvgAsset *asset : assets) {
+    if (m_allowGlyph && !m_allowGlyph(asset->id))
+      continue;
     DrawAssetThumbnail(*asset, m_isPlacing && m_paletteAssetId == asset->id);
     ImGui::NextColumn();
   }
@@ -1217,6 +1232,15 @@ void DrawStatChanges(const Spell &beforeSpell, const Spell &afterSpell) {
     add("Guided turn", a.homeTurnRate * RAD2DEG, b.homeTurnRate * RAD2DEG, 1,
         "%.0f deg/s");
     add("Follows cursor", a.steerTime, b.steerTime, 1, "%.1fs");
+    add("Crush", std::max(0.0f, a.crush), std::max(0.0f, b.crush), 1, "%.1f");
+    add("Reform", std::max(0.0f, -a.crush), std::max(0.0f, -b.crush), 1,
+        "%.1f");
+    add("Restore", a.restore, b.restore, 1, "%.1f");
+    add("Cooling", -a.temperatureDelta, -b.temperatureDelta, 0, "%.0f C");
+    // A rising column is done once built; only a launched one is held
+    add("Held for", a.holdRise > 0.0f ? 0.0f : a.holdTime,
+        b.holdRise > 0.0f ? 0.0f : b.holdTime, 1, "%.1fs");
+    add("Rises", a.holdRise, b.holdRise, 1, "%.0f cells/s");
   }
   if (rows.empty())
     return;

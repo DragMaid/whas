@@ -7,6 +7,7 @@
 #include "whas/spell/spell_quant.h"
 #include "whas/spell/svg_library.h"
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <catch2/catch_test_macros.hpp>
 #include <nlohmann/json.hpp>
@@ -43,7 +44,7 @@ Spell Make(const char *sigil, std::vector<PlacedGlyph> modifiers = {}) {
   Spell s;
   s.name = sigil;
   s.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f});
-  s.glyphs.push_back({"column", GlyphKind::Sign, {0, -120}, 2.0f, 0.0f});
+  s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 2.0f, 0.0f});
   for (auto &m : modifiers)
     s.glyphs.push_back(m);
   return s;
@@ -59,22 +60,78 @@ SpellComponent Part(const Spell &spell, float scale, float rotation = 0.0f) {
 
 } // namespace
 
-TEST_CASE("a character buried by a spell pops up on top of the pile",
+TEST_CASE("a character buried in sand shrugs it off where it stands",
           "[character]") {
   Simulation sim;
   sim.SetSeed(3);
   Floor(sim);
   Character c;
   c.pos = {50, GRID_H - 4 - Character::HEIGHT};
+  Vector2 start = c.pos;
   // Sand dumped right over the character, up to its head
-  Fill(sim, 48, GRID_H - 12, 55, GRID_H - 5, Element::SAND);
+  Fill(sim, 48, GRID_H - 12, 59, GRID_H - 5, Element::SAND);
 
+  c.Unbury(sim);
   c.Step(sim, {}, DT);
   Rectangle b = c.Bounds();
   for (int y = (int)b.y; y < (int)(b.y + b.height); ++y)
     for (int x = (int)b.x; x < (int)(b.x + b.width); ++x)
       REQUIRE(sim.GetCell(x, y).element == Element::AIR);
-  REQUIRE(c.pos.y <= GRID_H - 12 - Character::HEIGHT);
+  // Not lifted onto the pile: the grains went flying instead
+  REQUIRE(c.pos.y >= start.y - 1.0f);
+  int flying = 0;
+  sim.GetParticleSystem().ForEachActive(
+      [&](Particle &p) { flying += p.element == Element::SAND; });
+  REQUIRE(flying > 20);
+}
+
+TEST_CASE("rock grown into a character slips it aside, never to the top",
+          "[character]") {
+  Simulation sim;
+  Floor(sim);
+  Character c;
+  c.pos = {50, GRID_H - 4 - Character::HEIGHT};
+  // A wall grows two cells into the body from the left, all the way up
+  Fill(sim, 30, GRID_H - 60, 51, GRID_H - 5, Element::ROCK);
+  for (int y = GRID_H - 60; y <= GRID_H - 5; ++y)
+    for (int x = 30; x <= 51; ++x)
+      sim.Anchor(x, y);
+  c.Step(sim, {}, DT);
+  REQUIRE(c.pos.x >= 52.0f);
+  REQUIRE(c.pos.x <= 52.0f + Character::UNSTUCK_REACH);
+  REQUIRE(c.pos.y > GRID_H - 30.0f);
+
+  // Sealed in: it stays put and has to dig
+  Character sealed;
+  sealed.pos = {35, GRID_H - 40.0f};
+  Vector2 at = sealed.pos;
+  sealed.Step(sim, {false, true, true, false}, DT);
+  REQUIRE(sealed.pos.x == at.x);
+  REQUIRE(sealed.pos.y == at.y);
+}
+
+TEST_CASE("an earth crushing spell digs and leaves no earth behind",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(9);
+  Fill(sim, 0, GRID_H - 4, GRID_W - 1, GRID_H - 1, Element::ROCK);
+  Fill(sim, 150, GRID_H - 60, 175, GRID_H - 5, Element::ROCK);
+  for (int y = GRID_H - 60; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (sim.GetCell(x, y).element == Element::ROCK)
+        sim.Anchor(x, y);
+  int rock = Count(sim, Element::ROCK);
+  SpellStats dig = SpellQuant::Canonical(
+      Make("earth", {Sign("crushing", 2.0f), Sign("convergence", 2.0f)}));
+  REQUIRE(dig.crush > 0.0f);
+  sim.CastSpell(dig, {120, GRID_H - 30.0f}, {1, 0});
+  Step(sim, 120);
+  REQUIRE(Count(sim, Element::EARTH) == 0);
+  REQUIRE(Count(sim, Element::ROCK) < rock);
+  int earthParticles = 0;
+  sim.GetParticleSystem().ForEachActive(
+      [&](Particle &p) { earthParticles += p.element == Element::EARTH; });
+  REQUIRE(earthParticles == 0);
 }
 
 TEST_CASE("crushing grinds earth into sand and inverted crushing reforms it",
@@ -92,6 +149,13 @@ TEST_CASE("crushing grinds earth into sand and inverted crushing reforms it",
   Step(sim, 90);
   int crushed = Count(sim, Element::SAND);
   REQUIRE(crushed > sand + 10);
+  // It digs: the grit is thrown out of the block, not left where it was
+  int thrown = 0;
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      thrown += sim.GetCell(x, y).element == Element::SAND &&
+                (x < 150 || x >= 170 || y < GRID_H - 40);
+  REQUIRE(thrown > 5);
 
   SpellStats reform =
       SpellQuant::Canonical(Make("water", {Sign("crushing", 2.0f, true)}));
@@ -200,6 +264,7 @@ TEST_CASE("light is fast, weightless and blinds whoever it bursts near",
     Match::ApplyEffects(sim, chars, 2);
   }
   REQUIRE(chars[1].flash > 0.0f);
+  REQUIRE(chars[1].flash <= 2.0f); // a glare, not a knockout
   REQUIRE(chars[0].flash == 0.0f); // far from every burst
   REQUIRE(Count(sim, Element::LIGHT) == 0); // never lands as a cell
 }
@@ -477,7 +542,7 @@ TEST_CASE("the dragon sigil shapes a spell but needs an element", "[spell]") {
 
   Spell alone;
   alone.glyphs = {{"dragon", GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
-                  {"column", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
+                  {"levitation", GlyphKind::Sign, {0, -120}, 1.0f, 0.0f}};
   REQUIRE_FALSE(SpellSystem::Evaluate(alone).valid);
 }
 
@@ -894,7 +959,8 @@ Spell GuidedAt(const char *sigil, const char *target) {
 } // namespace
 
 TEST_CASE("guided water puts out the fire it was sent after", "[spell]") {
-  // A burning pile off to the side of where the water is aimed
+  // A burning pile off to the side of where the water is aimed. How much is
+  // burning each tick, with and without the water.
   auto run = [](bool cast) {
     Simulation sim;
     sim.SetSeed(47);
@@ -904,13 +970,20 @@ TEST_CASE("guided water puts out the fire it was sent after", "[spell]") {
     if (cast)
       sim.CastSpell(SpellQuant::Canonical(GuidedAt("water", "fire")),
                     {110, GRID_H - 40.0f}, {1, -0.5f}, 1);
-    Step(sim, 90);
-    return Burning(sim);
+    std::vector<int> burning;
+    for (int i = 0; i < 90; ++i) {
+      Step(sim, 1);
+      burning.push_back(Burning(sim));
+    }
+    return burning;
   };
-  // Compared with leaving it: what's left burning is the wood the water
-  // never reached catching again
-  int left = run(false), doused = run(true);
-  REQUIRE(doused < left * 3 / 4);
+  // The wood it didn't soak flares up again afterwards, so look at the
+  // moment it lands: a good share of the fire goes out
+  std::vector<int> left = run(false), doused = run(true);
+  bool putOut = false;
+  for (size_t i = 0; i < left.size(); ++i)
+    putOut |= doused[i] < left[i] * 3 / 4;
+  REQUIRE(putOut);
 }
 
 TEST_CASE("guided water goes after an enemy's fireball first", "[spell]") {
@@ -990,4 +1063,306 @@ TEST_CASE("convergence makes spells faster, tighter and smaller", "[spell]") {
   REQUIRE(blast.valid);
   REQUIRE(blast.force > gust.force);
   REQUIRE(blast.diameter < gust.diameter);
+}
+
+namespace {
+
+int Held(const Simulation &sim, Element e) {
+  int n = 0;
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x) {
+      const Cell &c = sim.GetCell(x, y);
+      n += c.element == e && (c.flags & CELL_HELD);
+    }
+  return n;
+}
+
+// Ticks for a standing column to rise its full length, and a couple more
+int RiseTicks(const SpellStats &s) {
+  return static_cast<int>(std::ceil(s.holdLength / s.holdRise / DT)) + 2;
+}
+
+Spell ColumnOf(const char *sigil, bool levitate, bool repetition = false) {
+  Spell s;
+  s.name = "col";
+  s.glyphs = {{sigil, GlyphKind::Sigil, {0, 0}, 1.0f, 0.0f},
+              {"column", GlyphKind::Sign, {100, 0}, 1.0f, 0.0f}};
+  if (levitate)
+    s.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -120}, 2.0f, 0.0f});
+  if (repetition)
+    s.glyphs.push_back({"repetition", GlyphKind::Sign, {-100, 0}, 1.0f, 0.0f});
+  return s;
+}
+
+} // namespace
+
+TEST_CASE("a standing column is done once built: earth stays, water falls",
+          "[spell]") {
+  for (const char *sigil : {"earth", "water"}) {
+    Simulation sim;
+    sim.SetSeed(11);
+    Floor(sim);
+    SpellStats stats = SpellQuant::Canonical(ColumnOf(sigil, false));
+    REQUIRE(stats.valid);
+    REQUIRE(stats.speed == 0.0f);
+    Element e = stats.element;
+    int floor = Count(sim, e);
+    // Aimed straight up from just above the floor
+    sim.CastSpell(stats, {100, GRID_H - 12.0f}, {0, -1});
+    Step(sim, RiseTicks(stats));
+    REQUIRE(Held(sim, e) == 0);
+    REQUIRE(sim.GetActiveSpellEffects().empty());
+    int built = Count(sim, e) - floor;
+    // A wall raises well more than the spell would throw
+    REQUIRE(built >= stats.particleCount * 2);
+    Step(sim, 60);
+    bool standing = true;
+    for (int y = GRID_H - 25; y < GRID_H - 20; ++y)
+      standing &= sim.GetCell(100, y).element == e;
+    REQUIRE(standing == (e == Element::EARTH));
+  }
+}
+
+TEST_CASE("repetition mends a launched block, without it damage stays",
+          "[spell]") {
+  for (bool repetition : {false, true}) {
+    Simulation sim;
+    sim.SetSeed(12);
+    Floor(sim);
+    SpellStats stats =
+        SpellQuant::Canonical(ColumnOf("earth", true, repetition));
+    sim.CastSpell(stats, {60, GRID_H - 40.0f}, {1, 0});
+    Step(sim, (int)(stats.range / stats.speed * 60) + 4);
+    int held = Held(sim, Element::EARTH);
+    REQUIRE(held > 10);
+    for (int y = 0; y < GRID_H; ++y)
+      for (int x = 0; x < GRID_W; ++x)
+        if (sim.GetCell(x, y).flags & CELL_HELD) {
+          sim.Erase(x, y, 1); // a hole knocked in it
+          y = GRID_H;
+          break;
+        }
+    Step(sim, 10);
+    if (repetition)
+      REQUIRE(Held(sim, Element::EARTH) == held);
+    else
+      REQUIRE(Held(sim, Element::EARTH) < held);
+  }
+}
+
+TEST_CASE("levitation launches a column as one block that lands held",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(13);
+  Floor(sim);
+  SpellStats stats = SpellQuant::Canonical(ColumnOf("sand", true));
+  REQUIRE(stats.speed > 0.0f);
+  sim.CastSpell(stats, {60, GRID_H - 40.0f}, {1, 0});
+  Step(sim, 2);
+  REQUIRE(Held(sim, Element::SAND) == 0); // flying
+  Step(sim, (int)(stats.range / stats.speed * 60) + 4);
+  int held = Held(sim, Element::SAND);
+  REQUIRE(held > stats.particleCount / 2);
+  // Set down near where it flew, still in the air: held, not fallen
+  int far = 0;
+  for (int y = GRID_H - 60; y < GRID_H - 20; ++y)
+    for (int x = 60 + (int)stats.range - 10; x < GRID_W; ++x)
+      far += sim.GetCell(x, y).element == Element::SAND;
+  REQUIRE(far > held / 2);
+}
+
+TEST_CASE("a column rises out of its base, quicker with more column signs",
+          "[spell]") {
+  SpellStats one = SpellQuant::Canonical(ColumnOf("earth", false));
+  Spell twoSigns = ColumnOf("earth", false);
+  twoSigns.glyphs.push_back({"column", GlyphKind::Sign, {-100, 0}, 1.0f, 0.0f});
+  SpellStats two = SpellQuant::Canonical(twoSigns);
+  Spell big = ColumnOf("earth", false);
+  big.glyphs.push_back(Sign("expansion", 2.0f));
+  SpellStats bigger = SpellQuant::Canonical(big);
+  REQUIRE(one.holdRise > 0.0f);
+  REQUIRE(two.holdRise > one.holdRise);
+  REQUIRE(bigger.holdLength * bigger.holdWidth > one.holdLength * one.holdWidth);
+  REQUIRE(bigger.holdRise < one.holdRise);
+  // Levitated, it flies instead
+  REQUIRE(SpellQuant::Canonical(ColumnOf("earth", true)).holdRise == 0.0f);
+
+  Simulation sim;
+  sim.SetSeed(14);
+  Floor(sim);
+  int floor = Count(sim, Element::EARTH);
+  sim.CastSpell(one, {100, GRID_H - 4.5f}, {0, -1}, -1, true);
+  Step(sim, 2);
+  int early = Count(sim, Element::EARTH) - floor;
+  REQUIRE(early > 0);
+  REQUIRE(early < one.particleCount / 2);
+  Step(sim, RiseTicks(one));
+  REQUIRE(Count(sim, Element::EARTH) - floor > early * 2);
+}
+
+TEST_CASE("column signs turn the block like levitation turns a spell",
+          "[spell]") {
+  Spell straight = ColumnOf("earth", false);
+  Spell turned = straight;
+  turned.glyphs[1].rotationDeg = 90.0f; // the column sign points right
+  SpellStats a = SpellQuant::Canonical(straight);
+  SpellStats b = SpellQuant::Canonical(turned);
+  REQUIRE(a.offsetRad == 0.0f);
+  REQUIRE(b.offsetRad > 0.5f);
+  turned.glyphs[1].rotationDeg = -90.0f;
+  REQUIRE(SpellQuant::Canonical(turned).offsetRad < -0.5f);
+}
+
+TEST_CASE("a column cast at a slant is as solid as an upright one", "[spell]") {
+  SpellStats stats = SpellQuant::Canonical(ColumnOf("earth", false));
+  auto cast = [&](Simulation &sim, Vector2 dir) {
+    sim.SetSeed(17);
+    sim.CastSpell(stats, {200, GRID_H / 2.0f}, dir, -1, true);
+    for (int i = 0; i < RiseTicks(stats); ++i)
+      sim.Update(DT);
+  };
+  Simulation straight, slanted;
+  cast(straight, {0, -1});
+  cast(slanted, {0.7071f, -0.7071f});
+  int upright = Count(straight, Element::EARTH);
+  int slant = Count(slanted, Element::EARTH);
+  REQUIRE(slant > upright * 0.9f);
+  REQUIRE(slant < upright * 1.1f);
+  int holes = 0;
+  for (int y = 1; y < GRID_H - 1; ++y)
+    for (int x = 1; x < GRID_W - 1; ++x) {
+      auto earth = [&](int i, int j) {
+        return slanted.GetCell(i, j).element == Element::EARTH;
+      };
+      holes += !earth(x, y) && earth(x - 1, y) && earth(x + 1, y) &&
+               earth(x, y - 1) && earth(x, y + 1);
+    }
+  REQUIRE(holes == 0);
+}
+
+TEST_CASE("column signs set how deep a drill digs, the sigil how much a "
+          "column builds",
+          "[spell]") {
+  auto drillOf = [](float sigil, float column) {
+    Spell s = ColumnOf("earth", false);
+    s.glyphs[0].scale = sigil;
+    s.glyphs[1].scale = column;
+    s.glyphs.push_back(Sign("crushing", 1.0f));
+    return SpellQuant::Canonical(s);
+  };
+  SpellStats one = drillOf(1.0f, 1.0f);
+  REQUIRE(drillOf(1.0f, 2.0f).holdLength > one.holdLength * 1.5f);
+  REQUIRE(drillOf(2.0f, 1.0f).holdLength == one.holdLength);
+  REQUIRE(one.holdWidth >= Character::WIDTH + 2);
+
+  Spell small = ColumnOf("earth", false), more = small, big = small;
+  more.glyphs[1].scale = 2.0f;
+  big.glyphs[0].scale = 2.0f;
+  float built = SpellQuant::Canonical(small).holdLength *
+                SpellQuant::Canonical(small).holdWidth;
+  REQUIRE(SpellQuant::Canonical(more).holdLength *
+              SpellQuant::Canonical(more).holdWidth == built);
+  REQUIRE(SpellQuant::Canonical(big).holdLength *
+              SpellQuant::Canonical(big).holdWidth > built);
+}
+
+TEST_CASE("drilling straight down under yourself drops you into the hole",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(18);
+  Fill(sim, 0, GRID_H - 40, GRID_W - 1, GRID_H - 1, Element::EARTH);
+  Character c;
+  c.pos = {196, GRID_H - 40 - Character::HEIGHT};
+  for (int i = 0; i < 10; ++i)
+    c.Step(sim, {}, DT);
+  float before = c.pos.y;
+  Spell drill = ColumnOf("earth", false);
+  drill.glyphs.push_back(Sign("crushing", 1.0f));
+  SpellStats stats = SpellQuant::Canonical(drill);
+  INFO("drill " << stats.holdWidth << " x " << stats.holdLength);
+  sim.CastSpell(stats, c.Center(), {0, 1}, c.id, false);
+  int ticks = RiseTicks(stats) + static_cast<int>(stats.holdTime / DT);
+  for (int i = 0; i < ticks; ++i) {
+    sim.Update(DT);
+    c.Unbury(sim);
+    c.Step(sim, {}, DT);
+  }
+  INFO("fell " << c.pos.y - before);
+  REQUIRE(c.pos.y > before + Character::HEIGHT);
+}
+
+TEST_CASE("a rising column lifts the character standing over it", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(15);
+  Floor(sim);
+  Character c;
+  c.pos = {96, GRID_H - 4 - Character::HEIGHT};
+  for (int i = 0; i < 10; ++i)
+    c.Step(sim, {}, DT);
+  float before = c.pos.y;
+  SpellStats stats = SpellQuant::Canonical(ColumnOf("earth", false));
+  sim.CastSpell(stats, {100, GRID_H - 4.5f}, {0, -1}, -1, true);
+  for (int i = 0; i < RiseTicks(stats); ++i) {
+    sim.Update(DT);
+    c.Step(sim, {}, DT);
+  }
+  REQUIRE(c.pos.y < before - stats.holdLength * 0.5f);
+}
+
+TEST_CASE("a crushing column drills a hole and throws the grit back out",
+          "[spell]") {
+  Simulation sim;
+  sim.SetSeed(16);
+  Fill(sim, 0, GRID_H - 4, GRID_W - 1, GRID_H - 1, Element::ROCK);
+  Fill(sim, 130, GRID_H - 60, 200, GRID_H - 5, Element::ROCK);
+  for (int y = GRID_H - 60; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      if (sim.GetCell(x, y).element == Element::ROCK)
+        sim.Anchor(x, y);
+  int rock = Count(sim, Element::ROCK);
+  Spell drill = ColumnOf("earth", false);
+  drill.glyphs.push_back(Sign("crushing", 1.0f));
+  SpellStats stats = SpellQuant::Canonical(drill);
+  REQUIRE(stats.holdRise > 0.0f);
+  REQUIRE(stats.crush > 0.0f);
+  // Placed on the wall's face, it bores in
+  sim.CastSpell(stats, {129.5f, GRID_H - 30.0f}, {1, 0}, -1, true);
+  int back = 0, ahead = 0;
+  for (int i = 0; i < RiseTicks(stats); ++i) {
+    sim.Update(DT);
+    sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+      if (p.element == Element::SAND)
+        (p.vel.x < 0.0f ? back : ahead)++;
+    });
+  }
+  REQUIRE(Count(sim, Element::ROCK) < rock - stats.holdLength);
+  REQUIRE(Count(sim, Element::EARTH) == 0);
+  REQUIRE(back > ahead * 3);
+  // The bore is open along the middle of the drill
+  int open = 0;
+  for (int x = 131; x < 130 + (int)stats.holdLength - 1; ++x)
+    open += sim.GetCell(x, GRID_H - 31).element != Element::ROCK;
+  REQUIRE(open >= (int)stats.holdLength - 4);
+}
+
+TEST_CASE("crushing debris flies back the way the spell came", "[spell]") {
+  Simulation sim;
+  sim.SetSeed(17);
+  Fill(sim, 150, GRID_H - 60, 175, GRID_H - 5, Element::ROCK);
+  for (int y = GRID_H - 60; y <= GRID_H - 5; ++y)
+    for (int x = 150; x <= 175; ++x)
+      sim.Anchor(x, y);
+  SpellStats dig = SpellQuant::Canonical(
+      Make("earth", {Sign("crushing", 2.0f), Sign("convergence", 2.0f)}));
+  sim.CastSpell(dig, {120, GRID_H - 30.0f}, {1, 0});
+  int back = 0, ahead = 0;
+  for (int i = 0; i < 60; ++i) {
+    sim.Update(DT);
+    sim.GetParticleSystem().ForEachActive([&](Particle &p) {
+      if (p.element == Element::SAND)
+        (p.vel.x < 0.0f ? back : ahead)++;
+    });
+  }
+  REQUIRE(back > 0);
+  REQUIRE(back > ahead * 3);
 }

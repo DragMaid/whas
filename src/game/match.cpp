@@ -4,6 +4,7 @@
 #include "whas/engine/simulation.h"
 #include "whas/game/arena_gen.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <span>
 
@@ -46,12 +47,15 @@ State BeginRound(Simulation &sim, uint64_t matchSeed, int round,
     c.facing = c.pos.x < GRID_W * 0.5f ? 1 : -1;
     c.look = c.facing;
     c.maxHp = c.hp = MAX_HP;
-    c.Step(sim, {}, 0.0f); // resolve grounded before the first plan
+    c.PlaceClear(sim); // out of the terrain, grounded before the first plan
   }
   return state;
 }
 
 namespace {
+
+// Burn exposure (ticks) a fire projectile passing through a body leaves
+constexpr int FIRE_HIT_EXPOSURE = 3;
 
 void ApplyHits(Simulation &sim, Character *chars, int count) {
   for (const ParticleHit &hit : sim.GetParticleSystem().TakeHits()) {
@@ -60,7 +64,9 @@ void ApplyHits(Simulation &sim, Character *chars, int count) {
         continue;
       c.hp = std::max(0.0f, c.hp - hit.power * DAMAGE_PER_POWER);
       if (hit.element == Element::WATER)
-        c.burnStacks = 0;
+        c.Soak();
+      else if (hit.element == Element::FIRE)
+        c.Ignite(FIRE_HIT_EXPOSURE);
     }
   }
 }
@@ -86,13 +92,20 @@ void ApplyFields(const Simulation &sim, Character *chars, int count) {
   }
 }
 
-// Light bursts blind everyone close enough, the caster too
+// Light bursts blind everyone close enough, the caster too: fully at the
+// burst, a quarter as long at its edge, and never for long
+constexpr float EDGE_BLIND = 0.25f;
+
 void ApplyFlashes(Simulation &sim, Character *chars, int count) {
   for (const Flash &flash : sim.GetParticleSystem().TakeFlashes()) {
     for (Character &c : std::span(chars, count)) {
       Vector2 d{c.Center().x - flash.pos.x, c.Center().y - flash.pos.y};
-      if (c.Alive() && d.x * d.x + d.y * d.y <= flash.radius * flash.radius)
-        c.flash = std::max(c.flash, flash.time);
+      float dist = std::sqrt(d.x * d.x + d.y * d.y);
+      if (!c.Alive() || dist > flash.radius)
+        continue;
+      float near = 1.0f - (1.0f - EDGE_BLIND) * dist / flash.radius;
+      c.flash = std::max(c.flash,
+                         std::min(MAX_BLIND_SECONDS, flash.time * near));
     }
   }
 }
@@ -176,6 +189,7 @@ uint64_t Hash(const Simulation &sim, const State &state) {
     addI(c.facing);
     addI(c.burnStacks);
     addI(c.burnExposure);
+    addF(c.wet);
   }
   return h;
 }
@@ -196,6 +210,7 @@ std::string EncodeSnapshot(const Simulation &sim, const State &state) {
     out.Put(c.maxHp);
     out.Put(c.burnStacks);
     out.Put(c.burnExposure);
+    out.Put(c.wet);
   }
   std::vector<uint8_t> world = sim.SaveSnapshot();
   out.Put(static_cast<uint32_t>(world.size()));
@@ -224,6 +239,7 @@ bool DecodeSnapshot(const std::string &text, Simulation &sim, State &state) {
       c.maxHp = in.Get<float>();
       c.burnStacks = in.Get<int>();
       c.burnExposure = in.Get<int>();
+      c.wet = in.Get<float>();
     }
     uint32_t size = in.Get<uint32_t>();
     const uint8_t *world = in.Take(size);

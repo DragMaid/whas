@@ -25,8 +25,8 @@ constexpr Entry kEntries[] = {
                "lands as rock."}},
     {"light",
      {"Light", "Makes light: weightless and very fast, it breaks nothing. "
-               "Every mote bursts into a flash that blinds anyone close, you "
-               "included. With guidance and a human sigil it flies at your "
+               "Every mote bursts into a flash that dazzles anyone close, you "
+               "included, for up to two seconds. With guidance and a human sigil it flies at your "
                "opponent."}},
     {"wind",
      {"Wind", "Moves air and whatever it carries, players included. Needs a "
@@ -49,18 +49,31 @@ constexpr Entry kEntries[] = {
                 "weaving body. Needs an element sigil beside it and plenty "
                 "of material (collection helps)."}},
     // Signs: how the spell behaves
+    {"levitation",
+     {"Levitation", "Thrust: points the way the spell flies. More or bigger "
+                    "signs fly faster and further; unbalanced ones bend it "
+                    "sideways."}},
     {"column",
-     {"Column", "Thrust: points the way the spell flies. More or bigger "
-                "columns fly faster and further; unbalanced ones bend it "
-                "sideways."}},
+     {"Column", "Holds the element as a block that rises out of its base: in "
+                "front of you, or straight out of the surface it's drawn on "
+                "(right click). It points like levitation: turn the sign to "
+                "lean it. More signs rise faster; a bigger block rises "
+                "slower. It lifts whoever stands on it, stops at solid "
+                "ground and lets go once built. With crushing it's a drill "
+                "that grinds its path; more signs dig deeper. Levitation "
+                "launches the block whole, held where it lands for longer "
+                "with more signs; repetition keeps that one as cast and "
+                "mends it."}},
     {"convergence",
      {"Convergence", "Packs the spell tighter: faster and further, denser "
                      "and narrower, with less material, and a little harder "
                      "where it lands. Wind underfoot throws you harder; a "
                      "wind field becomes a narrower, stronger jet."}},
     {"crushing",
-     {"Crushing", "Grinds what it hits: earth and rock turn to sand. Inverted "
-                  "(F), it packs sand back into earth."}},
+     {"Crushing", "Makes the spell a digging tool: it leaves nothing of its "
+                  "own. Earth and rock it hits burst out as sand, thrown back "
+                  "the way the spell came. With a column it drills. "
+                  "Inverted (F), it packs sand into earth instead."}},
     {"repetition",
      {"Repetition", "Puts what it hits back the way it was: its natural heat "
                     "and hardness, no longer burning."}},

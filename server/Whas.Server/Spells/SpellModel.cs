@@ -77,6 +77,10 @@ public sealed class SpellStats
     public float HomeRadius;
     public float SteerTime;
     public float SteerRate;
+    public float HoldTime;
+    public float HoldLength;
+    public float HoldWidth;
+    public float HoldRise;
     public List<SpellStats> Parts = [];
 }
 
@@ -113,6 +117,14 @@ public sealed record QuantizedStats(
     [property: JsonPropertyName("homeRadius")] int HomeRadius = 0,
     [property: JsonPropertyName("steerTime")] int SteerTime = 0,
     [property: JsonPropertyName("steerRate")] int SteerRate = 0,
+    [property: JsonPropertyName("holdTime"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int HoldTime = 0,
+    [property: JsonPropertyName("holdLength"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int HoldLength = 0,
+    [property: JsonPropertyName("holdWidth"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int HoldWidth = 0,
+    [property: JsonPropertyName("holdRise"),
+               JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int HoldRise = 0,
     [property: JsonPropertyName("parts"),
                JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     List<QuantizedStats>? Parts = null)
@@ -135,6 +147,8 @@ public sealed record QuantizedStats(
         HomeTarget == o.HomeTarget && HomeElement == o.HomeElement &&
         HomeTurnRate == o.HomeTurnRate && HomeRadius == o.HomeRadius &&
         SteerTime == o.SteerTime && SteerRate == o.SteerRate &&
+        HoldTime == o.HoldTime && HoldLength == o.HoldLength && HoldWidth == o.HoldWidth &&
+        HoldRise == o.HoldRise &&
         (Parts ?? []).SequenceEqual(o.Parts ?? []);
 
     public override int GetHashCode() =>

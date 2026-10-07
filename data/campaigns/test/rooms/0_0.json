@@ -1,0 +1,173 @@
+{
+ "background": "",
+ "conditions": [],
+ "enemies": [
+  {
+   "castEvery": 1.600000023841858,
+   "damage": 4.0,
+   "hp": 30.0,
+   "kind": 0,
+   "pos": [
+    22.70553970336914,
+    216.7405242919922
+   ],
+   "speed": 18.0,
+   "spells": [
+    {
+     "format": 3,
+     "glyphs": [
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 1.0,
+       "x": -4.816176414489746,
+       "y": -129.0735321044922
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": -90.0,
+       "scale": 1.0,
+       "x": 133.24754333496094,
+       "y": 14.769607543945313
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 90.0,
+       "scale": 1.0,
+       "x": -151.22793579101563,
+       "y": 7.7058820724487305
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": 4.816176414489746,
+       "y": 158.6127471923828
+      },
+      {
+       "assetId": "light",
+       "kind": "sigil",
+       "rotation": 0.0,
+       "scale": 3.0,
+       "x": -3.531862735748291,
+       "y": -2.56862735748291
+      },
+      {
+       "assetId": "expansion",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": 108.20343017578125,
+       "y": -74.49019622802734
+      },
+      {
+       "assetId": "expansion",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": 98.57107543945313,
+       "y": 120.7254867553711
+      },
+      {
+       "assetId": "expansion",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -81.23284149169922,
+       "y": 100.8186264038086
+      },
+      {
+       "assetId": "expansion",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -93.43382263183594,
+       "y": -75.77450561523438
+      }
+     ],
+     "name": "light"
+    }
+   ],
+   "tag": ""
+  }
+ ],
+ "npcs": [
+  {
+   "dialogue": [
+    {
+     "replies": [],
+     "teach": "",
+     "teachSigil": false,
+     "text": "Hello, little witch."
+    }
+   ],
+   "name": "Stranger",
+   "pos": [
+    247.5,
+    216.0
+   ],
+   "tag": ""
+  }
+ ],
+ "objects": [
+  {
+   "glyph": "water",
+   "kind": 2,
+   "pos": [
+    265.5,
+    228.0
+   ],
+   "sigil": true
+  },
+  {
+   "kind": 1,
+   "pos": [
+    279.5,
+    228.0
+   ]
+  }
+ ],
+ "pos": [
+  0,
+  0
+ ],
+ "sealed": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "terrain": {
+  "cells": "ucIFAAEHhgYAGwIFAI0DAgEAkiIC",
+  "format": 1,
+  "gen": {
+   "biome": 0,
+   "hills": 100,
+   "rocks": 100,
+   "seed": "1",
+   "vegetation": 100,
+   "waterRise": 0
+  },
+  "id": "",
+  "name": "room",
+  "settings": {},
+  "size": [
+   400,
+   240
+  ],
+  "spawns": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ }
+}

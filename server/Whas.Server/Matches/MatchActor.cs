@@ -69,6 +69,7 @@ public sealed class MatchActor
     string _phase = "decks";
     DateTimeOffset _phaseDeadline;
     readonly bool[] _committed = new bool[Players];
+    volatile bool _over;
 
     public long MatchId { get; private set; }
     public ulong Seed { get; }
@@ -97,7 +98,8 @@ public sealed class MatchActor
             _playerIds[i] = _sessions[i]!.Player!.Id;
     }
 
-    public int SlotOf(long playerId) => Array.IndexOf(_playerIds, playerId);
+    // -1 once the match is over (it lingers in the running list a moment)
+    public int SlotOf(long playerId) => _over ? -1 : Array.IndexOf(_playerIds, playerId);
 
     public void Post(MatchEvent e) => _events.Writer.TryWrite(e);
 
@@ -167,13 +169,16 @@ public sealed class MatchActor
         {
             _log.LogError(e, "match {Match} result not saved", MatchId);
         }
-        Broadcast("matchEnd", new { winner, reason, status = status.ToString(), roundsWon = _roundsWon });
+        // Free the players before telling them, so they can queue or open a
+        // room the moment matchEnd arrives
+        _over = true;
         foreach (var s in _sessions)
             if (s is not null && s.Match == this)
             {
                 s.Match = null;
                 s.Slot = -1;
             }
+        Broadcast("matchEnd", new { winner, reason, status = status.ToString(), roundsWon = _roundsWon });
     }
 
     // ---- Events ------------------------------------------------------------
