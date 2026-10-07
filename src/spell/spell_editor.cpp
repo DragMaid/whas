@@ -1172,6 +1172,27 @@ void SpellEditor::SaveCurrent() {
     m_statusMessage = "Spell contains invalid placements (red).";
     return;
   }
+  // A campaign's workbench: a blueprint can be used as found, but what's
+  // saved here may only hold glyphs the player knows
+  if (m_allowGlyph) {
+    auto unknown = [&](const std::vector<PlacedGlyph> &glyphs) -> const PlacedGlyph * {
+      for (const PlacedGlyph &g : glyphs)
+        if (!m_allowGlyph(g.assetId))
+          return &g;
+      return nullptr;
+    };
+    const PlacedGlyph *g = unknown(m_currentSpell.glyphs);
+    for (const SpellComponent &c : m_currentSpell.components)
+      if (!g)
+        g = unknown(c.glyphs);
+    if (g) {
+      GlyphDocs::Info info = GlyphDocs::Get(g->assetId);
+      m_statusMessage = std::string("You don't know ") +
+                        (info.name ? info.name : g->assetId.c_str()) +
+                        " yet, so you can't draw it.";
+      return;
+    }
+  }
   m_currentSpell.name = m_nameBuffer;
   std::string err;
   bool saved = m_spells->Save(m_currentSpell, err);

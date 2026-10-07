@@ -48,9 +48,12 @@ const char *ObjectName(ObjectKind kind);
 struct ObjectDef {
   ObjectKind kind = ObjectKind::Gate;
   Vector2 pos{0, 0}; // centre on the floor, cells
-  // Shrine: the glyph it teaches and whether it's a sigil
+  // Shrine: the glyph it teaches ("" for none) and whether it's a sigil,
+  // and blueprints: ready-made spells it puts in the backpack. A blueprint
+  // doesn't teach its glyphs.
   std::string glyph;
   bool sigil = false;
+  std::vector<Spell> spells;
 };
 
 // Talking: node 0 is where a conversation starts. A reply jumps to another
@@ -64,6 +67,7 @@ struct DialogueNode {
   std::vector<DialogueReply> replies; // up to MAX_REPLIES
   std::string teach;                  // glyph id learned on reaching it, or ""
   bool teachSigil = false;
+  std::vector<Spell> spells; // blueprints given on reaching it
 };
 constexpr int MAX_REPLIES = 3;
 

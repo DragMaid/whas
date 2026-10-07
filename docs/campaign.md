@@ -28,7 +28,11 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 - **Windowway gates**: walking into one opens it and makes it your
   respawn point. `E` at any open gate shows the rooms you've been through;
   click a room with a lit gate to travel there.
-- **Shrines** teach their sigil or sign the first time you touch them.
+- **Shrines** teach their sigil or sign the first time you touch them,
+  and/or give blueprints: ready-made spells that go into the backpack (and
+  an empty slot). A blueprint doesn't teach its glyphs: you can cast it and
+  change it at a workbench, but you can only save drawings made of glyphs
+  you know. People can give blueprints too, once per dialogue node.
 - **Workbenches** (`E`) open the spell editor with only the glyphs you
   know. What you save goes into this campaign's backpack, not your main
   library.
@@ -94,9 +98,10 @@ instead.
   mage's spells are cards: drag them up from your library (or double-click
   one), x takes one off, and "Draw a new spell for it" opens the spell
   editor and gives the mage what you save. **Spells** opens your library; a shrine's glyph; an NPC's name, tag
-  and dialogue. Dialogue is a list of nodes: node 1 starts the talk, each
+  and dialogue. A shrine teaches a glyph (or none) and gives blueprints,
+  picked like a mage's spells. Dialogue is a list of nodes: node 1 starts the talk, each
   node has a line, up to three replies (each leads to a node or ends the
-  talk) and optionally a glyph it teaches.
+  talk) and optionally a glyph it teaches and blueprints it gives.
 - **Room** tab:
   - *To leave this room*: tick the edges to seal and add conditions. Every
     condition must hold to open them:

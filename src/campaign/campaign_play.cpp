@@ -113,6 +113,16 @@ void DrawCampaignObject(const ObjectDef &o, bool lit, const SvgLibrary &glyphs) 
                     g.y + (s.b.y - asset->viewHeight * 0.5f) * k},
                    2.0f, c);
     }
+    // Blueprints: an open book (in the circle, or beside a glyph)
+    if (!o.spells.empty()) {
+      bool alone = !glyphs.FindById(o.glyph);
+      Vector2 b = alone ? g : Vector2{g.x + 18, g.y + 12};
+      float w = alone ? 10.0f : 6.0f, h = alone ? 8.0f : 5.0f;
+      DrawTriangle({b.x - w, b.y - h}, {b.x - w, b.y + h}, {b.x, b.y + h * 0.7f}, c);
+      DrawTriangle({b.x - w, b.y - h}, {b.x, b.y + h * 0.7f}, {b.x, b.y - h * 0.6f}, c);
+      DrawTriangle({b.x, b.y - h * 0.6f}, {b.x, b.y + h * 0.7f}, {b.x + w, b.y + h}, c);
+      DrawTriangle({b.x, b.y - h * 0.6f}, {b.x + w, b.y + h}, {b.x + w, b.y - h}, c);
+    }
     break;
   }
   }
@@ -281,6 +291,25 @@ void CampaignPlay::SaveProgress() {
 void CampaignPlay::Notify(std::string text, float seconds) {
   m_notice = std::move(text);
   m_noticeTime = seconds;
+  m_noticeSpell.reset();
+}
+
+std::string CampaignPlay::Grant(const std::vector<Spell> &spells) {
+  std::string names;
+  for (const Spell &spell : spells) {
+    std::string ref, error;
+    if (!m_backpackSpells.Import(spell, ref, error))
+      continue;
+    if (std::find(m_save.slots.begin(), m_save.slots.end(), ref) == m_save.slots.end())
+      if (auto empty = std::find(m_save.slots.begin(), m_save.slots.end(), "");
+          empty != m_save.slots.end())
+        *empty = ref;
+    if (const Spell *got = m_backpackSpells.Find(ref)) {
+      names += (names.empty() ? "" : ", ") + got->name;
+      m_noticeSpell = *got;
+    }
+  }
+  return names.empty() ? "" : "Found a blueprint: " + names + " (B to see it)";
 }
 
 const Spell *CampaignPlay::SlotSpell(int slot) const {
@@ -439,13 +468,18 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
     std::pair<RoomPos, int> key{m_room.pos, i};
     if (o.kind == ObjectKind::Shrine && !m_save.shrinesTaken.count(key)) {
       m_save.shrinesTaken.insert(key);
-      bool fresh = m_save.glyphs.insert(o.glyph).second;
-      GlyphDocs::Info info = GlyphDocs::Get(o.glyph);
-      std::string name = info.name ? info.name : o.glyph;
-      Notify(fresh ? "Learned the " + name + (o.sigil ? " sigil" : " sign") +
-                         ": draw it at a workbench"
-                   : "You already know " + name,
-             4.0f);
+      std::string text;
+      if (!o.glyph.empty()) {
+        bool fresh = m_save.glyphs.insert(o.glyph).second;
+        GlyphDocs::Info info = GlyphDocs::Get(o.glyph);
+        std::string name = info.name ? info.name : o.glyph;
+        text = fresh ? "Learned the " + name + (o.sigil ? " sigil" : " sign") +
+                           ": draw it at a workbench"
+                     : "You already know " + name;
+      }
+      Notify(text, 4.0f);
+      if (std::string found = Grant(o.spells); !found.empty())
+        m_notice += (text.empty() ? "" : "\n") + found;
       SaveProgress();
     } else if (o.kind == ObjectKind::Gate &&
                (!m_save.respawn || *m_save.respawn != key)) {
@@ -538,11 +572,24 @@ void CampaignPlay::ReachNode(int node) {
   m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), -1));
   m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), node));
   const DialogueNode &d = npc.dialogue[node];
+  std::string key = TalkKey(m_room.pos, NpcKey(m_talking), node);
+  bool first = !m_save.talked.count(key + "/given");
+  std::string text;
   if (!d.teach.empty() && m_save.glyphs.insert(d.teach).second) {
     GlyphDocs::Info info = GlyphDocs::Get(d.teach);
-    Notify(std::string("Learned the ") + (info.name ? info.name : d.teach.c_str()) +
-               (d.teachSigil ? " sigil" : " sign"),
-           4.0f);
+    text = std::string("Learned the ") + (info.name ? info.name : d.teach.c_str()) +
+           (d.teachSigil ? " sigil" : " sign");
+  }
+  // Blueprints are given once per node, not every time it's read
+  std::string found;
+  if (first && !d.spells.empty()) {
+    m_save.talked.insert(key + "/given");
+    found = Grant(d.spells);
+  }
+  if (!text.empty() || !found.empty()) {
+    std::optional<Spell> card = m_noticeSpell;
+    Notify(text + (text.empty() || found.empty() ? "" : "\n") + found, 4.0f);
+    m_noticeSpell = card;
   }
   SaveProgress();
 }
@@ -831,13 +878,25 @@ void CampaignPlay::DrawHud(UI &ui) {
     }
   }
 
-  if (m_noticeTime > 0.0f) {
+  if (m_noticeTime > 0.0f && !m_notice.empty()) {
+    // A blueprint found shows its card beside the words
     ImVec2 size = ImGui::CalcTextSize(m_notice.c_str());
+    float card = m_noticeSpell ? 72 * s : 0.0f;
+    float pad = card > 0 ? 10 * s : 0.0f;
+    float w = card + pad + size.x, h = std::max(card, size.y);
     ImVec2 c{ImGui::GetIO().DisplaySize.x * 0.5f, ImGui::GetIO().DisplaySize.y * 0.18f};
-    dl->AddRectFilled({c.x - size.x * 0.5f - 12, c.y - 8},
-                      {c.x + size.x * 0.5f + 12, c.y + size.y + 8},
-                      Theme::U32(Tone::Ink, 0.85f));
-    dl->AddText({c.x - size.x * 0.5f, c.y}, Theme::U32(Tone::Parchment), m_notice.c_str());
+    ImVec2 p0{c.x - w * 0.5f, c.y};
+    float fade = std::min(1.0f, m_noticeTime * 2);
+    dl->AddRectFilled({p0.x - 12, p0.y - 8}, {p0.x + w + 12, p0.y + h + 8},
+                      Theme::U32(Tone::Ink, 0.85f * fade));
+    if (m_noticeSpell) {
+      dl->AddRect({p0.x - 2, p0.y - 2}, {p0.x + card + 2, p0.y + card + 2},
+                  Theme::U32(Tone::BrassBright, fade), 4.0f);
+      ui.Thumbnails().Draw(dl, *m_noticeSpell, p0, {p0.x + card, p0.y + card},
+                           static_cast<unsigned char>(255 * fade));
+    }
+    dl->AddText({p0.x + card + pad, p0.y + (h - size.y) * 0.5f},
+                Theme::U32(Tone::Parchment, fade), m_notice.c_str());
   }
   if (!m_player.Alive()) {
     const char *text = "The ink runs out...";

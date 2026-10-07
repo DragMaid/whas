@@ -224,3 +224,19 @@ TEST_CASE("write the sample campaign", "[.sample]") {
   REQUIRE(SaveRoom(c.id, a, error));
   REQUIRE(SaveRoom(c.id, b, error));
 }
+
+TEST_CASE("shrine and dialogue blueprints survive a round trip", "[campaign]") {
+  RoomDef room = BlankRoom({0, 0});
+  ObjectDef shrine{ObjectKind::Shrine, {80, 200}, "", false, {Bolt()}};
+  room.objects = {shrine};
+  NpcDef npc;
+  npc.dialogue[0].spells = {Bolt()};
+  room.npcs = {npc};
+  RoomDef back;
+  std::string error;
+  REQUIRE(FromJson(ToJson(room), back, error));
+  REQUIRE(back.objects[0].glyph.empty());
+  REQUIRE(back.objects[0].spells.size() == 1);
+  REQUIRE(back.objects[0].spells[0].name == Bolt().name);
+  REQUIRE(back.npcs[0].dialogue[0].spells.size() == 1);
+}

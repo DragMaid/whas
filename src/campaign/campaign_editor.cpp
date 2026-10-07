@@ -733,7 +733,7 @@ float CampaignEditor::DrawToolbar(Simulation &sim, float panelWidth) {
       {Tool::Start, EditorIcon::Start, "Where a new game starts (T)"},
       {Tool::Gate, EditorIcon::Gate, "Windowway gate: checkpoint and travel (G)"},
       {Tool::Workbench, EditorIcon::Bench, "Workbench: draw spells (W)"},
-      {Tool::Shrine, EditorIcon::Shrine, "Glyph shrine: teaches a glyph (H)"},
+      {Tool::Shrine, EditorIcon::Shrine, "Shrine: teaches a glyph and/or gives blueprints (H)"},
       {Tool::Npc, EditorIcon::Npc, "Someone to talk to (N)"},
       {Tool::Mage, EditorIcon::Mage, "Mage: casts its spells at you (M)"},
       {Tool::Undead, EditorIcon::Undead, "Undead: charges and knocks back (U)"},
@@ -799,8 +799,15 @@ void CampaignEditor::DrawSelected(UI &ui) {
                          "travels between opened gates.");
     else if (o.kind == ObjectKind::Workbench)
       ImGui::TextWrapped("E opens the spell editor (unlocked glyphs only).");
-    else
-      GlyphCombo("Teaches", o.glyph, o.sigil, ui, false);
+    else {
+      GlyphCombo("Teaches", o.glyph, o.sigil, ui, true);
+      Widgets::SectionHeader("Blueprints it gives");
+      ImGui::TextDisabled("Ready-made spells for the backpack. They don't\n"
+                          "teach their glyphs.");
+      SpellPicker::Draw("shrine", o.spells, ui.Library(), ui.Thumbnails());
+      if (o.glyph.empty() && o.spells.empty())
+        ImGui::TextColored(Theme::Vec(Tone::Oxblood), "It gives nothing yet.");
+    }
     break;
   }
   case Selection::Enemy: {
@@ -876,6 +883,10 @@ void CampaignEditor::DrawNpc(NpcDef &npc, UI &ui) {
       if (d.replies.empty())
         ImGui::TextDisabled("No replies: the talk ends after this.");
       GlyphCombo("Teaches", d.teach, d.teachSigil, ui, true);
+      if (ImGui::TreeNode("blueprints", "Blueprints it gives (%d)", (int)d.spells.size())) {
+        SpellPicker::Draw("node spells", d.spells, ui.Library(), ui.Thumbnails());
+        ImGui::TreePop();
+      }
       if (i > 0 && Widgets::SmallButton("Delete node"))
         remove = i;
     }
@@ -1020,7 +1031,7 @@ void CampaignEditor::DrawConditions() {
 
 void CampaignEditor::DrawCampaignTab(UI &ui) {
   Widgets::SectionHeader("Starting kit");
-  ImGui::TextDisabled("Glyphs a new game knows; shrines and NPCs teach the rest.");
+  ImGui::TextDisabled("Glyphs a new game knows; shrines and people teach the rest.");
   for (GlyphKind kind : {GlyphKind::Sigil, GlyphKind::Sign}) {
     int n = 0;
     for (const SvgAsset *a : ui.Glyphs().GetByKind(kind)) {

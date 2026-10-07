@@ -66,6 +66,8 @@ private:
   void Cast(Simulation &sim, UI &ui);
   void SaveProgress();
   void Notify(std::string text, float seconds = 2.5f);
+  // Blueprints into the backpack (and empty slots); returns the notice
+  std::string Grant(const std::vector<Spell> &spells);
   const Spell *SlotSpell(int slot) const;
   bool PanelOpen() const {
     return m_backpack || m_warp || m_bench.IsOpen() || m_talking >= 0;
@@ -119,6 +121,7 @@ private:
 
   std::string m_notice;
   float m_noticeTime = 0.0f;
+  std::optional<Spell> m_noticeSpell; // a blueprint just found, shown with the notice
   float m_hudAlpha = 1.0f;
   float m_helpTime = 0.0f; // the key hints show this long after starting
 };

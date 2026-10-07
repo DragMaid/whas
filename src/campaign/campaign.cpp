@@ -144,6 +144,33 @@ bool FromJson(const json &j, CampaignDef &c, std::string &error) {
   }
 }
 
+namespace {
+
+json SpellsJson(const std::vector<Spell> &spells) {
+  json out = json::array();
+  for (const Spell &s : spells) {
+    json sj{{"name", s.name}, {"format", SpellJson::FORMAT}};
+    SpellJson::Write(sj, s);
+    out.push_back(std::move(sj));
+  }
+  return out;
+}
+
+std::vector<Spell> SpellsFrom(const json &j, const char *key) {
+  std::vector<Spell> spells;
+  for (const json &sj : j.value(key, json::array())) {
+    Spell s;
+    s.name = sj.value("name", "");
+    SpellJson::Read(sj, s);
+    if (int format = sj.value("format", 1); format < SpellJson::FORMAT)
+      SpellJson::MigrateLegacyIds(s, format);
+    spells.push_back(std::move(s));
+  }
+  return spells;
+}
+
+} // namespace
+
 json ToJson(const RoomDef &r) {
   json objects = json::array();
   for (const ObjectDef &o : r.objects) {
@@ -151,6 +178,8 @@ json ToJson(const RoomDef &r) {
     if (o.kind == ObjectKind::Shrine) {
       oj["glyph"] = o.glyph;
       oj["sigil"] = o.sigil;
+      if (!o.spells.empty())
+        oj["spells"] = SpellsJson(o.spells);
     }
     objects.push_back(std::move(oj));
   }
@@ -164,12 +193,7 @@ json ToJson(const RoomDef &r) {
             {"damage", e.damage}};
     if (e.kind == EnemyKind::Mage) {
       ej["castEvery"] = e.castEvery;
-      ej["spells"] = json::array();
-      for (const Spell &s : e.spells) {
-        json sj{{"name", s.name}, {"format", SpellJson::FORMAT}};
-        SpellJson::Write(sj, s);
-        ej["spells"].push_back(std::move(sj));
-      }
+      ej["spells"] = SpellsJson(e.spells);
     }
     enemies.push_back(std::move(ej));
   }
@@ -180,10 +204,13 @@ json ToJson(const RoomDef &r) {
       json replies = json::array();
       for (const DialogueReply &rep : d.replies)
         replies.push_back({{"text", rep.text}, {"next", rep.next}});
-      nodes.push_back({{"text", d.text},
-                       {"replies", replies},
-                       {"teach", d.teach},
-                       {"teachSigil", d.teachSigil}});
+      json nj{{"text", d.text},
+              {"replies", replies},
+              {"teach", d.teach},
+              {"teachSigil", d.teachSigil}};
+      if (!d.spells.empty())
+        nj["spells"] = SpellsJson(d.spells);
+      nodes.push_back(std::move(nj));
     }
     npcs.push_back({{"name", n.name}, {"tag", n.tag}, {"pos", Vec(n.pos)},
                     {"dialogue", nodes}});
@@ -222,6 +249,7 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       o.pos = Vec(oj.at("pos"));
       o.glyph = oj.value("glyph", "");
       o.sigil = oj.value("sigil", false);
+      o.spells = SpellsFrom(oj, "spells");
       r.objects.push_back(std::move(o));
     }
     r.enemies.clear();
@@ -234,14 +262,7 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
       e.damage = ej.value("damage", e.damage);
       e.castEvery = ej.value("castEvery", e.castEvery);
       e.tag = ej.value("tag", "");
-      for (const json &sj : ej.value("spells", json::array())) {
-        Spell s;
-        s.name = sj.value("name", "");
-        SpellJson::Read(sj, s);
-        if (int format = sj.value("format", 1); format < SpellJson::FORMAT)
-          SpellJson::MigrateLegacyIds(s, format);
-        e.spells.push_back(std::move(s));
-      }
+      e.spells = SpellsFrom(ej, "spells");
       r.enemies.push_back(std::move(e));
     }
     r.npcs.clear();
@@ -256,6 +277,7 @@ bool FromJson(const json &j, RoomDef &r, std::string &error) {
         d.text = dj.value("text", "");
         d.teach = dj.value("teach", "");
         d.teachSigil = dj.value("teachSigil", false);
+        d.spells = SpellsFrom(dj, "spells");
         for (const json &rj : dj.value("replies", json::array()))
           if (d.replies.size() < MAX_REPLIES)
             d.replies.push_back({rj.value("text", ""), rj.value("next", -1)});
