@@ -113,6 +113,7 @@ private:
   float m_accumulator = 0.0f;
   std::vector<MapDef> m_maps; // 1v1 maps to copy terrain from
   int m_mapPick = 0;
+  int m_drawFor = -1; // enemy getting the spell being drawn in the editor
 
   std::optional<PlayRequest> m_play;
   std::optional<Campaign::CampaignDef> m_editRequest;

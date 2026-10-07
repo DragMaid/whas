@@ -1174,7 +1174,22 @@ void SpellEditor::SaveCurrent() {
   }
   m_currentSpell.name = m_nameBuffer;
   std::string err;
-  m_statusMessage = m_spells->Save(m_currentSpell, err) ? "Saved." : err;
+  bool saved = m_spells->Save(m_currentSpell, err);
+  m_statusMessage = saved ? "Saved." : err;
+  if (saved)
+    m_saved = m_currentSpell;
+}
+
+void SpellEditor::OpenNew() {
+  m_open = true;
+  m_tab = Tab::Edit;
+  m_switchTab = true;
+  m_currentSpell = {};
+  m_nameBuffer[0] = '\0';
+  ClearSelection();
+  ResetHistory();
+  m_statusMessage.clear();
+  m_saved.reset();
 }
 
 namespace {

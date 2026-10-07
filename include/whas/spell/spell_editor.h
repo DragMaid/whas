@@ -9,6 +9,7 @@
 #include <imgui.h>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 class SpellThumbnails;
@@ -28,6 +29,9 @@ public:
   void Draw();
   bool IsOpen() const { return m_open; }
   void Open() { m_open = true; }
+  // A blank spell on the Edit tab; TakeSaved then reports what was saved
+  void OpenNew();
+  std::optional<Spell> TakeSaved() { return std::exchange(m_saved, {}); }
   // Straight to the spell grid and decks
   void OpenLibrary() {
     m_open = true;
@@ -171,4 +175,5 @@ private:
 
   char m_nameBuffer[SPELL_NAME_MAX_LEN + 1]{};
   std::string m_statusMessage;
+  std::optional<Spell> m_saved; // last saved since OpenNew
 };

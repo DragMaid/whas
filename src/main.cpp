@@ -324,7 +324,8 @@ int main(int argc, char **argv) {
       campaign.Update(sim, ui, uiState);
     } else if (campaignEditor.Editing()) {
       client.Update(sim, game.NetState());
-      campaignEditor.Update(sim);
+      if (!ui.SpellEditorOpen())
+        campaignEditor.Update(sim);
     } else if (game.IsActive()) {
       game.Update(sim, ui, uiState);
       if (game.TakeExitRequest()) {

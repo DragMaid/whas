@@ -87,8 +87,10 @@ instead.
 
 - **Rooms** map: click a room to edit it; `+` beside the selected room adds
   a new one on that side. The room you leave is saved.
-- **Selected** tab: an enemy's health, speed, touch damage and tag (a
-  mage's spells from your library); a shrine's glyph; an NPC's name, tag
+- **Selected** tab: an enemy's health, speed, touch damage and tag. A
+  mage's spells are cards: drag them up from your library (or double-click
+  one), x takes one off, and "Draw a new spell for it" opens the spell
+  editor and gives the mage what you save. **Spells** opens your library; a shrine's glyph; an NPC's name, tag
   and dialogue. Dialogue is a list of nodes: node 1 starts the talk, each
   node has a line, up to three replies (each leads to a node or ends the
   talk) and optionally a glyph it teaches.

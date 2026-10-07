@@ -10,6 +10,7 @@
 #include "whas/game/turn_controller.h"
 #include "whas/spell/glyph_docs.h"
 #include "whas/ui/editor_icons.h"
+#include "whas/ui/spell_picker.h"
 #include "whas/ui/theme.h"
 #include "whas/ui/ui.h"
 #include "whas/ui/widgets.h"
@@ -633,6 +634,16 @@ void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
     Open(sim, *def);
   if (!m_editing)
     return;
+  // Back from drawing a spell for a mage
+  if (m_drawFor >= 0) {
+    if (auto spell = ui.TakeSavedSpell();
+        spell && m_drawFor < (int)m_room.enemies.size()) {
+      std::vector<Spell> &spells = m_room.enemies[m_drawFor].spells;
+      std::erase_if(spells, [&](const Spell &s) { return s.name == spell->name; });
+      spells.push_back(*spell);
+    }
+    m_drawFor = -1;
+  }
 
   float s = View::UiScale();
   float panelW = 380.0f * s;
@@ -662,6 +673,11 @@ void CampaignEditor::DrawPanel(Simulation &sim, UI &ui) {
       m_test = TestRequest{m_def, m_room.pos, at};
     }
   }
+  ImGui::SameLine();
+  if (Widgets::Button("Spells"))
+    ui.OpenSpellLibrary();
+  if (ImGui::IsItemHovered())
+    ImGui::SetTooltip("Your spell library: draw spells for mages and shrines");
   ImGui::SameLine();
   if (Widgets::Button("Close")) {
     Close(sim);
@@ -797,20 +813,16 @@ void CampaignEditor::DrawSelected(UI &ui) {
     if (e.kind != EnemyKind::Mage)
       break;
     ImGui::SliderFloat("Casts every", &e.castEvery, 0.4f, 6.0f, "%.1fs");
-    ImGui::TextDisabled("Spells it picks from at random (from your library):");
-    ImGui::BeginChild("mage spells", {0, 160 * View::UiScale()}, true);
-    for (const Spell &spell : ui.Library().All()) {
-      auto it = std::find_if(e.spells.begin(), e.spells.end(),
-                             [&](const Spell &s) { return s.name == spell.name; });
-      bool has = it != e.spells.end();
-      if (ImGui::Checkbox(spell.name.c_str(), &has)) {
-        if (has)
-          e.spells.push_back(spell);
-        else
-          e.spells.erase(it);
-      }
+    Widgets::SectionHeader("Spells it casts");
+    ImGui::TextDisabled("It picks one at random each cast.");
+    SpellPicker::Draw("mage", e.spells, ui.Library(), ui.Thumbnails());
+    if (Widgets::SmallButton("Draw a new spell for it")) {
+      m_drawFor = m_selected.index;
+      ui.OpenNewSpell();
     }
-    ImGui::EndChild();
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Opens the spell editor; what you save goes into your\n"
+                        "library and onto this mage.");
     if (e.spells.empty())
       ImGui::TextColored(Theme::Vec(Tone::Oxblood), "With no spells it only walks.");
     break;

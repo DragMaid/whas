@@ -74,6 +74,10 @@ public:
 
   void OpenSpellLibrary() { m_spellEditor.OpenLibrary(); }
   void OpenSpellEditor() { m_spellEditor.Open(); }
+  void OpenNewSpell() { m_spellEditor.OpenNew(); }
+  bool SpellEditorOpen() const { return m_spellEditor.IsOpen(); }
+  // The spell saved since OpenNewSpell, once
+  std::optional<Spell> TakeSavedSpell() { return m_spellEditor.TakeSaved(); }
 
   // Game mode hands the mouse to the character instead of the sandbox tools
   void SetGameMode(bool enabled);
