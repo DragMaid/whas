@@ -1330,8 +1330,7 @@ void SpellEditor::DrawOverlay() {
 
   // Close sits at the right of the tab row
   const char *closeLabel = m_workbench ? "Leave the bench (Esc)" : "Close (Esc)";
-  float closeW = ImGui::CalcTextSize(closeLabel).x +
-                 ImGui::GetStyle().FramePadding.x * 2;
+  float closeW = Widgets::ButtonWidth(closeLabel);
   ImVec2 row = ImGui::GetCursorPos();
   ImGui::SetCursorPos({ImGui::GetWindowWidth() - closeW - 10, row.y});
   // Esc lets go of what's picked or selected first, then closes
