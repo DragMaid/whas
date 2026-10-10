@@ -1,5 +1,14 @@
 {
  "format": 1,
+ "lore": {
+  "water": "The first glyph the well-keepers of Hearth Hollow ever drew.",
+  "cooling": "Sister Ilse's lamps burn cold with it, and never go out.",
+  "expansion": "Cut into the Windward Cliffs by someone who wanted more of everything.",
+  "convergence": "The Lantern Tower's keepers packed their light tight with it.",
+  "strengthening": "Buried under the Root Cellar, where the roots grow hardest.",
+  "repetition": "The Warden kept things as they were. This is how.",
+  "wind": "Pellam swears he copied it fairly."
+ },
  "name": "test",
  "rooms": [
   [
@@ -9,11 +18,39 @@
   [
    1,
    0
+  ],
+  [
+   0,
+   -1
+  ],
+  [
+   1,
+   -1
+  ],
+  [
+   1,
+   1
+  ],
+  [
+   0,
+   1
+  ],
+  [
+   2,
+   0
+  ],
+  [
+   2,
+   1
+  ],
+  [
+   2,
+   -1
   ]
  ],
  "startPos": [
-  291.66180419921875,
-  210.86880493164063
+  190.0,
+  187.0
  ],
  "startRoom": [
   0,

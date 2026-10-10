@@ -1,134 +1,126 @@
 {
  "background": "",
  "conditions": [],
- "enemies": [
-  {
-   "castEvery": 1.600000023841858,
-   "damage": 4.0,
-   "hp": 30.0,
-   "kind": 0,
-   "pos": [
-    22.70553970336914,
-    216.7405242919922
-   ],
-   "speed": 18.0,
-   "spells": [
-    {
-     "format": 3,
-     "glyphs": [
-      {
-       "assetId": "levitation",
-       "kind": "sign",
-       "rotation": 180.0,
-       "scale": 1.0,
-       "x": -4.816176414489746,
-       "y": -129.0735321044922
-      },
-      {
-       "assetId": "levitation",
-       "kind": "sign",
-       "rotation": -90.0,
-       "scale": 1.0,
-       "x": 133.24754333496094,
-       "y": 14.769607543945313
-      },
-      {
-       "assetId": "levitation",
-       "kind": "sign",
-       "rotation": 90.0,
-       "scale": 1.0,
-       "x": -151.22793579101563,
-       "y": 7.7058820724487305
-      },
-      {
-       "assetId": "levitation",
-       "kind": "sign",
-       "rotation": 0.0,
-       "scale": 1.0,
-       "x": 4.816176414489746,
-       "y": 158.6127471923828
-      },
-      {
-       "assetId": "light",
-       "kind": "sigil",
-       "rotation": 0.0,
-       "scale": 3.0,
-       "x": -3.531862735748291,
-       "y": -2.56862735748291
-      },
-      {
-       "assetId": "expansion",
-       "kind": "sign",
-       "rotation": 0.0,
-       "scale": 1.0,
-       "x": 108.20343017578125,
-       "y": -74.49019622802734
-      },
-      {
-       "assetId": "expansion",
-       "kind": "sign",
-       "rotation": 0.0,
-       "scale": 1.0,
-       "x": 98.57107543945313,
-       "y": 120.7254867553711
-      },
-      {
-       "assetId": "expansion",
-       "kind": "sign",
-       "rotation": 0.0,
-       "scale": 1.0,
-       "x": -81.23284149169922,
-       "y": 100.8186264038086
-      },
-      {
-       "assetId": "expansion",
-       "kind": "sign",
-       "rotation": 0.0,
-       "scale": 1.0,
-       "x": -93.43382263183594,
-       "y": -75.77450561523438
-      }
-     ],
-     "name": "light"
-    }
-   ],
-   "tag": ""
-  }
- ],
+ "enemies": [],
  "npcs": [
   {
+   "name": "Old Wren",
+   "tag": "wren",
+   "pos": [
+    224,
+    187
+   ],
    "dialogue": [
     {
-     "replies": [],
+     "text": "Ah, awake at last. The Rootwood took you in, little witch, same as it took me. Still got ink in your fingers?",
+     "replies": [
+      {
+       "text": "Where am I?",
+       "next": 1
+      },
+      {
+       "text": "What's that glowing stone?",
+       "next": 2
+      },
+      {
+       "text": "I'd best be going.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Hearth Hollow, at the foot of the Great Root. East, the root climbs up to the treetops. Down the well-stair, the old cellars. Mind the hats.",
+     "replies": [
+      {
+       "text": "How do I climb the Root?",
+       "next": 3
+      },
+      {
+       "text": "And the cellars?",
+       "next": 5
+      },
+      {
+       "text": "Thank you.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "A shrine. Touch it and a glyph settles in your hand. Then come to the bench here and draw it into a circle. A glyph you never draw is just a scribble.",
+     "replies": [
+      {
+       "text": "And once it's drawn?",
+       "next": 4
+      },
+      {
+       "text": "Where am I, again?",
+       "next": 1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Walk it. The bark's stepped like a stair, all the way up to the gap in the canopy. Jump at the very top. Flyers nest up there, so go armed.",
+     "replies": [
+      {
+       "text": "And the cellars?",
+       "next": 5
+      },
+      {
+       "text": "Farewell.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Press B and set it in one of your three slots, then click to cast. A spell needs its breath between casts. Here, a little silver for the road.",
+     "replies": [
+      {
+       "text": "Thank you, Wren.",
+       "next": -1
+      }
+     ],
      "teach": "",
      "teachSigil": false,
-     "text": "Hello, little witch."
+     "silver": 15
+    },
+    {
+     "text": "Sister Ilse keeps the cellar lamps. She knows the cold glyphs. Give her my regards. She'll take them better than she takes me.",
+     "replies": [
+      {
+       "text": "I will.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
     }
-   ],
-   "name": "Stranger",
-   "pos": [
-    247.5,
-    216.0
-   ],
-   "tag": ""
+   ]
   }
  ],
  "objects": [
   {
-   "glyph": "water",
-   "kind": 2,
-   "pos": [
-    265.5,
-    228.0
-   ],
-   "sigil": true
-  },
-  {
    "kind": 1,
    "pos": [
-    279.5,
-    228.0
+    262.5,
+    199
    ]
+  },
+  {
+   "kind": 2,
+   "pos": [
+    318.5,
+    201
+   ],
+   "glyph": "water",
+   "sigil": true
   }
  ],
  "pos": [
@@ -142,7 +134,7 @@
   false
  ],
  "terrain": {
-  "cells": "ucIFAAEHhgYAGwIFAI0DAgEAkiIC",
+  "cells": "wAwCeAiYAgB4CJgCAEAIDgAqCJgCAD4IEwAnCJgCADsIGAAlCJgCADkIHAAjCJgCADcIIAAhCJgCADYIIwAfCJgCADQIJgAeCJgCADMIKQAcCJgCADEILAAbCJgCADAILwAZCJgCAC4IMgAYCJgCAC0INQAWCJgCACsIOAAVCJgCACkIPAATCJgCACgIPwARCJgCACcIQQAQCJgCACYIRAAOCJgCACYIRwALCJgCACUISwAICJgCACQI7AIAIwjtAgAiCO4CACEI7wIAIAjwAgAfCPECAB0I8wIAHAj0AgAbCPUCABkI9wIAGAj4AgAWCPoCABQI/AIAEQj/AgAMCIzFAgANCoADAAQKAQACCgEACwr7AgASCgEABAr4AgAMCgEABQoBAAYK9gIAEgoBAAgK9AIAAwoBABkK8gIABwoBAAkKAQAFCgEABwrwAgAECgEADAoBAAEKAwALCu8CAAoKAQACCgEACAoBAAUKAQACCgEAAQruAgAjCu0CAA8KAQACCgEAAgoBAA0K7QIAAgoBAAEKAQACCgEAEAoBAAEKAQAICu0CAAsKAQAXCu0CAAkKAQAICgEJEArtAgAHCgIAAgoBABcK7QIAAQoBACEK7QIACwoBABcK7QIAAwoCAAMKAQADCgEABAoBCREK7gIACgoBAAgKAQAFCgEABAoBAAIK7wIADQoBAAwKAQAGCv0CAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJBgAKCvwCAAQJAQATCvgCAAQJBgoKAggK2AIAAgoZAAEKBAkBChMCBwoBAAEK0wIABQoTAAQKBAkYAgcK0QIAAgIHCgsABwogAgEKAQIDCtACAAUCEwonAgIKzwIACQILCiwCAwrNAgBBAgMKzAIAQwIDCsoCAEQCAwrJAgBGAgMKxwIARwIDCsYCAEkCAwrEAgBKAgMKBAAHCLgCAEwCAgoCAAkItwIATQIDCgkIiAEAOQp2AE4CAgoJCAsKbQBYCgcILQAHCCwKUAIBCgcIDApGADcKOQIPCgcILQoHCCwKZQJFACcKWAIHCC0KBwiSAQJEAAQIyQICQwAECMoCAkIABAjLAgJBAAQIzAICQAAECM0CAj8ABAjOAgI+AAQIzwICPQAECNACAjwABAjRAgI7AAQI0gICOgAECNMCAjkABAjUAgI4AAQI1QICNwAECNYCAjYABAjXAgI1AAQI2AICNAAECNkCAjMABAjaAgIyAAQI2wICMQAECNwCAjAABAjdAgIvAAQI3gICLgAECN8CAi0ABAjgAgIsAAQI4QICKwAECOICAioABAjjAgIpAAQI5AICKAAECOUCAicABAjmAgImAAQI5wICJQAECOgCAiQABAjpAgIjAAQI6gICIgAECO4CAh4A8gICHgDyAgIeAPICAh4A5gEC",
   "format": 1,
   "gen": {
    "biome": 0,
