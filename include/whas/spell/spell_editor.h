@@ -43,6 +43,9 @@ public:
   void SetGlyphFilter(std::function<bool(const std::string &)> allow) {
     m_allowGlyph = std::move(allow);
   }
+  // A campaign workbench: saves go to the backpack, and nothing about the
+  // sandbox, decks or match limits is offered
+  void SetWorkbench(bool on) { m_workbench = on; }
 
   // Shared with the casting UI
   static Color BalanceColor(float imbalance);
@@ -117,6 +120,7 @@ private:
                         float maxV, float step);
 
   bool m_open = false;
+  bool m_workbench = false;
   std::function<bool(const std::string &)> m_allowGlyph;
   Spell m_currentSpell;
   float m_zoom = 1.0f; // canvas pixels per spell unit

@@ -168,6 +168,7 @@ bool CampaignPlay::Start(Simulation &sim, UI &ui, const CampaignDef &def,
   m_backpackSpells.Load();
   m_bench.Bind(&m_backpackSpells, nullptr);
   m_bench.SetThumbnails(&ui.Thumbnails());
+  m_bench.SetWorkbench(true);
   m_bench.SetGlyphFilter(
       [this](const std::string &id) { return m_testing || m_save.glyphs.count(id) > 0; });
 
@@ -193,6 +194,7 @@ bool CampaignPlay::StartTest(Simulation &sim, UI &ui, const CampaignDef &def,
   m_backpackSpells.Load();
   m_bench.Bind(&m_backpackSpells, nullptr);
   m_bench.SetThumbnails(&ui.Thumbnails());
+  m_bench.SetWorkbench(true);
   m_bench.SetGlyphFilter([](const std::string &) { return true; });
   m_active = true;
   m_helpTime = 8.0f;

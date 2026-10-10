@@ -115,7 +115,11 @@ void SpellEditor::DrawSpellGrid(float width) {
       m_filter = i;
   }
   ImGui::TextDisabled(
-      "Drag a card onto a deck slot. Right-click for more. Double-click to edit.");
+      m_workbench ? "Double-click a spell to redraw it. Right-click to rename, "
+                    "copy or delete. Press B outside to put spells in your slots."
+      : m_decks   ? "Drag a card onto a deck slot. Right-click for more. "
+                    "Double-click to edit."
+                  : "Right-click for more. Double-click to edit.");
   ImGui::Spacing();
 
   int columns = std::max(1, (int)((width - 16) / (CardW() + 8)));
@@ -133,7 +137,9 @@ void SpellEditor::DrawSpellGrid(float width) {
   }
   if (shown == 0)
     ImGui::TextDisabled(m_spells->All().empty()
-                            ? "No spells yet. Make one in the Edit tab."
+                            ? (m_workbench ? "Nothing in your backpack yet. Draw a "
+                                             "spell in the first tab and save it."
+                                           : "No spells yet. Make one in the Edit tab.")
                             : "No spells match.");
 }
 
@@ -200,7 +206,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
     ImGui::Text("%s", spell.name.c_str());
     ImGui::Separator();
     DrawStats(stats);
-    if (!SpellRules::WithinLimits(spell))
+    if (!m_workbench && !SpellRules::WithinLimits(spell))
       ImGui::TextColored(Theme::Vec(Tone::Oxblood),
                          "Over the limit: solo and chaos rooms only");
     ImGui::EndTooltip();
@@ -232,7 +238,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
   dl->AddText(ImGui::GetFont(), Px(12), {p0.x + 8, t0.y + thumb + Px(20)},
               stats.valid ? ToU32(tint, 200) : Theme::U32(Tone::Oxblood),
               TextFormat("%s  %.2fs", kind, ticks * TurnController::TICK_DT));
-  if (!SpellRules::WithinLimits(spell))
+  if (!m_workbench && !SpellRules::WithinLimits(spell))
     DrawChaosBadge(dl, {p1.x - Px(8), p0.y + Px(8)});
   ImGui::PopID();
 }
