@@ -168,6 +168,7 @@ bool CampaignPlay::Start(Simulation &sim, UI &ui, const CampaignDef &def,
   m_backpackSpells.Load();
   m_bench.Bind(&m_backpackSpells, nullptr);
   m_bench.SetThumbnails(&ui.Thumbnails());
+  m_bench.SetWorkbench(true);
   m_bench.SetGlyphFilter(
       [this](const std::string &id) { return m_testing || m_save.glyphs.count(id) > 0; });
 
@@ -193,6 +194,7 @@ bool CampaignPlay::StartTest(Simulation &sim, UI &ui, const CampaignDef &def,
   m_backpackSpells.Load();
   m_bench.Bind(&m_backpackSpells, nullptr);
   m_bench.SetThumbnails(&ui.Thumbnails());
+  m_bench.SetWorkbench(true);
   m_bench.SetGlyphFilter([](const std::string &) { return true; });
   m_active = true;
   m_helpTime = 8.0f;
@@ -380,7 +382,8 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
     return;
   state.hideActionBar = true;
   state.matchRound = -1;
-  m_noticeTime = std::max(0.0f, m_noticeTime - GetFrameTime());
+  if (m_reveals.empty()) // notices wait behind a glyph being shown
+    m_noticeTime = std::max(0.0f, m_noticeTime - GetFrameTime());
   ui.Blind(m_player.TakeFlash());
 
   UpdateCamera();
@@ -388,7 +391,7 @@ void CampaignPlay::Update(Simulation &sim, UI &ui, UIState &state) {
 
   bool keys = !ImGui::GetIO().WantCaptureKeyboard;
   m_bigMap = keys && IsKeyDown(KEY_TAB) && !PanelOpen();
-  if (keys && IsKeyPressed(KEY_ESCAPE)) {
+  if (keys && IsKeyPressed(KEY_ESCAPE) && m_reveals.empty()) {
     if (m_bench.IsOpen())
       m_bench.Close();
     else if (m_talking >= 0)
@@ -593,18 +596,19 @@ void CampaignPlay::Tick(Simulation &sim, UI &ui, CharacterInput input, float dt)
       m_save.shrinesTaken.insert(key);
       std::string text;
       if (!o.glyph.empty()) {
-        bool fresh = m_save.glyphs.insert(o.glyph).second;
-        GlyphDocs::Info info = GlyphDocs::Get(o.glyph);
-        std::string name = info.name ? info.name : o.glyph;
-        text = fresh ? "Learned the " + name + (o.sigil ? " sigil" : " sign") +
-                           ": draw it at a workbench"
-                     : "You already know " + name;
+        if (m_save.glyphs.insert(o.glyph).second) {
+          Learn(o.glyph, o.sigil, "from a shrine");
+        } else {
+          GlyphDocs::Info info = GlyphDocs::Get(o.glyph);
+          text = "You already know " + (info.name ? std::string(info.name) : o.glyph);
+        }
       }
       if (o.silver > 0) {
         m_save.silver += o.silver;
         text += (text.empty() ? "" : "\n") + std::string(TextFormat("+%d silver", o.silver));
       }
-      Notify(text, 4.0f);
+      if (!text.empty())
+        Notify(text, 4.0f);
       if (std::string found = Grant(o.spells); !found.empty())
         m_notice += (text.empty() ? "" : "\n") + found;
       SaveProgress();
@@ -650,13 +654,18 @@ void CampaignPlay::CheckEdges(Simulation &sim, const CharacterInput &input) {
     EnterRoom(sim, at.Step(dx, dy), to, true);
     return true;
   };
-  if (p.pos.x <= EDGE && (input.left || p.vel.x < 0.0f) &&
+  // Moving into the room's bounds stops up to a substep short of them
+  // (slowed in water, rising), so anything within a cell of the edge
+  // counts; rooms are entered a whole cell in
+  if (p.pos.x < 1.0f && (input.left || p.vel.x < 0.0f) &&
       go(-1, 0, {GRID_W - Character::WIDTH - 1.0f, p.pos.y}))
     return;
-  if (p.pos.x + Character::WIDTH >= GRID_W - EDGE && (input.right || p.vel.x > 0.0f) &&
+  if (p.pos.x + Character::WIDTH > GRID_W - 1.0f && (input.right || p.vel.x > 0.0f) &&
       go(1, 0, {1.0f, p.pos.y}))
     return;
-  if (p.pos.y <= EDGE && p.vel.y <= 0.0f &&
+  // Standing still, pos.y is a whole number: only standing in the very top
+  // row counts then
+  if (p.pos.y < 1.0f && p.vel.y <= 0.0f && !(p.grounded && p.pos.y > EDGE) &&
       go(0, -1, {p.pos.x, GRID_H - Character::HEIGHT - 1.0f}))
     return;
   if (p.pos.y + Character::HEIGHT >= GRID_H - EDGE)
@@ -728,14 +737,12 @@ void CampaignPlay::ReachNode(int node) {
     m_save.silver -= d.price;
   }
   m_node = node;
+  m_typed = 0.0f;
   m_save.talked.insert(TalkKey(m_room.pos, NpcKey(m_talking), -1));
   m_save.talked.insert(key);
   std::string text;
-  if (!d.teach.empty() && m_save.glyphs.insert(d.teach).second) {
-    GlyphDocs::Info info = GlyphDocs::Get(d.teach);
-    text = std::string("Learned the ") + (info.name ? info.name : d.teach.c_str()) +
-           (d.teachSigil ? " sigil" : " sign");
-  }
+  if (!d.teach.empty() && m_save.glyphs.insert(d.teach).second)
+    Learn(d.teach, d.teachSigil, "taught by " + npc.name);
   // Blueprints and silver are given once per node, not every time it's read
   std::string found;
   if (first && (!d.spells.empty() || d.silver > 0 || d.price > 0)) {
@@ -943,27 +950,58 @@ void CampaignPlay::DrawWorld(const Simulation &sim, const UI &ui) const {
       DrawCircleLinesV(p, 5, Color{120, 125, 140, 255});
     }
   }
-  for (const NpcDef &n : m_room.npcs) {
+  float t2 = static_cast<float>(GetTime());
+  int near = m_player.Alive() ? NearNpc() : -1;
+  for (int i = 0; i < static_cast<int>(m_room.npcs.size()); ++i) {
+    const NpcDef &n = m_room.npcs[i];
     Character body;
     body.pos = n.pos;
     body.grounded = true;
     body.look = m_player.Center().x < n.pos.x + Character::WIDTH * 0.5f ? -1 : 1;
     DrawCharacterBody(body, Color{235, 215, 160, 255}, false);
-    Theme::DrawText(Theme::RlBody(), n.name.c_str(),
-                    {n.pos.x * CELL_SIZE - 8, n.pos.y * CELL_SIZE - 44}, 16,
+    Vector2 head{(n.pos.x + Character::WIDTH * 0.5f) * CELL_SIZE, n.pos.y * CELL_SIZE};
+    Vector2 ns = Theme::MeasureText(Theme::RlBody(), n.name.c_str(), 16);
+    Theme::DrawText(Theme::RlBody(), n.name.c_str(), {head.x - ns.x * 0.5f, head.y - 44}, 16,
                     Color{250, 235, 190, 255});
+    // A speech bubble over them: "!" until they've been talked to, "..."
+    // when you're close enough to
+    bool fresh = !m_save.talked.count(TalkKey(m_room.pos, NpcKey(i), -1));
+    if (fresh || near == i) {
+      Vector2 b{head.x, head.y - 62 + 2 * std::sin(t2 * 3 + i)};
+      DrawCircleV(b, 11, Color{245, 235, 205, 235});
+      DrawTriangle({b.x - 4, b.y + 8}, {b.x + 3, b.y + 15}, {b.x + 5, b.y + 8},
+                   Color{245, 235, 205, 235});
+      if (fresh && near != i) {
+        DrawRectangle((int)b.x - 1, (int)b.y - 7, 3, 9, Color{150, 40, 30, 255});
+        DrawRectangle((int)b.x - 1, (int)b.y + 4, 3, 3, Color{150, 40, 30, 255});
+      } else {
+        for (int d = -1; d <= 1; ++d)
+          DrawCircleV({b.x + d * 5.0f, b.y + (std::fmod(t2 * 4 + d, 3.0f) < 1 ? -1.5f : 0.0f)},
+                      1.8f, Color{60, 45, 35, 255});
+      }
+    }
   }
   DrawSeals();
 
-  // What E would do here
-  const char *prompt = NearNpc() >= 0                         ? "E  talk"
-                       : NearObject(ObjectKind::Workbench) >= 0 ? "E  workbench"
-                       : NearObject(ObjectKind::Gate) >= 0      ? "E  travel"
-                                                                : nullptr;
-  if (prompt && m_player.Alive())
-    Theme::DrawText(Theme::RlBody(), prompt,
-                    {m_player.Center().x * CELL_SIZE - 30, m_player.pos.y * CELL_SIZE - 50},
-                    18, Theme::Rl(Tone::Parchment, 0.95f));
+  // What E would do here, in a key cap over your head
+  std::string prompt;
+  if (near >= 0)
+    prompt = "Talk to " + m_room.npcs[near].name;
+  else if (NearObject(ObjectKind::Workbench) >= 0)
+    prompt = "Draw spells";
+  else if (NearObject(ObjectKind::Gate) >= 0)
+    prompt = "Travel";
+  if (!prompt.empty() && m_player.Alive() && !PanelOpen()) {
+    Vector2 size = Theme::MeasureText(Theme::RlBody(), prompt.c_str(), 18);
+    float w = 22 + 8 + size.x;
+    Vector2 o{m_player.Center().x * CELL_SIZE - w * 0.5f,
+              m_player.pos.y * CELL_SIZE - 54 + std::sin(t2 * 4) * 1.5f};
+    DrawRectangleRounded({o.x - 6, o.y - 4, w + 12, 30}, 0.3f, 6, Theme::Rl(Tone::Ink, 0.75f));
+    DrawRectangleRoundedLinesEx({o.x, o.y + 1, 22, 22}, 0.25f, 6, 2, Theme::Rl(Tone::BrassBright));
+    Theme::DrawText(Theme::RlBody(), "E", {o.x + 6, o.y + 2}, 18, Theme::Rl(Tone::BrassBright));
+    Theme::DrawText(Theme::RlBody(), prompt.c_str(), {o.x + 30, o.y + 2}, 18,
+                    Theme::Rl(Tone::Parchment));
+  }
 
   m_trail.Draw();
   for (const Enemies::Enemy &e : m_enemies)
@@ -1015,32 +1053,72 @@ void CampaignPlay::DrawSeals() const {
                            2.0f, Color{200, 150, 255, 120});
 }
 
-// A conversation: the NPC's line and the replies to pick from
+// A conversation: the NPC's line, typed out, and the replies to pick from
 void CampaignPlay::DrawDialogue() {
   const NpcDef &npc = m_room.npcs[m_talking];
   const DialogueNode &node = npc.dialogue[m_node];
   float s = View::UiScale();
-  ImVec2 size{std::min(ImGui::GetIO().DisplaySize.x - 40 * s, 720 * s), 0};
-  ImGui::SetNextWindowPos({ImGui::GetIO().DisplaySize.x * 0.5f,
-                           ImGui::GetIO().DisplaySize.y - 30 * s},
-                          ImGuiCond_Always, {0.5f, 1.0f});
-  ImGui::SetNextWindowSize(size);
+  ImVec2 screen = ImGui::GetIO().DisplaySize;
+  float width = std::min(screen.x - 40 * s, 760 * s);
+  ImGui::SetNextWindowPos({screen.x * 0.5f, screen.y - 24 * s}, ImGuiCond_Always, {0.5f, 1.0f});
+  ImGui::SetNextWindowSize({width, 0});
   ImGui::Begin("##dialogue", nullptr,
                ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
-                   ImGuiWindowFlags_AlwaysAutoResize);
-  ImGui::TextColored(Theme::Vec(Tone::Brass), "%s", npc.name.c_str());
-  ImGui::SameLine(ImGui::GetContentRegionAvail().x - 80 * s);
-  ImGui::TextDisabled("%d silver", m_save.silver);
+                   ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+  ImDrawList *dl = ImGui::GetWindowDrawList();
+  // Nothing answers while a glyph is being shown, and the key that opened
+  // the conversation (or picked the last reply) doesn't also answer it
+  bool keys = m_reveals.empty() && !std::exchange(m_talkFresh, false);
+
+  // Name plate, with silver when there's something to buy
+  bool shop = std::any_of(node.replies.begin(), node.replies.end(), [&](const DialogueReply &r) {
+    return r.next >= 0 && r.next < (int)npc.dialogue.size() && npc.dialogue[r.next].price > 0;
+  });
+  ImVec2 p = ImGui::GetCursorScreenPos();
+  float lh = ImGui::GetTextLineHeight();
+  Theme::Diamond(dl, {p.x + 6 * s, p.y + lh * 0.55f}, 5 * s, Theme::U32(Tone::Brass));
+  ImGui::SetCursorScreenPos({p.x + 18 * s, p.y});
+  ImGui::PushFont(Theme::Heading(), 0.0f);
+  ImGui::TextColored(Theme::Vec(Tone::BrassBright), "%s", npc.name.c_str());
+  ImGui::PopFont();
+  if (shop || m_save.silver > 0) {
+    std::string silver = TextFormat("%d silver", m_save.silver);
+    ImGui::SameLine(ImGui::GetContentRegionMax().x - ImGui::CalcTextSize(silver.c_str()).x);
+    ImGui::TextColored(Theme::Vec(Tone::Muted), "%s", silver.c_str());
+  }
+  ImGui::Separator();
+  ImGui::Spacing();
+
+  // The line types itself out; a key or click finishes it
+  int length = static_cast<int>(node.text.size());
+  m_typed = std::min<float>(length, m_typed + GetFrameTime() * 70.0f);
+  bool typing = m_typed < length;
+  bool skip = keys && (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_SPACE) ||
+                       IsKeyPressed(KEY_ENTER) || IsMouseButtonPressed(MOUSE_BUTTON_LEFT));
+  if (typing && skip) {
+    m_typed = static_cast<float>(length);
+    keys = false;
+  }
   ImGui::PushTextWrapPos(0.0f);
-  ImGui::TextUnformatted(node.text.c_str());
+  // Laid out at full length so the box doesn't grow as it types
+  ImVec2 at = ImGui::GetCursorScreenPos();
+  ImGui::TextColored(Theme::Vec(Tone::Parchment, 0.0f), "%s", node.text.c_str());
+  ImVec2 after = ImGui::GetCursorScreenPos();
+  ImGui::SetCursorScreenPos(at);
+  size_t cut = static_cast<size_t>(m_typed);
+  while (cut < node.text.size() && (node.text[cut] & 0xC0) == 0x80)
+    ++cut; // not halfway into a letter
+  std::string shown = node.text.substr(0, cut);
+  ImGui::TextUnformatted(shown.c_str());
+  ImGui::SetCursorScreenPos(after);
   ImGui::PopTextWrapPos();
   ImGui::Spacing();
-  // The key that opened the conversation doesn't also answer it
-  bool keys = !std::exchange(m_talkFresh, false);
+
   int pick = -2; // -2: nothing chosen yet
+  ImGui::BeginDisabled(typing);
   for (int i = 0; i < static_cast<int>(node.replies.size()); ++i) {
     int next = node.replies[i].next;
-    std::string label = TextFormat("%d. %s", i + 1, node.replies[i].text.c_str());
+    std::string label = node.replies[i].text;
     // Shop wares show their price, and can't be had without the silver
     bool locked = false;
     if (next >= 0 && next < (int)npc.dialogue.size() && npc.dialogue[next].price > 0) {
@@ -1052,24 +1130,50 @@ void CampaignPlay::DrawDialogue() {
         locked = m_save.silver < price;
       }
     }
+    if (next < 0)
+      label += "  [leave]";
+    ImGui::PushID(i);
     ImGui::BeginDisabled(locked);
-    if (ImGui::Selectable(label.c_str()) || (!locked && keys && IsKeyPressed(KEY_ONE + i)))
-      pick = next;
+    ImVec2 r0 = ImGui::GetCursorScreenPos();
+    float key = ImGui::GetFrameHeight();
+    bool clicked = ImGui::Selectable("##reply", false, 0, {0, key});
+    bool hovered = ImGui::IsItemHovered();
     ImGui::EndDisabled();
+    // A key cap with its number, then the words
+    ImU32 cap = Theme::U32(locked ? Tone::Faint : hovered ? Tone::BrassBright : Tone::Brass);
+    dl->AddRect({r0.x + 2 * s, r0.y + 2 * s}, {r0.x + key - 2 * s, r0.y + key - 2 * s}, cap,
+                3.0f * s);
+    char num[2] = {static_cast<char>('1' + i), 0};
+    ImVec2 ns = ImGui::CalcTextSize(num);
+    dl->AddText({r0.x + (key - ns.x) * 0.5f, r0.y + (key - ns.y) * 0.5f}, cap, num);
+    dl->AddText({r0.x + key + 8 * s, r0.y + (key - lh) * 0.5f},
+                Theme::U32(locked ? Tone::Faint : hovered ? Tone::Parchment : Tone::Muted),
+                label.c_str());
+    if (!typing && (clicked || (!locked && keys && IsKeyPressed(KEY_ONE + i))))
+      pick = next;
+    ImGui::PopID();
   }
-  if (node.replies.empty() &&
-      (ImGui::Selectable("(Farewell)") ||
-       (keys && (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_ENTER)))))
-    pick = -1;
+  ImGui::EndDisabled();
+  if (node.replies.empty()) {
+    ImGui::TextColored(Theme::Vec(typing ? Tone::Faint : Tone::Brass),
+                       typing ? "..." : "E  Farewell");
+    if (!typing && (ImGui::IsItemClicked() ||
+                    (keys && (IsKeyPressed(KEY_E) || IsKeyPressed(KEY_ENTER) ||
+                              IsKeyPressed(KEY_SPACE)))))
+      pick = -1;
+  }
   ImGui::End();
-  if (pick != -2)
+  if (pick != -2) {
+    m_talkFresh = true;
     ReachNode(pick);
+  }
 }
 
 void CampaignPlay::DrawPanels(UI &ui) {
   if (!m_active)
     return;
-  DrawHud(ui);
+  if (!m_bench.IsOpen()) // the bench covers the screen
+    DrawHud(ui);
   if (m_talking >= 0)
     DrawDialogue();
   if (m_backpack)
@@ -1081,6 +1185,8 @@ void CampaignPlay::DrawPanels(UI &ui) {
   if (m_codex)
     DrawCodex(ui);
   m_bench.Draw();
+  if (!m_reveals.empty())
+    DrawReveal(ui);
 }
 
 void CampaignPlay::DrawHud(UI &ui) {
@@ -1097,7 +1203,10 @@ void CampaignPlay::DrawHud(UI &ui) {
       {m_player.Center().x * CELL_SIZE, m_player.Center().y * CELL_SIZE});
   bool behind = CheckCollisionPointRec(body, bar) ||
                 CheckCollisionPointRec(GetMousePosition(), bar);
-  m_hudAlpha += ((behind ? 0.3f : 1.0f) - m_hudAlpha) * std::min(1.0f, GetFrameTime() * 10);
+  // Out of the way of a conversation or a glyph being shown
+  bool hidden = m_talking >= 0 || !m_reveals.empty();
+  m_hudAlpha += ((hidden ? 0.0f : behind ? 0.3f : 1.0f) - m_hudAlpha) *
+                std::min(1.0f, GetFrameTime() * 10);
   float a = m_hudAlpha;
 
   dl->AddRectFilled(at, {at.x + w, at.y + h}, Theme::U32(Tone::Ink, 0.85f * a));
@@ -1125,6 +1234,29 @@ void CampaignPlay::DrawHud(UI &ui) {
     }
     char key[2] = {static_cast<char>('1' + i), 0};
     dl->AddText({p0.x + 4 * s, p0.y + 2 * s}, Theme::U32(Tone::Parchment, a), key);
+    if (!spell) {
+      ImVec2 ps = ImGui::CalcTextSize("+");
+      dl->AddText({(p0.x + p1.x - ps.x) * 0.5f, (p0.y + p1.y - ps.y) * 0.5f},
+                  Theme::U32(Tone::Faint, 0.7f * a), "+");
+    }
+  }
+  // Above the bar: the chosen spell's name, or what to do about empty hands
+  {
+    const Spell *chosen = SlotSpell(m_slot);
+    bool any = false;
+    for (int i = 0; i < SLOTS; ++i)
+      any |= SlotSpell(i) != nullptr;
+    std::string line = chosen ? chosen->name
+                       : any  ? ""
+                       : !m_backpackSpells.All().empty()
+                           ? "Your hands are empty: B to take spells from your backpack"
+                           : "No spells yet: draw one at a workbench (E)";
+    if (!line.empty()) {
+      ImVec2 ts = ImGui::CalcTextSize(line.c_str());
+      ImVec2 tp{(screen.x - ts.x) * 0.5f, at.y - h - 6 * s - ts.y - 6 * s};
+      dl->AddText(tp, Theme::U32(chosen ? Tone::Muted : Tone::BrassBright, 0.9f * a),
+                  line.c_str());
+    }
   }
 
   // Keys, for a little while after starting, then only the glyph count
@@ -1135,8 +1267,8 @@ void CampaignPlay::DrawHud(UI &ui) {
                 "B backpack   J codex   E use   Tab map   right click: cast from a surface   Esc leave");
   else
     dl->AddText(tl, Theme::U32(Tone::Faint, 0.8f),
-                TextFormat("%d glyphs known   %d silver", (int)m_save.glyphs.size(),
-                           m_save.silver));
+                TextFormat("%d glyphs known   %d silver      B backpack   J codex   Tab map",
+                           (int)m_save.glyphs.size(), m_save.silver));
   ImVec2 bottom{tl.x, tl.y + 18 * s};
   if (m_testing)
     dl->AddText(bottom, Theme::U32(Tone::Brass),

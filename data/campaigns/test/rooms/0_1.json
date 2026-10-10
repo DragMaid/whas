@@ -1,0 +1,117 @@
+{
+ "background": "",
+ "conditions": [],
+ "enemies": [],
+ "npcs": [
+  {
+   "name": "Sister Ilse",
+   "tag": "ilse",
+   "pos": [
+    381,
+    188
+   ],
+   "dialogue": [
+    {
+     "text": "Careful on that stair. Few come down here who aren't hats or bones.",
+     "replies": [
+      {
+       "text": "Wren sent me.",
+       "next": 1
+      },
+      {
+       "text": "What's down here?",
+       "next": 2
+      },
+      {
+       "text": "Goodbye.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Did he. Then he still owes me a kettle. Well. You'll want the cold, I expect. Everyone does, once fire's been at them.",
+     "replies": [
+      {
+       "text": "Teach me.",
+       "next": 3
+      },
+      {
+       "text": "What's down here?",
+       "next": 2
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Cellars, then the Warden's hall. The Warden was a keeper once. Now it only keeps. East, past the acid. Bring something that breaks.",
+     "replies": [
+      {
+       "text": "Teach me the cold.",
+       "next": 3
+      },
+      {
+       "text": "Goodbye.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "There. Cooling. Draw it into a spell and the spell runs cold: water stiffens to ice, fire falters. Use it kindly.",
+     "replies": [
+      {
+       "text": "Thank you, Sister.",
+       "next": -1
+      }
+     ],
+     "teach": "cooling",
+     "teachSigil": false
+    }
+   ]
+  }
+ ],
+ "objects": [],
+ "pos": [
+  0,
+  1
+ ],
+ "sealed": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "terrain": {
+  "cells": "jAECHgDyAgIeAPICAh4A8gICHgDyAgIeAPICAh4A8gICHgDyAgIeAPICAh4A8gICHgDyAgIeAPICAh4A8gICHgDzAgIdAPQCAhwA9QICGwD2AgIaAPcCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAPgCAhkA+AICGQD4AgIZAAsCBwjmAgIZAAoCBwjnAgIZAAkCBwjoAgIZAAYCDwBpAg4A7AECGQACAhUAYwIUAOoBAjEAXgIZAOkBAjIAWgIeAOcBAjMAVgIhAOcBAjQAUwIkAOYBAjQAUAIoAOUBAjUATAIrAOUBAjUASgIuAOQBAjYARgIxAOQBAjYARAI0AOMBAjcAQQI2AOMBAjcAPgI5AOMBAjcAPAI8AOIBAjgABwgyAj4A4gECNwAHCDACQQDiAQI2AAcILwJEAMwBAgcIDgI5ADACRwDLAQIHCA8COQAuAkoAyQECBwgQAjoAKwJMAOABAjoAKAJQAN8BAjsAJAJTAN8BAjwAGQIHCAECVgDeAQI8ABgCBwhZAN0BAj0AFgIHCFsA3AECPwAUAmMA2wECQQAOAmkADwIBAMkBAscBAMoBAsYBAMsBAsUBAMwBAsQBAM0BAsMBAM4BAsIBAM8BAsEBANABAsABANEBAr8BANIBAr4BANMBAr0BANQBArwBANUBArsBANYBAroBANcBArkBANgBArgBANkBArcBANoBArYBANsBArUBANwBArQBAN0BArMBAN4BArIBAN8BArEBAOABArABAOEBAq8BAOIBAq4BAOMBAq0BAOQBAqwBAOUBAqsBAOYBAqoBAOcBAqkBAOgBAqgBAOkBAqcBAOoBAqYBAOsBAqUBAOwBAqQBAO0BAqMBAO4BAqIBAO8BAqEBAPABAqABAPEBAp8BAPIBAp4BAPMBAp0BAPQBApwBAPUBApsBAPYBApoBAPcBApkBAPgBApgBAPkBApcBAPoBApYBAPsBApUBAPwBApQBAP0BApMBAP4BApIBAP8BApEBAIACApABAIECAo8BAIICAo4BAIMCAo0BAIQCAowBAIUCAosBAIYCAooBAIcCAokBAIgCAogBAIkCAocBAIoCAoYBAIsCAoUBAIwCAoQBAI0CAoMBAI4CAoIBAI8CAoEBAJACAoABAJECAn8AkgICfgCTAgJ9AJQCAnwAlQICewCWAgJ6AJcCAnkAmAICeACZAgJ6AJcCAnkAmAICeACZAgJ3AJoCAnYAmwICdQCcAgJ0AJ0CAnMAngICcgCfAgJxAKACAnAAoQICbwCiAgJuAKMCAm0ApAICbAClAgJrAKYCAmoApwICaQCoAgJoAKkCAmcAqgICZgCrAgJlAKwCAmQArQICYwCuAgJiAK8CAmEAsAICYACxAgJfALICAl4AswICXQC0AgJcALUCAlsAtgICWgC3AgJZALgCAlgAuQICVwC6AgJWALsCAlUAvAICVAC9AgJTAL4CAlIAvwICUQDAAgJQAMECAk8AwgICTgDDAgJNAMQCAkwAxQICSwDGAgJKAMcCAkkA1AICIAHxAgIeAfMCAhwB9QICGgH3AgIYAfkCAhYB+wICFAGyZwI=",
+  "format": 1,
+  "gen": {
+   "biome": 0,
+   "hills": 100,
+   "rocks": 100,
+   "seed": "1",
+   "vegetation": 100,
+   "waterRise": 0
+  },
+  "id": "",
+  "name": "room",
+  "settings": {},
+  "size": [
+   400,
+   240
+  ],
+  "spawns": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ }
+}

@@ -939,10 +939,31 @@ void SpellEditor::DrawGlyphGrid(GlyphKind kind) {
   float cell = 84.0f * View::UiScale();
   int columns = std::max(1, (int)(ImGui::GetContentRegionAvail().x / cell));
   ImGui::Columns(columns, nullptr, false);
+  int locked = 0;
   for (const SvgAsset *asset : assets) {
-    if (m_allowGlyph && !m_allowGlyph(asset->id))
+    if (m_allowGlyph && !m_allowGlyph(asset->id)) {
+      ++locked;
       continue;
+    }
     DrawAssetThumbnail(*asset, m_isPlacing && m_paletteAssetId == asset->id);
+    ImGui::NextColumn();
+  }
+  // At a bench, the glyphs still to learn are blank cards, so it's clear
+  // there are more to find
+  for (int i = 0; m_workbench && i < locked; ++i) {
+    float ui = View::UiScale();
+    ImGui::PushID(i);
+    ImGui::Dummy({72 * ui, 72 * ui});
+    ImVec2 p0 = ImGui::GetItemRectMin(), p1 = ImGui::GetItemRectMax();
+    ImDrawList *dl = ImGui::GetWindowDrawList();
+    dl->AddRectFilled(p0, p1, Theme::U32(Tone::Soot), 4.0f);
+    dl->AddRect(p0, p1, Theme::U32(Tone::Line, 0.6f), 4.0f);
+    ImVec2 ts = ImGui::CalcTextSize("?");
+    dl->AddText({(p0.x + p1.x - ts.x) * 0.5f, (p0.y + p1.y - ts.y) * 0.5f},
+                Theme::U32(Tone::Faint), "?");
+    ImGui::SetItemTooltip("Not learned yet. Shrines and the people you meet "
+                          "teach glyphs.");
+    ImGui::PopID();
     ImGui::NextColumn();
   }
   ImGui::Columns(1);
@@ -1196,7 +1217,7 @@ void SpellEditor::SaveCurrent() {
   m_currentSpell.name = m_nameBuffer;
   std::string err;
   bool saved = m_spells->Save(m_currentSpell, err);
-  m_statusMessage = saved ? "Saved." : err;
+  m_statusMessage = !saved ? err : m_workbench ? "Saved to your backpack." : "Saved.";
   if (saved)
     m_saved = m_currentSpell;
 }
@@ -1308,8 +1329,8 @@ void SpellEditor::DrawOverlay() {
                    ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
   // Close sits at the right of the tab row
-  float closeW = ImGui::CalcTextSize("Close (Esc)").x +
-                 ImGui::GetStyle().FramePadding.x * 2;
+  const char *closeLabel = m_workbench ? "Leave the bench (Esc)" : "Close (Esc)";
+  float closeW = Widgets::ButtonWidth(closeLabel);
   ImVec2 row = ImGui::GetCursorPos();
   ImGui::SetCursorPos({ImGui::GetWindowWidth() - closeW - 10, row.y});
   // Esc lets go of what's picked or selected first, then closes
@@ -1319,7 +1340,7 @@ void SpellEditor::DrawOverlay() {
                  m_selectedComponent >= 0;
   if (escape && holding && m_tab == Tab::Edit) {
     ClearSelection();
-  } else if (Widgets::Button("Close (Esc)") || escape) {
+  } else if (Widgets::Button(closeLabel) || escape) {
     m_open = false;
     ClearSelection();
   }
@@ -1332,11 +1353,13 @@ void SpellEditor::DrawOverlay() {
                                      ? ImGuiTabItemFlags_SetSelected
                                      : 0;
     m_switchTab = false;
-    if (ImGui::BeginTabItem("Edit spell", nullptr, editFlags)) {
+    if (ImGui::BeginTabItem(m_workbench ? "Draw a spell" : "Edit spell", nullptr,
+                            editFlags)) {
       m_tab = Tab::Edit;
       ImGui::EndTabItem();
     }
-    if (ImGui::BeginTabItem("Library & decks", nullptr, libFlags)) {
+    if (ImGui::BeginTabItem(m_workbench ? "Your backpack###lib" : "Library & decks###lib",
+                            nullptr, libFlags)) {
       m_tab = Tab::Library;
       ImGui::EndTabItem();
     }
@@ -1353,7 +1376,7 @@ void SpellEditor::DrawOverlay() {
   ImGui::SetNextItemWidth(240);
   ImGui::InputText("Name", m_nameBuffer, SPELL_NAME_MAX_LEN + 1);
   ImGui::SameLine();
-  if (Widgets::Button("Save spell"))
+  if (Widgets::Button(m_workbench ? "Save to backpack" : "Save spell"))
     SaveCurrent();
   ImGui::SameLine();
   if (Widgets::Button("New")) {
@@ -1375,11 +1398,13 @@ void SpellEditor::DrawOverlay() {
     Redo();
   ImGui::EndDisabled();
   ImGui::SetItemTooltip("Ctrl+Y / Ctrl+Shift+Z");
-  ImGui::SameLine();
-  ImGui::BeginDisabled(!m_spells || !m_spells->Find(m_spells->RefOf(m_nameBuffer)));
-  if (Widgets::Button("Test in sandbox"))
-    m_testRef = m_spells->RefOf(m_nameBuffer);
-  ImGui::EndDisabled();
+  if (!m_workbench) {
+    ImGui::SameLine();
+    ImGui::BeginDisabled(!m_spells || !m_spells->Find(m_spells->RefOf(m_nameBuffer)));
+    if (Widgets::Button("Test in sandbox"))
+      m_testRef = m_spells->RefOf(m_nameBuffer);
+    ImGui::EndDisabled();
+  }
   if (!m_statusMessage.empty()) {
     ImGui::SameLine();
     ImGui::TextColored(Theme::Vec(Tone::Moss), "%s",
@@ -1388,7 +1413,7 @@ void SpellEditor::DrawOverlay() {
   DrawGlyphCounter();
 
   ImGui::Separator();
-  if (SpellRules::CountGlyphs(m_currentSpell).OverLimit())
+  if (!m_workbench && SpellRules::CountGlyphs(m_currentSpell).OverLimit())
     ImGui::TextColored(Theme::Vec(Tone::Oxblood),
                        "Over the limit (more than %d signs in a circle or %d "
                        "spells in a layered spell): this spell can only be "
@@ -1444,9 +1469,17 @@ void SpellEditor::DrawGlyphCounter() const {
   SpellRules::Count count = SpellRules::CountGlyphs(m_currentSpell);
   bool over = count.OverLimit();
   char text[96];
-  int n = std::snprintf(text, sizeof text, "Signs %d/%d    Sigils %d",
-                        count.mostSigns, SIGN_LIMIT, count.sigils);
-  if (count.parts > 0)
+  // No match limits on a campaign's bench
+  if (m_workbench)
+    over = false;
+  int n = m_workbench
+              ? std::snprintf(text, sizeof text, "Signs %d    Sigils %d",
+                              count.mostSigns, count.sigils)
+              : std::snprintf(text, sizeof text, "Signs %d/%d    Sigils %d",
+                              count.mostSigns, SIGN_LIMIT, count.sigils);
+  if (count.parts > 0 && m_workbench)
+    std::snprintf(text + n, sizeof text - n, "    Spells %d", count.parts);
+  else if (count.parts > 0)
     std::snprintf(text + n, sizeof text - n, "    Spells %d/%d", count.parts,
                   LAYER_MAX_COMPONENTS);
   float w = ImGui::CalcTextSize(text).x;
@@ -1455,10 +1488,12 @@ void SpellEditor::DrawGlyphCounter() const {
                                ImGui::GetStyle().ItemSpacing.x));
   ImGui::AlignTextToFramePadding();
   ImGui::TextColored(Theme::Vec(over ? Tone::Oxblood
-                                : count.mostSigns > SIGN_LIMIT * 3 / 4
+                                : !m_workbench && count.mostSigns > SIGN_LIMIT * 3 / 4
                                     ? Tone::Brass
                                     : Tone::Muted),
                      "%s", text);
+  if (m_workbench)
+    return;
   if (ImGui::IsItemHovered()) {
     ImGui::BeginTooltip();
     ImGui::Text("Ordinary matches allow %d signs per circle and %d spells "

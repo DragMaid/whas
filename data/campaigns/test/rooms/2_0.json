@@ -1,0 +1,154 @@
+{
+ "background": "",
+ "conditions": [],
+ "enemies": [],
+ "npcs": [
+  {
+   "name": "Pellam",
+   "tag": "pellam",
+   "pos": [
+    262,
+    174
+   ],
+   "dialogue": [
+    {
+     "text": "A customer! Don't mind the ruin, it came with the shop. Silver for glyphs, glyphs for silver. Mostly the first.",
+     "replies": [
+      {
+       "text": "What do you sell?",
+       "next": 1
+      },
+      {
+       "text": "Who are you?",
+       "next": 4
+      },
+      {
+       "text": "Not today.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "The wind sigil, freshly copied. Sixty silver. And a tip, free: the tower up top wants its wall broken, and fast.",
+     "replies": [
+      {
+       "text": "The wind sigil.",
+       "next": 2
+      },
+      {
+       "text": "Tell me about the tower.",
+       "next": 3
+      },
+      {
+       "text": "Something else.",
+       "next": 0
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "A pleasure. Wind pushes, and with a pulling sign it carries things home. Don't blow yourself off the Root.",
+     "replies": [
+      {
+       "text": "Thanks.",
+       "next": -1
+      }
+     ],
+     "teach": "wind",
+     "teachSigil": true,
+     "price": 60
+    },
+    {
+     "text": "Lantern Tower, past the treetops. You get till the lantern gutters to break the wall, and there's a shrine behind it. Drill straight through, I'd say.",
+     "replies": [
+      {
+       "text": "Something else.",
+       "next": 0
+      },
+      {
+       "text": "Farewell.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Pellam. Trader. Formerly of a much nicer ruin.",
+     "replies": [
+      {
+       "text": "Something else.",
+       "next": 0
+      },
+      {
+       "text": "Farewell.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    }
+   ]
+  }
+ ],
+ "objects": [
+  {
+   "kind": 0,
+   "pos": [
+    190.5,
+    190
+   ]
+  },
+  {
+   "kind": 4,
+   "pos": [
+    125.5,
+    40
+   ],
+   "jet": 8,
+   "every": 4.0
+  }
+ ],
+ "pos": [
+  2,
+  0
+ ],
+ "sealed": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "terrain": {
+  "cells": "wwwCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCMQgTAD8IEwA/CBMAPggTAD8IDQAICAMCLQgbADcIGwA3CBsANggbADcIEQAICAMCKggiAC8IIwAvCCIAMAgiAC8IFQAICAMCAQAiCC8AIwgoACkIMAAiCC8AIwgbAAgIAwIEABwINgAbCCwACggBABsINgAcCDIAHwgfAAgIAwIJABIIPAAWCDAACggFABMIPwASCDcAGwgjAAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCDwACgigAQAKCDQACAgDAlcACgg8AAoIoAEACgg0AAgIAwJXAAoIPAAKCKABAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMCVwAKCOYBAAoINAAICAMChQMACAgDAoUDAAgIAwKFAwAICAMChQMACAgDAoUDAAgIAwKFAwAICAMChQMACAgDAoUDAAgIAwKFAwAICAMChQMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAiIAwAICIgDAAgIiAMACAjwAQAyCWYACAjwAQAyCU0ABwgSAAgIOQAHCLABADIJTAAJCBEACAg5AAcIsAEAMglMAAkIEQAICAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIAwKNAwgDAo0DCAMCjQMIwAwC",
+  "format": 1,
+  "gen": {
+   "biome": 0,
+   "hills": 100,
+   "rocks": 100,
+   "seed": "1",
+   "vegetation": 100,
+   "waterRise": 0
+  },
+  "id": "",
+  "name": "room",
+  "settings": {},
+  "size": [
+   400,
+   240
+  ],
+  "spawns": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ }
+}

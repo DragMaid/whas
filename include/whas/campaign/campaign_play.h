@@ -73,7 +73,8 @@ private:
   std::string Grant(const std::vector<Spell> &spells);
   const Spell *SlotSpell(int slot) const;
   bool PanelOpen() const {
-    return m_backpack || m_warp || m_codex || m_bench.IsOpen() || m_talking >= 0;
+    return m_backpack || m_warp || m_codex || m_bench.IsOpen() || m_talking >= 0 ||
+           !m_reveals.empty();
   }
   int NearObject(Campaign::ObjectKind kind) const;
   // Not buried (or dug out) and, for a prize, the room is done
@@ -105,6 +106,17 @@ private:
   float DrawMinimap(ImDrawList *dl);
   void DrawBigMap();
   void DrawCodex(UI &ui); // campaign_codex.cpp
+  // A glyph just learned, shown big while the world waits
+  // (campaign_reveal.cpp); `from` says where it came from
+  void Learn(const std::string &glyph, bool sigil, std::string from);
+  void DrawReveal(UI &ui);
+  struct Reveal {
+    std::string glyph;
+    bool sigil = false;
+    std::string from;
+    float t = 0.0f; // seconds shown
+  };
+  std::vector<Reveal> m_reveals;
   void DrawBackpack(UI &ui);
   void DrawWarp(Simulation *sim);
 
@@ -137,6 +149,7 @@ private:
   int m_talking = -1; // NPC being talked to
   int m_node = 0;
   bool m_talkFresh = false;
+  float m_typed = 0.0f; // characters of the line shown so far
   std::vector<int> m_breakStart; // solid cells each Break region began with
   std::vector<bool> m_met;       // conditions met, last checked
   std::vector<bool> m_uncovered; // buried objects dug out this visit
@@ -166,7 +179,7 @@ private:
   float m_hudAlpha = 1.0f;
   Vector2 m_cam{0, 0};     // world pixels
   Vector2 m_lookAhead{0, 0};
-  float m_zoom = 1.8f;     // times the whole-room view
+  float m_zoom = 1.5f;     // times the whole-room view
   bool m_camSnap = true;   // jump straight there (entering a room)
 
   Renderer m_colors; // cell colours for the live map

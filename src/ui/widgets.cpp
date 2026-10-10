@@ -65,6 +65,10 @@ bool PlateButton(const char *label, ImVec2 size, bool selected, bool small) {
 
 } // namespace
 
+float ButtonWidth(const char *label) {
+  return LabelSize(label, ButtonFontSize(false)).x + ImGui::GetStyle().FramePadding.x * 3.2f;
+}
+
 bool Button(const char *label, const ImVec2 &size, bool selected) {
   return PlateButton(label, size, selected, false);
 }

@@ -16,6 +16,8 @@ inline void Click() {
 // that much. A selected button wears brighter trim (toggles, current tab).
 bool Button(const char *label, const ImVec2 &size = ImVec2(0, 0),
             bool selected = false);
+// The width Button gives `label`, for laying out around it
+float ButtonWidth(const char *label);
 // Compact, for rows of small actions
 bool SmallButton(const char *label, bool selected = false);
 
