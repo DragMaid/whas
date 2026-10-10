@@ -31,6 +31,10 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
 - **Windowway gates**: walking into one opens it and makes it your
   respawn point. `E` at any open gate shows the rooms you've been through;
   click a room with a lit gate to travel there.
+- **Learning a glyph** (from a shrine or a person) stops the world and
+  shows it: the glyph is inked stroke by stroke in a ring of light, then
+  named, explained and given its lore line. A key or click hurries it, then
+  puts it away. Code: `campaign_reveal.cpp`.
 - **Shrines** teach their sigil or sign the first time you touch them,
   and/or give blueprints: ready-made spells that go into the backpack (and
   an empty slot). A blueprint doesn't teach its glyphs: you can cast it and
@@ -41,12 +45,15 @@ Open it from the menu: **Campaign**, or `--open campaigns`.
   still hide one with a faint spark. **Prizes** only appear once the room's
   conditions are met.
 - **Workbenches** (`E`) open the spell editor with only the glyphs you
-  know. What you save goes into this campaign's backpack, not your main
-  library.
+  know; the ones still to learn are blank "?" cards. What you save goes
+  into this campaign's backpack, not your main library. The bench leaves
+  out everything about the sandbox, decks and match limits.
 - **Casting** works like real-time duels: a spell can't be cast again until
   its cast time has passed. Wet paper, burning and the rest apply.
-- **People** (NPCs) stand where they were placed; `E` talks to them, and
-  `1`-`3` or a click picks a reply. A conversation can teach a glyph.
+- **People** (NPCs) stand where they were placed, with a "!" over them
+  until you've talked to them; `E` talks, the line types itself out (a key
+  or click finishes it), and `1`-`3` or a click picks a reply. A
+  conversation can teach a glyph.
   Spells, enemies and guidance pass them by.
 - **Sealed edges**: a room can seal some of its edges with a glowing
   barrier until its conditions hold (listed top right). Once met, they stay
