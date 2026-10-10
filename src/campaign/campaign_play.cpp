@@ -652,13 +652,18 @@ void CampaignPlay::CheckEdges(Simulation &sim, const CharacterInput &input) {
     EnterRoom(sim, at.Step(dx, dy), to, true);
     return true;
   };
-  if (p.pos.x <= EDGE && (input.left || p.vel.x < 0.0f) &&
+  // Moving into the room's bounds stops up to a substep short of them
+  // (slowed in water, rising), so anything within a cell of the edge
+  // counts; rooms are entered a whole cell in
+  if (p.pos.x < 1.0f && (input.left || p.vel.x < 0.0f) &&
       go(-1, 0, {GRID_W - Character::WIDTH - 1.0f, p.pos.y}))
     return;
-  if (p.pos.x + Character::WIDTH >= GRID_W - EDGE && (input.right || p.vel.x > 0.0f) &&
+  if (p.pos.x + Character::WIDTH > GRID_W - 1.0f && (input.right || p.vel.x > 0.0f) &&
       go(1, 0, {1.0f, p.pos.y}))
     return;
-  if (p.pos.y <= EDGE && p.vel.y <= 0.0f &&
+  // Standing still, pos.y is a whole number: only standing in the very top
+  // row counts then
+  if (p.pos.y < 1.0f && p.vel.y <= 0.0f && !(p.grounded && p.pos.y > EDGE) &&
       go(0, -1, {p.pos.x, GRID_H - Character::HEIGHT - 1.0f}))
     return;
   if (p.pos.y + Character::HEIGHT >= GRID_H - EDGE)
