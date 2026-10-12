@@ -1,6 +1,9 @@
 #include "whas/constants.h"
 #include "whas/engine/simulation.h"
 #include "whas/game/character.h"
+#include "whas/game/match.h"
+#include "whas/game/turn_controller.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 
 namespace {
@@ -113,3 +116,70 @@ TEST_CASE("characters build burn stacks in fire and water clears them",
   REQUIRE(c.burnStacks == 3);
 }
 
+
+TEST_CASE("a fire bolt sets a body alight and flies on through it",
+          "[burning]") {
+  Simulation sim;
+  sim.SetSeed(2);
+  Floor(sim);
+  Character c;
+  c.id = 1;
+  c.pos = {100, GRID_H - 4 - Character::HEIGHT};
+  float y = c.Center().y;
+  Particle *p = sim.GetParticleSystem().Spawn({90, y}, {120, 0}, Element::FIRE,
+                                              60.0f, 50.0f, true, 2);
+  REQUIRE(p);
+  for (int i = 0; i < 12; ++i) {
+    sim.GetParticleSystem().SetHurtboxes({{c.id, c.Bounds()}});
+    sim.Update(DT);
+    Match::ApplyEffects(sim, &c, 1);
+  }
+  REQUIRE(c.Burning());
+  REQUIRE(c.hp < c.maxHp);
+  // Still going, past the body
+  REQUIRE(p->active);
+  REQUIRE(p->pos.x > c.pos.x + Character::WIDTH);
+}
+
+TEST_CASE("water wets the paper: only flight casts until it dries",
+          "[burning]") {
+  Simulation sim;
+  sim.SetSeed(4);
+  Floor(sim);
+  Character c;
+  c.id = 1;
+  c.pos = {60, GRID_H - 4 - Character::HEIGHT};
+  sim.Paint(63, GRID_H - 8, Element::WATER, 2);
+  c.UpdateBurn(sim, DT);
+  REQUIRE(c.Wet());
+  REQUIRE_FALSE(c.CanCast(false));
+  REQUIRE(c.CanCast(true));
+
+  // Fire won't leave wet paper
+  Spell fire;
+  fire.glyphs = {{"fire", GlyphKind::Sigil, {0, 0}, 1.0f, 0}};
+  TurnPlan plan;
+  plan.steps.push_back({});
+  plan.steps[0].casts.push_back(PlannedCast::Local(fire, {1, 0}));
+  REQUIRE(plan.steps[0].casts[0].stats.valid);
+  sim.Reset();
+  Floor(sim);
+  int before = sim.GetActiveSpellEffects().size();
+  TurnController::ApplyPlanTick(plan, 0, sim, c);
+  REQUIRE((int)sim.GetActiveSpellEffects().size() == before);
+
+  // Drying takes WET_SECONDS on foot, a third of that in flight
+  Character walker = c, flyer = c;
+  flyer.pos = {200, 10};
+  flyer.LaunchFlight({0, -20});
+  for (int i = 0; i < 70; ++i) {
+    walker.Step(sim, {}, DT);
+    flyer.Step(sim, {}, DT);
+  }
+  REQUIRE_FALSE(flyer.grounded);
+  REQUIRE(walker.Wet());
+  REQUIRE_FALSE(flyer.Wet());
+  for (int i = 0; i < 60 * 3; ++i)
+    walker.Step(sim, {}, DT);
+  REQUIRE(walker.CanCast(false));
+}

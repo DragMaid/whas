@@ -1,0 +1,81 @@
+{
+ "background": "",
+ "conditions": [],
+ "enemies": [
+  {
+   "kind": 1,
+   "tag": "",
+   "pos": [
+    170,
+    109
+   ],
+   "hp": 40.0,
+   "speed": 20.0,
+   "damage": 7.0,
+   "silver": 15
+  },
+  {
+   "kind": 2,
+   "tag": "",
+   "pos": [
+    90,
+    60
+   ],
+   "hp": 20.0,
+   "speed": 24.0,
+   "damage": 5.0,
+   "silver": 10
+  }
+ ],
+ "npcs": [],
+ "objects": [
+  {
+   "kind": 2,
+   "pos": [
+    50.5,
+    117
+   ],
+   "glyph": "expansion",
+   "sigil": false
+  }
+ ],
+ "pos": [
+  0,
+  -1
+ ],
+ "sealed": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "terrain": {
+  "cells": "jQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKNAwADAo0DAAMCjQMAAwKeLwANCjgADQo4AA0K9AEAFwouABcKDgAHCBkAFQrtAQAJCg0CCQomAAkKDQIJCggACwgTAAkKDQIDCsgBAAIKHwAIChcCBwofAAgKFwIICgQACwgPAAgKFQIBCscBAAYKFwAICh8CBwoXAAgKHwIHCgEACwgMAAcKGQICCsYBAAICCQoNAAkKJgIJCg0ACQonAgQKCwgGAAkKHgICCsUBAAYCFwouAhcKLgIBCgsIDAoiAgIKxAEACwINCjgCDQo2AgcICAopAgIKwwEAzAECAgrCAQDNAQICCsEBAM4BAgIKwAEAzwECAgq/AQDQAQICCr4BANEBAgIKvQEA0gECAgq8AQDTAQICCrsBANQBAgIKugEA1QECAgq5AQDWAQICCrgBANcBAgIKtwEA2AECAgq2AQDZAQICCrUBANoBAgIKtAEA2wECAgqzAQDcAQICCrIBAN0BAgIKsQEA3gECAgqwAQDfAQICCq8BAOABAgIKrgEA4QECAgqtAQDiAQICCqwBAOMBAgIKqwEA5AECAgqqAQDlAQICCqkBAOYBAgIKqAEA5wECAgqnAQDoAQICCqYBAOkBAgIKpQEA6gECAgqkAQDrAQICCqMBAOwBAgIKogEA7QECAgqhAQDuAQICCqABAO8BAgIKnwEA8AECAgqeAQDxAQICCp0BAPIBAgIKnAEA8wECAgqbAQD0AQICCpoBAPUBAgIKmQEA9gECAgqYAQD3AQICCkQABwhMAPgBAgIKQgAJCEsA+QECQwoJCEsK+gECQgoJCEsKvQICBwic2AEC",
+  "format": 1,
+  "gen": {
+   "biome": 0,
+   "hills": 100,
+   "rocks": 100,
+   "seed": "1",
+   "vegetation": 100,
+   "waterRise": 0
+  },
+  "id": "",
+  "name": "room",
+  "settings": {},
+  "size": [
+   400,
+   240
+  ],
+  "spawns": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ }
+}

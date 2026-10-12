@@ -2,8 +2,8 @@
 
 constexpr int FPS = 60;
 
-constexpr int WINDOW_WIDTH    = 1280;
-constexpr int WINDOW_HEIGHT   = 720;
+constexpr int WINDOW_WIDTH    = 1600;
+constexpr int WINDOW_HEIGHT   = 960;
 constexpr int CELL_SIZE       = 4;
 constexpr int GRID_W          = WINDOW_WIDTH  / CELL_SIZE;
 constexpr int GRID_H          = WINDOW_HEIGHT / CELL_SIZE;

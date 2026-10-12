@@ -23,7 +23,7 @@ MapThumbnails::~MapThumbnails() {
     UnloadTexture(texture);
 }
 
-Image MapThumbnails::Render(const MapDef &map) {
+Image MapThumbnails::Render(const MapDef &map, bool spawns) {
   Image image = GenImageColor(WIDTH, HEIGHT, BACKDROP);
   if (map.cells.size() != static_cast<size_t>(GRID_W) * GRID_H)
     return image;
@@ -44,7 +44,7 @@ Image MapThumbnails::Render(const MapDef &map) {
       pixels[y * WIDTH + x] = colors[e < colors.size() ? e : 0];
     }
   // Where the players start
-  for (int slot = 0; slot < 2; ++slot) {
+  for (int slot = 0; spawns && slot < 2; ++slot) {
     Vector2 s = map.spawns[slot];
     int x = static_cast<int>(s.x) * WIDTH / GRID_W;
     int y = static_cast<int>(s.y) * HEIGHT / GRID_H;

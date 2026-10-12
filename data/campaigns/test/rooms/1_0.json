@@ -1,0 +1,312 @@
+{
+ "background": "",
+ "conditions": [],
+ "enemies": [
+  {
+   "kind": 1,
+   "tag": "",
+   "pos": [
+    80,
+    118
+   ],
+   "hp": 35.0,
+   "speed": 18.0,
+   "damage": 6.0,
+   "silver": 15
+  },
+  {
+   "kind": 1,
+   "tag": "",
+   "pos": [
+    270,
+    61
+   ],
+   "hp": 35.0,
+   "speed": 18.0,
+   "damage": 6.0,
+   "silver": 15
+  },
+  {
+   "castEvery": 1.600000023841858,
+   "damage": 4.0,
+   "hp": 30.0,
+   "kind": 0,
+   "pos": [
+    330.0,
+    121.0
+   ],
+   "silver": 100,
+   "speed": 18.0,
+   "spells": [
+    {
+     "format": 3,
+     "glyphs": [
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 2.1000008583068848,
+       "x": 0.0,
+       "y": -115.06141662597656
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 2.3000006675720215,
+       "x": -4.857473850250244,
+       "y": 131.45538330078125
+      },
+      {
+       "assetId": "collection",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -117.18656158447266,
+       "y": -86.52375793457031
+      },
+      {
+       "assetId": "water",
+       "kind": "sigil",
+       "rotation": 0.0,
+       "scale": 2.3000006675720215,
+       "x": -117.79374694824219,
+       "y": -5.161066055297852
+      },
+      {
+       "assetId": "repetition",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -75.89803314208984,
+       "y": -136.9200439453125
+      },
+      {
+       "assetId": "collection",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 1.0,
+       "x": -113.54345703125,
+       "y": 95.63151550292969
+      },
+      {
+       "assetId": "strengthening",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 1.0,
+       "x": 62.53997802734375,
+       "y": -90.16686248779297
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": -90.0,
+       "scale": 1.4000000953674316,
+       "x": 130.54461669921875,
+       "y": 74.38007354736328
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 90.0,
+       "scale": 1.7000001668930054,
+       "x": 131.15179443359375,
+       "y": -78.63036346435547
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": -90.0,
+       "scale": 2.499999761581421,
+       "x": 123.2583999633789,
+       "y": -8.19698715209961
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 90.0,
+       "scale": 2.6000003814697266,
+       "x": 117.18656158447266,
+       "y": 19.733488082885742
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": -90.0,
+       "scale": 1.0,
+       "x": 134.18771362304688,
+       "y": -34.91309356689453
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 90.0,
+       "scale": 1.0,
+       "x": 128.11587524414062,
+       "y": 48.87833023071289
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": -90.0,
+       "scale": 1.0,
+       "x": 119.61529541015625,
+       "y": 108.98957061767578
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 90.0,
+       "scale": 1.0,
+       "x": 137.2236328125,
+       "y": -108.98957061767578
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 1.0,
+       "x": 34.609500885009766,
+       "y": -119.91889190673828
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": 28.53765869140625,
+       "y": 85.91657257080078
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 1.0,
+       "x": 58.896873474121094,
+       "y": -44.02085876464844
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -147.5457763671875,
+       "y": 69.52259826660156
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 180.0,
+       "scale": 1.0,
+       "x": -173.04751586914062,
+       "y": 54.950172424316406
+      },
+      {
+       "assetId": "levitation",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": 23.680185317993164,
+       "y": -67.09385681152344
+      },
+      {
+       "assetId": "convergence",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -73.46929168701172,
+       "y": -69.52259826660156
+      },
+      {
+       "assetId": "convergence",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -161.51101684570312,
+       "y": -37.94901657104492
+      },
+      {
+       "assetId": "dragon",
+       "kind": "sigil",
+       "rotation": 0.0,
+       "scale": 0.8999999761581421,
+       "x": -0.6071842312812805,
+       "y": 5.161066055297852
+      },
+      {
+       "assetId": "sights_set",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -63.89460754394531,
+       "y": 120.08332824707031
+      },
+      {
+       "assetId": "sights_set",
+       "kind": "sign",
+       "rotation": 0.0,
+       "scale": 1.0,
+       "x": -38.20833206176758,
+       "y": 52.014705657958984
+      }
+     ],
+     "name": "dick"
+    }
+   ],
+   "tag": ""
+  },
+  {
+   "kind": 2,
+   "tag": "",
+   "pos": [
+    120,
+    60
+   ],
+   "hp": 20.0,
+   "speed": 22.0,
+   "damage": 5.0,
+   "silver": 10
+  }
+ ],
+ "npcs": [],
+ "objects": [],
+ "pos": [
+  1,
+  0
+ ],
+ "sealed": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "terrain": {
+  "cells": "xgECDgC/AQL9AgANCAYC/QIADQgGAv0CAA0IAwKAAwANCAMCgAMADQgDAoADAA0IAwKAAwANCAMCgAMADQgDAoADAA0IAwKAAwANCAMCgAMADQgDAoADAA0IAwLFAQAOAq0BAA0IAwLDAQABChACAQqrAQANCAMCwgEAAQoSAgEKqgEADQgDAsEBAAEKFAIBCqkBAA0IAwLAAQABChYCAQqoAQANCAMCvwEAAQoYAgEKpwEADQgDAr4BAAEKGgIBCqYBAA0IAwK9AQABChwCAQqlAQANCAMCvAEAAQoeAgEKpAEADQgDArsBAAEKIAIBCqMBAA0IAwK6AQABCiICAQqiAQANCAMCuQEAAQokAgEKoQEADQgDArgBAAEKJgIBCqABAA0IAwK3AQABCigCAQqfAQANCAMCtgEAAQoqAgEKngEADQgDArUBAAEKLAIBCp0BAA0IAwK0AQABCi4CAQqcAQANCAMCswEAAQowAgEKmwEADQgDArIBAAEKMgIBCpoBAA0IAwKxAQABCjQCAQqZAQANCAMCsAEAAQo2AgEKmAEADQgDAq8BAAEKOAIBCpcBAA0IAwKuAQABCjoCAQqWAQANCAMCrQEAAQo8AgEKlQEADQgDAqwBAAEKPgIBCpQBAA0IAwKrAQABCkACAQqTAQANCAMCqgEAAQpCAgEKkgEADQgDAqkBAAEKRAIBCpEBAA0IAwKoAQABCkYCAQqQAQANCAMCpwEAAQpIAgEKjwEADQgDAqYBAAEKSgIBCo4BAA0IAwKlAQABCkwCAQqNAQANCAMCpAEAAQpOAgEKjAEADQgDAqMBAAEKUAIBCosBAA0IAwKiAQABClICAQqKAQANCAMCoQEAAQpUAgEKiQEADQgDAqABAAEKVgIBCogBAA0IAwKfAQABClgCAQqHAQANCAMCngEAAQpaAgEKhgEADQgDAp0BAAEKXAIBCoUBAA0IAwKcAQABCl4CAQqEAQANCAMCmwEAAQpgAgEKgwEADQgDApoBAAEKYgIBCoIBAA0IAwKZAQABCmQCAQqBAQANCAMCmAEAAQpmAgEKgAEADQgDApcBAAEKaAIBCn8ADQgDApYBAAEKagIBCn4ADQgDApUBAAEKbAIBCn0ADQgDApQBAAEKbgIBCnwADQgDApMBAAEKcAIBCnsADQgDApIBAAEKcgIBCnoADQgDApEBAAEKdAIBCnkADQgDApABAAEKdgIBCngADQgDAo8BAAEKeAIBCncADQgDAo4BAAEKegIBCnYADQgDAo0BAAEKfAIBCnUADQgDAowBAAEKfgIBCnQADQgDAosBAAEKgAECAQpzAA0IAwKKAQABCoIBAgEKcgANCAMCiQEAAQqEAQIBCnEADQgDAogBAAEKhgECAQpwAA0IAwKHAQABCogBAgEKbwANCAMChgEAAQqKAQIBCm4ADQgDAoUBAAEKjAECAQptAA0IAwKEAQABCo4BAgEKbAANCAMCgwEAAQqQAQIBCmsADQgDAoIBAAEKkgECAQpqAA0IAwKBAQABCpQBAgEKaQANCAMCgAEAAQqWAQIBCmgADQgDAn8AAQqYAQIBCmcADQgDAn4AAQqaAQIBCmYADQgDAn0AAQqcAQIBCmUADQgDAnwAAQqeAQIBCmQADQgDAnsAAQqgAQIBCmMADQgDAnoAAQqiAQIBCmIADQgDAnUABwiiAQIBCmEADQgDAnUABwijAQIBCmAADQgDAnUABwikAQIBCl8ADQgDAnYAAQqqAQIBCl4ADQgDAnUAAQqsAQIBCl0ADQgDAnQAAQquAQIBClwADQgDAnMAAQqwAQIBClsADQgDAnIAAQqyAQIBCloADQgDAnEAAQq0AQIBClkADQgDAnAAAQq2AQIBClgADQgDAm8AAQq4AQIBClcADQgDAm4AAQq6AQIBClYADQgDAm0AAQq8AQIBClUADQgDAmwAAQq+AQIBClQADQgDAmsAAQrAAQIBClMADQgDAmoAAQrCAQIBClIADQgDAmkAAQrEAQIBClEADQgDAmgAAQrGAQIBClAADQgDAmcAAQrIAQIBCk8ADQgDAmYAAQrKAQIBCk4ADQgDAmUAAQrMAQIBCk0ADQgDAmQAAQrOAQIBCkwADQgDAmMAAQrQAQIBCksADQgDAmIAAQrSAQIBCkoADQgDAmEAAQrUAQIBCkkADQgDAmAAAQrWAQIBCkgADQgDAl8AAQrYAQIBCkcADQgDAl4AAQraAQIBCkYADQgDAl0AAQrcAQIBCkUADQgDAlwAAQreAQIBCkQADQgDAlsAAQrgAQIBCkMADQgDAloAAQriAQIBCkIADQgDAlkAAQrkAQIBCkEADQgDAlgAAQrmAQIBCkAADQgDAlcAAQroAQIBCj8ADQgDAlYAAQrqAQIBCj4ADQgDAlUAAQrsAQIBCj0ADQgDAlQAAQruAQIBCjwADQgDAlMAAQrwAQIBCjsADQgDAlIAAQryAQIBCjoADQgDAlEAAQr0AQIBCjkADQgDAlAAAQr2AQIBCjgADQgDAk8AAQr4AQIBCjcADQgDAk4AAQr6AQIBCjYADQgDAk0AAQr8AQIBCjUADQgDAkwAAQr+AQIBCjQADQgDAksAAQqAAgIBCjMADQgDAkoAAQqCAgIBCjIADQgDAkkAAQqEAgIBCjEADQgDAkgAAQqGAgIBCjAADQgDAkcAAQqIAgIBCi8ADQgDAkYAAQqKAgIBCi4ADQgDAkUAAQqMAgIBCi0ADQgDAkQAAQqOAgIBCiwADQgDAkMAAQqQAgIBCisADQgDAkIAAQqSAgIBCioADQgDAkEAAQqUAgIBCikADQgDAkAAAQqWAgIBCigADQgDAj8AAQqYAgIBCicADQgDAj4AAQqaAgIBCiYADQgDAj0AAQqcAgIBCiUADQgDAjwAAQqeAgIBCiQADQgDAjsAAQqgAgIBCm0AAQqiAgIBCmsAAQqkAgIBCmkAAQqmAgIBCmcAAQqoAgIBCmUAAQqqAgIBCmMAAQqsAgIBCmEAAQquAgIBCl8AAQqwAgIBCl0AAQqyAgIBClsAAQq0AgIBClkAAQq2AgIBClcAAQq4AgIBClUAAQq6AgIBClMAAQq8AgIBClEAAQq+AgIBCk8AAQrAAgIBCk0AAQrCAgIBCksAAQrEAgIBCkkAAQrGAgIBCkcAAQrIAgIBCkUAAQrKAgIBCkMAAQrMAgIBCkEAAQrOAgIBCj8AAQrQAgIBCj0AAQrSAgIBCjsAAQrUAgIBCjkAAQrWAgIBCjcAAQrYAgIBCjUAAQraAgIBCjMAAQrcAgIBCjEAAQreAgIBCi8AAQrgAgIBCi0AAQriAgIBCisAAQrkAgIBCikAAQrmAgIBCicAAQroAgIBCiUAAQrqAgIBCiMAAQrsAgIBCiEAAQruAgINChMAAQr8AgISAAEK/QICEQABCv4CAhAAAQr/AgIPAAEKgAMCDgABCoEDAg0AAQqCAwIMAAEKgwMCCwABCoQDAgsKhYABAg==",
+  "format": 1,
+  "gen": {
+   "biome": 0,
+   "hills": 100,
+   "rocks": 100,
+   "seed": "1",
+   "vegetation": 100,
+   "waterRise": 0
+  },
+  "id": "",
+  "name": "room",
+  "settings": {},
+  "size": [
+   400,
+   240
+  ],
+  "spawns": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ }
+}

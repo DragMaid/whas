@@ -22,7 +22,7 @@ public static class SpellValidator
         ["water", "fire", "earth", "ice", "sand", "rock", "wind", "wind_underfoot", "light", "dragon", "guidance", "human"];
 
     static readonly HashSet<string> KnownSigns =
-        ["column", "convergence", "crushing", "repetition", "cooling", "strengthening",
+        ["levitation", "column", "convergence", "crushing", "repetition", "cooling", "strengthening",
          "collection", "expansion", "orb", "pulling", "sights_set"];
 
     public static string? Check(string name, IReadOnlyList<Glyph> glyphs) =>

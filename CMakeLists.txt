@@ -101,6 +101,7 @@ set(SOURCES
     src/element/sand.cpp
     src/element/burning.cpp
     src/element/smoke.cpp
+    src/element/acid.cpp
 
     src/audio/audio_manager.cpp
     src/audio/audio_observer.cpp
@@ -122,6 +123,7 @@ set(SOURCES
     src/ui/theme.cpp
     src/ui/widgets.cpp
     src/ui/spell_thumbnails.cpp
+    src/ui/spell_picker.cpp
     src/ui/action_bar.cpp
     src/ui/play_menu.cpp
     src/ui/map_thumbnails.cpp
@@ -152,6 +154,16 @@ set(SOURCES
     src/game/map.cpp
     src/game/character_draw.cpp
     src/game/sandbox.cpp
+    src/game/placement.cpp
+    src/campaign/campaign.cpp
+    src/ui/terrain_brush.cpp
+    src/ui/editor_icons.cpp
+    src/campaign/enemies.cpp
+    src/campaign/campaign_play.cpp
+    src/campaign/campaign_map.cpp
+    src/campaign/campaign_codex.cpp
+    src/campaign/campaign_reveal.cpp
+    src/campaign/campaign_editor.cpp
     src/game/flight_trail.cpp
     src/game/replay.cpp
     src/game/replay_store.cpp
@@ -172,8 +184,9 @@ add_library(imgui STATIC
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
     ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/misc/cpp/imgui_stdlib.cpp
 )
-target_include_directories(imgui PUBLIC ${IMGUI_DIR})
+target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/misc/cpp)
 
 add_library(rlimgui STATIC ${RLIMGUI_DIR}/rlImGui.cpp)
 target_include_directories(rlimgui PUBLIC ${RLIMGUI_DIR})
@@ -207,6 +220,7 @@ target_include_directories(whas
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
     ${IMGUI_DIR}
+    ${IMGUI_DIR}/misc/cpp
     ${RLIMGUI_DIR}
     ${nanosvg_SOURCE_DIR}/src
 )
@@ -232,6 +246,7 @@ if(WHAS_BUILD_TESTS)
     add_executable(whas_tests
         tests/determinism_test.cpp
         tests/burning_test.cpp
+        tests/hazard_test.cpp
         tests/match_test.cpp
         tests/spell_golden_test.cpp
         tests/spell_modifier_test.cpp
@@ -240,6 +255,8 @@ if(WHAS_BUILD_TESTS)
         tests/bench_test.cpp
         tests/audio_test.cpp
         tests/map_test.cpp
+        tests/placement_test.cpp
+        tests/campaign_test.cpp
     )
     target_link_libraries(whas_tests PRIVATE whas raylib box2d Catch2::Catch2WithMain)
     target_compile_definitions(whas_tests PRIVATE WHAS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")

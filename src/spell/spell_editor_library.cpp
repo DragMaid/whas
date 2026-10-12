@@ -76,8 +76,17 @@ void DrawChaosBadge(ImDrawList *dl, ImVec2 c) {
 } // namespace
 
 void SpellEditor::DrawLibraryTab() {
-  if (!m_spells || !m_decks)
+  if (!m_spells)
     return;
+  if (!m_decks) {
+    // A library of its own (a campaign backpack): no decks beside it
+    float w = ImGui::GetContentRegionAvail().x;
+    ImGui::BeginChild("SpellGrid", {w, 0}, true);
+    DrawSpellGrid(w);
+    ImGui::EndChild();
+    DrawLibraryPopups();
+    return;
+  }
   if (!m_decks->Find(m_selectedDeck))
     m_selectedDeck = m_decks->ActiveId();
 
@@ -106,7 +115,11 @@ void SpellEditor::DrawSpellGrid(float width) {
       m_filter = i;
   }
   ImGui::TextDisabled(
-      "Drag a card onto a deck slot. Right-click for more. Double-click to edit.");
+      m_workbench ? "Double-click a spell to redraw it. Right-click to rename, "
+                    "copy or delete. Press B outside to put spells in your slots."
+      : m_decks   ? "Drag a card onto a deck slot. Right-click for more. "
+                    "Double-click to edit."
+                  : "Right-click for more. Double-click to edit.");
   ImGui::Spacing();
 
   int columns = std::max(1, (int)((width - 16) / (CardW() + 8)));
@@ -124,7 +137,9 @@ void SpellEditor::DrawSpellGrid(float width) {
   }
   if (shown == 0)
     ImGui::TextDisabled(m_spells->All().empty()
-                            ? "No spells yet. Make one in the Edit tab."
+                            ? (m_workbench ? "Nothing in your backpack yet. Draw a "
+                                             "spell in the first tab and save it."
+                                           : "No spells yet. Make one in the Edit tab.")
                             : "No spells match.");
 }
 
@@ -171,10 +186,12 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
       m_popupRef = ref;
       m_openPopup = "Delete spell?";
     }
-    ImGui::Separator();
-    if (ImGui::MenuItem("Test in sandbox"))
-      m_testRef = ref;
-    if (const Deck *deck = m_decks->Find(m_selectedDeck)) {
+    if (m_decks) {
+      ImGui::Separator();
+      if (ImGui::MenuItem("Test in sandbox"))
+        m_testRef = ref;
+    }
+    if (const Deck *deck = m_decks ? m_decks->Find(m_selectedDeck) : nullptr) {
       auto empty = std::find(deck->slots.begin(), deck->slots.end(), "");
       if (ImGui::MenuItem(TextFormat("Add to \"%s\"", deck->name.c_str()),
                           nullptr, false, empty != deck->slots.end()))
@@ -189,7 +206,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
     ImGui::Text("%s", spell.name.c_str());
     ImGui::Separator();
     DrawStats(stats);
-    if (!SpellRules::WithinLimits(spell))
+    if (!m_workbench && !SpellRules::WithinLimits(spell))
       ImGui::TextColored(Theme::Vec(Tone::Oxblood),
                          "Over the limit: solo and chaos rooms only");
     ImGui::EndTooltip();
@@ -221,7 +238,7 @@ void SpellEditor::DrawSpellCard(const Spell &spell, ImVec2 size) {
   dl->AddText(ImGui::GetFont(), Px(12), {p0.x + 8, t0.y + thumb + Px(20)},
               stats.valid ? ToU32(tint, 200) : Theme::U32(Tone::Oxblood),
               TextFormat("%s  %.2fs", kind, ticks * TurnController::TICK_DT));
-  if (!SpellRules::WithinLimits(spell))
+  if (!m_workbench && !SpellRules::WithinLimits(spell))
     DrawChaosBadge(dl, {p1.x - Px(8), p0.y + Px(8)});
   ImGui::PopID();
 }
@@ -419,7 +436,8 @@ void SpellEditor::DrawLibraryPopups() {
     if (Widgets::Button("Rename") || enter) {
       std::string newRef, err;
       if (m_spells->Rename(m_popupRef, m_renameBuffer, newRef, err)) {
-        m_decks->ReplaceRef(m_popupRef, newRef);
+        if (m_decks)
+          m_decks->ReplaceRef(m_popupRef, newRef);
         m_statusMessage = "Renamed.";
         close();
       } else {
@@ -441,7 +459,7 @@ void SpellEditor::DrawLibraryPopups() {
                 spell ? spell->name.c_str() : m_popupRef.c_str());
     if (Widgets::Button("Delete")) {
       std::string err;
-      if (m_spells->Remove(m_popupRef, err))
+      if (m_spells->Remove(m_popupRef, err) && m_decks)
         m_decks->RemoveRef(m_popupRef);
       m_statusMessage = err.empty() ? "Deleted." : err;
       close();

@@ -41,7 +41,8 @@ std::vector<uint8_t> Rle(const std::vector<uint8_t> &cells) {
   return out;
 }
 
-bool Unrle(const std::vector<uint8_t> &in, std::vector<uint8_t> &cells) {
+bool Unrle(const std::vector<uint8_t> &in, std::vector<uint8_t> &cells,
+           size_t count = CELL_COUNT) {
   cells.clear();
   size_t i = 0;
   while (i < in.size()) {
@@ -54,12 +55,22 @@ bool Unrle(const std::vector<uint8_t> &in, std::vector<uint8_t> &cells) {
       if (!(b & 0x80))
         break;
     }
-    if (i >= in.size() || run == 0 || cells.size() + run > CELL_COUNT ||
+    if (i >= in.size() || run == 0 || cells.size() + run > count ||
         !Placeable(in[i]))
       return false;
     cells.insert(cells.end(), run, in[i++]);
   }
-  return cells.size() == CELL_COUNT;
+  return cells.size() == count;
+}
+
+// A map made for another world size, stretched to this one (nearest cell)
+std::vector<uint8_t> Resample(const std::vector<uint8_t> &cells, int w, int h) {
+  std::vector<uint8_t> out(CELL_COUNT);
+  for (int y = 0; y < GRID_H; ++y)
+    for (int x = 0; x < GRID_W; ++x)
+      out[static_cast<size_t>(y) * GRID_W + x] =
+          cells[static_cast<size_t>(y * h / GRID_H) * w + x * w / GRID_W];
+  return out;
 }
 
 bool InGrid(Vector2 spawn) {
@@ -116,6 +127,7 @@ json ToJson(const MapDef &map) {
   for (Vector2 s : map.spawns)
     j["spawns"].push_back({s.x, s.y});
   j["cells"] = Base64::Encode(Rle(map.cells));
+  j["size"] = {GRID_W, GRID_H};
   j["settings"] = map.settings.is_object() ? map.settings : json::object();
   return j;
 }
@@ -143,14 +155,30 @@ bool FromJson(const json &j, MapDef &map, std::string &error) {
     map.gen.vegetation = std::clamp(gen.value("vegetation", 100), 0, 400);
     map.gen.rocks = std::clamp(gen.value("rocks", 100), 0, 400);
 
+    // Maps from before "size" were made at 1280x720 (320x180 cells)
+    int w = GRID_W, h = GRID_H;
+    if (auto size = j.find("size"); size != j.end()) {
+      w = size->at(0).get<int>();
+      h = size->at(1).get<int>();
+    } else {
+      w = 320, h = 180;
+    }
+    if (w < 16 || h < 16 || w > 4096 || h > 4096) {
+      error = "bad map size";
+      return false;
+    }
+    float sx = static_cast<float>(GRID_W) / w, sy = static_cast<float>(GRID_H) / h;
+
     const json &spawns = j.at("spawns");
     if (!spawns.is_array() || spawns.size() != 2) {
       error = "a map needs two spawns";
       return false;
     }
     for (int i = 0; i < 2; ++i) {
-      map.spawns[i] = {spawns[i].at(0).get<float>(),
-                       spawns[i].at(1).get<float>()};
+      map.spawns[i] = {spawns[i].at(0).get<float>() * sx,
+                       spawns[i].at(1).get<float>() * sy};
+      map.spawns[i].x = std::min(map.spawns[i].x, GRID_W - Character::WIDTH);
+      map.spawns[i].y = std::min(map.spawns[i].y, GRID_H - Character::HEIGHT);
       if (!InGrid(map.spawns[i])) {
         error = "spawn outside the world";
         return false;
@@ -159,10 +187,12 @@ bool FromJson(const json &j, MapDef &map, std::string &error) {
 
     std::vector<uint8_t> rle;
     if (!Base64::Decode(j.at("cells").get<std::string>(), rle) ||
-        !Unrle(rle, map.cells)) {
+        !Unrle(rle, map.cells, static_cast<size_t>(w) * h)) {
       error = "map cells are damaged";
       return false;
     }
+    if (w != GRID_W || h != GRID_H)
+      map.cells = Resample(map.cells, w, h);
     map.settings = j.value("settings", json::object());
     if (!map.settings.is_object())
       map.settings = json::object();

@@ -1,0 +1,195 @@
+#pragma once
+#include "whas/campaign/campaign.h"
+#include "whas/campaign/enemies.h"
+#include "whas/game/flight_trail.h"
+#include "whas/game/placement.h"
+#include "whas/game/rts.h"
+#include "whas/spell/spell_editor.h"
+#include "whas/spell/spell_library.h"
+#include "whas/engine/renderer.h"
+#include <future>
+#include <map>
+#include <memory>
+#include <random>
+#include <string>
+
+class Simulation;
+struct ImDrawList;
+struct ImVec2;
+class SvgLibrary;
+class UI;
+struct UIState;
+
+// A gate, workbench or shrine where it stands (lit: an opened gate, or a
+// shrine still to be taken). Placeholder art; the editor draws them too.
+void DrawCampaignObject(const Campaign::ObjectDef &o, bool lit,
+                        const SvgLibrary &glyphs);
+
+// Playing a campaign: one room in the world at a time, walk off an edge
+// into the next. Rooms next to the current one are read (and their
+// backgrounds decoded) on a worker thread ahead of time, so crossing over
+// only has to build the terrain. Rooms reset whenever they are entered.
+class CampaignPlay {
+public:
+  // A new game (wipes progress) or carrying on from the save
+  bool Start(Simulation &sim, UI &ui, const Campaign::CampaignDef &def,
+             bool newGame, std::string &error);
+  // From the editor: this room, every glyph, nothing saved
+  bool StartTest(Simulation &sim, UI &ui, const Campaign::CampaignDef &def,
+                 Campaign::RoomPos room, Vector2 at, std::string &error);
+  void Stop();
+  bool Active() const { return m_active; }
+  // Back to the menu (or the editor, after a test)
+  bool TakeExit() { return std::exchange(m_exit, false); }
+  bool Testing() const { return m_testing; }
+
+  void Update(Simulation &sim, UI &ui, UIState &state);
+  // Behind the world's cells
+  void DrawBackground() const;
+  // Inside the world camera
+  void DrawWorld(const Simulation &sim, const UI &ui) const;
+  // Inside the ImGui frame: HUD, backpack, gate map, workbench
+  void DrawPanels(UI &ui);
+
+private:
+  struct Loaded {
+    Campaign::RoomDef room;
+    Image background{}; // decoded off the main thread; uploaded on entry
+  };
+  using Pending = std::shared_future<std::shared_ptr<Loaded>>;
+
+  void Preload(Campaign::RoomPos pos);
+  std::shared_ptr<Loaded> Fetch(Campaign::RoomPos pos);
+  void EnterRoom(Simulation &sim, Campaign::RoomPos pos, Vector2 at,
+                 bool keepMotion);
+  void Respawn(Simulation &sim);
+  void Tick(Simulation &sim, UI &ui, CharacterInput input, float dt);
+  void CheckEdges(Simulation &sim, const CharacterInput &input);
+  void Interact(Simulation &sim);
+  void Cast(Simulation &sim, UI &ui);
+  void SaveProgress();
+  void Notify(std::string text, float seconds = 2.5f);
+  // Blueprints into the backpack (and empty slots); returns the notice
+  std::string Grant(const std::vector<Spell> &spells);
+  const Spell *SlotSpell(int slot) const;
+  bool PanelOpen() const {
+    return m_backpack || m_warp || m_codex || m_bench.IsOpen() || m_talking >= 0 ||
+           !m_reveals.empty();
+  }
+  int NearObject(Campaign::ObjectKind kind) const;
+  // Not buried (or dug out) and, for a prize, the room is done
+  bool Shown(int object) const;
+  int NearNpc() const;
+  std::string NpcKey(int npc) const;
+  // Conditions: whether the room's seals are open, and each condition
+  bool RoomOpen() const;
+  bool ConditionMet(const Simulation &sim, int index) const;
+  std::string Hint(const Campaign::ConditionDef &c) const;
+  void CheckConditions(const Simulation &sim);
+  void ReachNode(int node);
+  void DrawDialogue();
+  void DrawSeals() const;
+
+  // The camera follows the player, a little ahead of where they're going
+  // and leaning toward the cursor; the wheel zooms
+  void UpdateCamera();
+  void DrawHud(UI &ui);
+  // Maps (campaign_map.cpp): the current room live, rooms seen as pictures,
+  // rooms next to them as "?"
+  void UpdateMinimap(const Simulation &sim);
+  void ForgetMaps();
+  const Texture2D *RoomPicture(Campaign::RoomPos pos, bool load);
+  // The rooms in a box: around the current one, or (all) every room seen
+  // fitted in
+  void DrawMap(ImDrawList *dl, ImVec2 min, ImVec2 max, float roomW, bool all);
+  // Top right, with what opens the room under it; returns its bottom
+  float DrawMinimap(ImDrawList *dl);
+  void DrawBigMap();
+  void DrawCodex(UI &ui); // campaign_codex.cpp
+  // A glyph just learned, shown big while the world waits
+  // (campaign_reveal.cpp); `from` says where it came from
+  void Learn(const std::string &glyph, bool sigil, std::string from);
+  void DrawReveal(UI &ui);
+  struct Reveal {
+    std::string glyph;
+    bool sigil = false;
+    std::string from;
+    float t = 0.0f; // seconds shown
+  };
+  std::vector<Reveal> m_reveals;
+  void DrawBackpack(UI &ui);
+  void DrawWarp(Simulation *sim);
+
+  bool m_active = false;
+  bool m_testing = false;
+  bool m_exit = false;
+  Campaign::CampaignDef m_def;
+  Campaign::Save m_save;
+  Campaign::RoomDef m_room;
+  Texture2D m_background{};
+  std::map<Campaign::RoomPos, Pending> m_cache;
+
+  Character m_player;
+  std::vector<Enemies::Enemy> m_enemies;
+  FlightTrail m_trail;
+  Rts::Cooldowns m_cooldowns;
+  int m_tick = 0;
+  int m_slot = 0;
+  float m_accumulator = 0.0f;
+  float m_deadFor = 0.0f;
+  std::mt19937 m_rng{12345};
+
+  SpellLibrary m_backpackSpells;
+  SpellEditor m_bench;
+  bool m_benchWasOpen = false;
+  bool m_backpack = false;
+  bool m_warp = false;
+  bool m_bigMap = false; // Tab held
+  bool m_codex = false;  // J: glyphs, blueprints, people
+  int m_talking = -1; // NPC being talked to
+  int m_node = 0;
+  bool m_talkFresh = false;
+  float m_typed = 0.0f; // characters of the line shown so far
+  std::vector<int> m_breakStart; // solid cells each Break region began with
+  std::vector<bool> m_met;       // conditions met, last checked
+  std::vector<bool> m_uncovered; // buried objects dug out this visit
+  // What beaten enemies leave behind, until picked up
+  struct Drop {
+    Vector2 pos; // cells
+    int enemy;
+    int silver;
+    std::vector<Spell> spells;
+  };
+  std::vector<Drop> m_drops;
+  void TickDrops(const Simulation &sim, float dt);
+  void TickHazards(Simulation &sim, float dt);
+  std::vector<float> m_hazardIn; // seconds until each hazard goes off
+  // Whether a node is a shop item already bought
+  bool Bought(int npc, int node) const;
+  // Trials: time left, and where the room was entered (to start over)
+  bool TrialRunning() const { return m_room.trial.on && !RoomOpen(); }
+  float m_trialLeft = 0.0f;
+  bool m_trialFailed = false;
+  Vector2 m_entryAt{0, 0};
+  Simulation *m_warpSim = nullptr;
+
+  std::string m_notice;
+  float m_noticeTime = 0.0f;
+  std::optional<Spell> m_noticeSpell; // a blueprint just found, shown with the notice
+  float m_hudAlpha = 1.0f;
+  Vector2 m_cam{0, 0};     // world pixels
+  Vector2 m_lookAhead{0, 0};
+  float m_zoom = 1.5f;     // times the whole-room view
+  bool m_camSnap = true;   // jump straight there (entering a room)
+
+  Renderer m_colors; // cell colours for the live map
+  std::vector<Color> m_livePixels;
+  Texture2D m_live{};
+  float m_liveAge = 1.0f;
+  struct Seen {
+    Texture2D picture{};
+    std::vector<Campaign::ObjectDef> objects; // for gates and shrines
+  };
+  std::map<Campaign::RoomPos, Seen> m_seen;
+  float m_helpTime = 0.0f; // the key hints show this long after starting
+};

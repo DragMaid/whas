@@ -32,6 +32,7 @@ public:
     return std::exchange(m_practice, {});
   }
   bool TakeSandboxRequest() { return std::exchange(m_sandbox, false); }
+  bool TakeCampaignRequest() { return std::exchange(m_campaign, false); }
   std::optional<nlohmann::json> TakeReplay() { return std::exchange(m_replay, {}); }
 
 private:
@@ -59,6 +60,7 @@ private:
   bool m_soloRts = false;
   bool m_roomRts = false;
   bool m_sandbox = false;
+  bool m_campaign = false;
   char m_url[128] = "ws://localhost:8080/ws";
   char m_code[8]{};
 

@@ -64,6 +64,8 @@ private:
   void ProcessDisplacement(Grid &grid, ElementContext &ctx,
                            class ParticleSystem &particles);
   void SyncBackToGrid(Grid &grid, ElementContext &ctx);
+  // Report bodies striking something hard enough to hear
+  void HearHits(class ParticleSystem &particles);
 
   void AddTriangulatedShapes(b2BodyId bodyId, const std::vector<bool> &mask,
                              int width, int height, float centerX,

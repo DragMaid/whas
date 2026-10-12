@@ -1,0 +1,165 @@
+{
+ "background": "",
+ "conditions": [],
+ "enemies": [],
+ "npcs": [
+  {
+   "name": "Old Wren",
+   "tag": "wren",
+   "pos": [
+    224,
+    187
+   ],
+   "dialogue": [
+    {
+     "text": "Ah, awake at last. The Rootwood took you in, little witch, same as it took me. Still got ink in your fingers?",
+     "replies": [
+      {
+       "text": "Where am I?",
+       "next": 1
+      },
+      {
+       "text": "What's that glowing stone?",
+       "next": 2
+      },
+      {
+       "text": "I'd best be going.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Hearth Hollow, at the foot of the Great Root. East, the root climbs up to the treetops. Down the well-stair, the old cellars. Mind the hats.",
+     "replies": [
+      {
+       "text": "How do I climb the Root?",
+       "next": 3
+      },
+      {
+       "text": "And the cellars?",
+       "next": 5
+      },
+      {
+       "text": "Thank you.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "A shrine. Touch it and a glyph settles in your hand. Then come to the bench here and draw it into a circle. A glyph you never draw is just a scribble.",
+     "replies": [
+      {
+       "text": "And once it's drawn?",
+       "next": 4
+      },
+      {
+       "text": "Where am I, again?",
+       "next": 1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Walk it. The bark's stepped like a stair, all the way up to the gap in the canopy. Jump at the very top. Flyers nest up there, so go armed.",
+     "replies": [
+      {
+       "text": "And the cellars?",
+       "next": 5
+      },
+      {
+       "text": "Farewell.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    },
+    {
+     "text": "Press B and set it in one of your three slots, then click to cast. A spell needs its breath between casts. Here, a little silver for the road.",
+     "replies": [
+      {
+       "text": "Thank you, Wren.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false,
+     "silver": 15
+    },
+    {
+     "text": "Sister Ilse keeps the cellar lamps. She knows the cold glyphs. Give her my regards. She'll take them better than she takes me.",
+     "replies": [
+      {
+       "text": "I will.",
+       "next": -1
+      }
+     ],
+     "teach": "",
+     "teachSigil": false
+    }
+   ]
+  }
+ ],
+ "objects": [
+  {
+   "kind": 1,
+   "pos": [
+    262.5,
+    199
+   ]
+  },
+  {
+   "kind": 2,
+   "pos": [
+    318.5,
+    201
+   ],
+   "glyph": "water",
+   "sigil": true
+  }
+ ],
+ "pos": [
+  0,
+  0
+ ],
+ "sealed": [
+  false,
+  false,
+  false,
+  false
+ ],
+ "terrain": {
+  "cells": "wAwCeAiYAgB4CJgCAEAIDgAqCJgCAD4IEwAnCJgCADsIGAAlCJgCADkIHAAjCJgCADcIIAAhCJgCADYIIwAfCJgCADQIJgAeCJgCADMIKQAcCJgCADEILAAbCJgCADAILwAZCJgCAC4IMgAYCJgCAC0INQAWCJgCACsIOAAVCJgCACkIPAATCJgCACgIPwARCJgCACcIQQAQCJgCACYIRAAOCJgCACYIRwALCJgCACUISwAICJgCACQI7AIAIwjtAgAiCO4CACEI7wIAIAjwAgAfCPECAB0I8wIAHAj0AgAbCPUCABkI9wIAGAj4AgAWCPoCABQI/AIAEQj/AgAMCIzFAgANCoADAAQKAQACCgEACwr7AgASCgEABAr4AgAMCgEABQoBAAYK9gIAEgoBAAgK9AIAAwoBABkK8gIABwoBAAkKAQAFCgEABwrwAgAECgEADAoBAAEKAwALCu8CAAoKAQACCgEACAoBAAUKAQACCgEAAQruAgAjCu0CAA8KAQACCgEAAgoBAA0K7QIAAgoBAAEKAQACCgEAEAoBAAEKAQAICu0CAAsKAQAXCu0CAAkKAQAICgEJEArtAgAHCgIAAgoBABcK7QIAAQoBACEK7QIACwoBABcK7QIAAwoCAAMKAQADCgEABAoBCREK7gIACgoBAAgKAQAFCgEABAoBAAIK7wIADQoBAAwKAQAGCv0CAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJjAMABAmMAwAECYwDAAQJBgAKCvwCAAQJAQATCvgCAAQJBgoKAggK2AIAAgoZAAEKBAkBChMCBwoBAAEK0wIABQoTAAQKBAkYAgcK0QIAAgIHCgsABwogAgEKAQIDCtACAAUCEwonAgIKzwIACQILCiwCAwrNAgBBAgMKzAIAQwIDCsoCAEQCAwrJAgBGAgMKxwIARwIDCsYCAEkCAwrEAgBKAgMKBAAHCLgCAEwCAgoCAAkItwIATQIDCgkIiAEAOQp2AE4CAgoJCAsKbQBYCgcILQAHCCwKUAIBCgcIDApGADcKOQIPCgcILQoHCCwKZQJFACcKWAIHCC0KBwiSAQJEAAQIyQICQwAECMoCAkIABAjLAgJBAAQIzAICQAAECM0CAj8ABAjOAgI+AAQIzwICPQAECNACAjwABAjRAgI7AAQI0gICOgAECNMCAjkABAjUAgI4AAQI1QICNwAECNYCAjYABAjXAgI1AAQI2AICNAAECNkCAjMABAjaAgIyAAQI2wICMQAECNwCAjAABAjdAgIvAAQI3gICLgAECN8CAi0ABAjgAgIsAAQI4QICKwAECOICAioABAjjAgIpAAQI5AICKAAECOUCAicABAjmAgImAAQI5wICJQAECOgCAiQABAjpAgIjAAQI6gICIgAECO4CAh4A8gICHgDyAgIeAPICAh4A5gEC",
+  "format": 1,
+  "gen": {
+   "biome": 0,
+   "hills": 100,
+   "rocks": 100,
+   "seed": "1",
+   "vegetation": 100,
+   "waterRise": 0
+  },
+  "id": "",
+  "name": "room",
+  "settings": {},
+  "size": [
+   400,
+   240
+  ],
+  "spawns": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ }
+}

@@ -80,6 +80,8 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
     state.debugOverlay = !state.debugOverlay;
   if (IsKeyPressed(KEY_F4))
     state.showConfigEditor = !state.showConfigEditor;
+  if (state.keysTaken)
+    return;
   if (IsKeyPressed(KEY_E))
     m_spellEditor.Open();
   if (IsKeyPressed(KEY_M))
@@ -116,20 +118,21 @@ void UI::HandleInput(UIState &state, Simulation &sim) {
   }
 }
 
-void UI::Blind(float seconds, bool hold) {
-  m_blind = std::max(m_blind, seconds);
-  m_blindHold = hold && m_blind > 0.0f;
+void UI::Blind(float seconds) {
+  if (seconds <= m_blind)
+    return;
+  m_blind = seconds;
+  m_blindTotal = seconds;
 }
 
 void UI::DrawBlindness() {
   if (m_blind <= 0.0f)
     return;
-  if (!m_blindHold)
-    m_blind = std::max(0.0f, m_blind - GetFrameTime());
-  // Fully white until the last second, which fades
-  float alpha = m_blindHold ? 1.0f : std::min(1.0f, m_blind);
+  m_blind = std::max(0.0f, m_blind - GetFrameTime());
+  // A white glare that never quite hides the world and clears steadily
+  float alpha = 0.9f * std::sqrt(m_blind / m_blindTotal);
   DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(),
-                Color{255, 255, 248, static_cast<unsigned char>(alpha * 250)});
+                Color{255, 255, 248, static_cast<unsigned char>(alpha * 255)});
 }
 
 void UI::SelectSlot(int slot) {
@@ -140,6 +143,7 @@ void UI::DrawWorld(const UIState &state, Simulation &sim) {
   if (state.debugOverlay)
     sim.GetRigidBodySystem().DrawDebug();
   DrawActiveFields(sim);
+  DrawActiveColumns(sim);
 }
 
 void UI::ApplyUiScale() {
@@ -488,6 +492,56 @@ void UI::DrawActiveFields(const Simulation &sim) const {
         DrawLineEx(b, a, 1.5f, c);
       }
     }
+  }
+}
+
+void UI::DrawActiveColumns(const Simulation &sim) const {
+  for (const SpellEffect &effect : sim.GetActiveSpellEffects()) {
+    const SpellStats &s = effect.stats;
+    bool rising = effect.holdPhase == SpellEffect::HoldRising;
+    if (s.kind != SpellKind::Element || s.holdTime <= 0.0f ||
+        (!rising && effect.holdPhase != SpellEffect::HoldHolding))
+      continue;
+    // A drill is red, a building column gold
+    Color ink = s.crush != 0.0f ? Color{196, 52, 36, 255} : Color{226, 176, 70, 255};
+    // A rising column is done once built: just where it will reach, faint,
+    // and what it's risen to, firm
+    if (rising) {
+      Vector2 d = effect.direction;
+      Vector2 n{-d.y, d.x};
+      float w = s.holdWidth;
+      float side0 = -std::floor(w / 2.0f), side1 = side0 + w;
+      auto at = [&](float ahead, float side) {
+        return Vector2{(effect.origin.x + d.x * ahead + n.x * side) * CELL_SIZE,
+                       (effect.origin.y + d.y * ahead + n.y * side) * CELL_SIZE};
+      };
+      float a0 = effect.holdGap, a1 = a0 + s.holdLength;
+      float risen = a0 + effect.holdRisen;
+      auto outline = [&](float from, float to, Color c) {
+        Vector2 p[] = {at(from, side0), at(to, side0), at(to, side1),
+                       at(from, side1)};
+        for (int i = 0; i < 4; ++i)
+          DrawLineEx(p[i], p[(i + 1) % 4], 1.5f, c);
+      };
+      outline(a0, a1, Fade(ink, 0.3f));
+      outline(a0, risen, Fade(ink, 0.85f));
+      continue;
+    }
+    // A launched block: time left to hold, as a draining ring
+    if (effect.holdCells.empty())
+      continue;
+    Vector2 sum{0.0f, 0.0f};
+    for (int32_t i : effect.holdCells) {
+      sum.x += i % GRID_W + 0.5f;
+      sum.y += i / GRID_W + 0.5f;
+    }
+    float k = CELL_SIZE / static_cast<float>(effect.holdCells.size());
+    Vector2 timer{sum.x * k, sum.y * k};
+    float left =
+        static_cast<float>(effect.holdTicks) / std::max(1, effect.holdTotal);
+    float r = 2.2f * CELL_SIZE;
+    DrawRing(timer, r - 2.0f, r + 1.0f, 0.0f, 360.0f, 24, Color{38, 30, 24, 150});
+    DrawRing(timer, r - 1.5f, r + 0.5f, -90.0f, -90.0f + 360.0f * left, 24, ink);
   }
 }
 

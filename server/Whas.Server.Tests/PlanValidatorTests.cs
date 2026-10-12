@@ -30,6 +30,10 @@ public class PlanValidatorTests
         Assert.True(V("""{"v":1,"runs":[{"n":3,"in":0,"c":[1280,-40]},{"n":2,"in":2,"c":[1300,-40]}]}""").Ok);
 
     [Fact]
+    public void AcceptsAPlacedCast() =>
+        Assert.True(V($$"""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":7,"ax":0,"ay":-{{Unit}},"px":-200,"py":96}]},{"n":29,"in":0}]}""").Ok);
+
+    [Fact]
     public void AcceptsTheEmptyPlan() => Assert.True(V(PlanValidator.EmptyPlan).Ok);
 
     [Theory]
@@ -43,6 +47,8 @@ public class PlanValidatorTests
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":8,"ax":16383,"ay":0},{"id":8,"ax":0,"ay":-16383}]}]}""", "wind underfoot")]
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"c":[1]}]}""", "cursor")]
     [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"c":[1,99999]}]}""", "cursor")]
+    [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":7,"ax":16383,"ay":0,"px":400,"py":0}]}]}""", "reach")]
+    [InlineData("""{"v":1,"runs":[{"n":1,"in":0,"casts":[{"id":7,"ax":16383,"ay":0,"px":40}]}]}""", "reach")]
     [InlineData("not json", "JSON")]
     public void RejectsCheats(string plan, string expected)
     {

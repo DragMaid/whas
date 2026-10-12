@@ -172,6 +172,10 @@ void PlayMenu::DrawSidebar(float width, float height) {
     m_sandbox = true;
     m_open = false;
   });
+  action("Campaign", [&] {
+    m_campaign = true;
+    m_open = false;
+  });
   page("Solo Duel", Page::Solo);
   page("Online Duel", Page::Online);
   action("Spells & Decks", [&] {

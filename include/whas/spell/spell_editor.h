@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 
 #include "whas/spell/deck.h"
 #include "whas/spell/spell_library.h"
@@ -8,6 +9,7 @@
 #include <imgui.h>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 class SpellThumbnails;
@@ -27,6 +29,9 @@ public:
   void Draw();
   bool IsOpen() const { return m_open; }
   void Open() { m_open = true; }
+  // A blank spell on the Edit tab; TakeSaved then reports what was saved
+  void OpenNew();
+  std::optional<Spell> TakeSaved() { return std::exchange(m_saved, {}); }
   // Straight to the spell grid and decks
   void OpenLibrary() {
     m_open = true;
@@ -34,6 +39,13 @@ public:
     m_switchTab = true;
   }
   void Close() { m_open = false; }
+  // Only offer glyphs this allows (a campaign's unlocked ones); null: all
+  void SetGlyphFilter(std::function<bool(const std::string &)> allow) {
+    m_allowGlyph = std::move(allow);
+  }
+  // A campaign workbench: saves go to the backpack, and nothing about the
+  // sandbox, decks or match limits is offered
+  void SetWorkbench(bool on) { m_workbench = on; }
 
   // Shared with the casting UI
   static Color BalanceColor(float imbalance);
@@ -108,6 +120,8 @@ private:
                         float maxV, float step);
 
   bool m_open = false;
+  bool m_workbench = false;
+  std::function<bool(const std::string &)> m_allowGlyph;
   Spell m_currentSpell;
   float m_zoom = 1.0f; // canvas pixels per spell unit
 
@@ -165,4 +179,5 @@ private:
 
   char m_nameBuffer[SPELL_NAME_MAX_LEN + 1]{};
   std::string m_statusMessage;
+  std::optional<Spell> m_saved; // last saved since OpenNew
 };

@@ -32,7 +32,7 @@ Spell MakeSpell(const char *name, const char *sigil, float sigilScale, int signs
   spell.name = name;
   spell.glyphs.push_back({sigil, GlyphKind::Sigil, {0, 0}, sigilScale, 0.0f});
   for (int i = 0; i < signs; ++i)
-    spell.glyphs.push_back({"column", GlyphKind::Sign, {0, -100}, 1.0f, 0.0f});
+    spell.glyphs.push_back({"levitation", GlyphKind::Sign, {0, -100}, 1.0f, 0.0f});
   return spell;
 }
 

@@ -8,6 +8,8 @@
 struct Hurtbox {
     int id;
     Rectangle bounds; // cells
+    // Spells never hit their caster's own side; -1 is a side of one
+    int team = -1;
 };
 
 // A light mote bursting: everyone within `radius` cells is blinded for
@@ -30,10 +32,12 @@ struct ParticleHit {
 // caster, a spell's element striking, a solid breaking, fire meeting water.
 // Sound only: not simulation state, never hashed or saved.
 struct ParticleNoise {
-  enum Kind : uint8_t { Cast, Impact, Break, Fizzle };
+  enum Kind : uint8_t { Cast, Impact, Break, Fizzle, BodyHit };
   Kind kind;
   Element element; // the spell's element, or what broke
   Vector2 pos;     // cells
+  float strength = 0.0f; // BodyHit: 0..1, how hard it struck
+  float heft = 0.0f;     // BodyHit: 0..1, how big the body is
 };
 
 // A particle spawn queued by a worker thread (see ElementContext)
@@ -73,6 +77,9 @@ struct Particle {
     // spell particles of different casts collide; one cast's never do, so a
     // figure doesn't knock itself apart.
     int castId = -1;
+    // Hurtbox this particle last struck: fire passes through bodies and
+    // shouldn't burn the same one again on every step inside it
+    int lastHit = -1;
 };
 
 // Where a caster's cursor is (cells), for sights set
@@ -110,6 +117,14 @@ public:
     Particle *Spawn(Vector2 pos, Vector2 vel, Element element,
                     float remainingDistance = 0.0f, float power = 0.0f,
                     bool isProjectile = false, int owner = -1);
+    // Crushing: earth and rock ground to sand thrown off along `back` (out
+    // of the hole); inverted, sand packed into earth
+    static bool Crushable(const struct Cell &c, float crush);
+    static void Crush(struct ElementContext &ctx, int x, int y, Vector2 back,
+                      bool invert = false);
+    // Lift a cell out of the grid and throw it off along `back` as `as`
+    static void Fling(struct ElementContext &ctx, int x, int y, Vector2 back,
+                      Element as);
     // Spawn now, or queue it when called from a worker thread
     static void SpawnFrom(struct ElementContext &ctx, Vector2 pos, Vector2 vel,
                           Element element);
@@ -163,7 +178,8 @@ public:
     int NextGuideId() const { return m_nextGuideId; }
 
 private:
-    bool HitHurtbox(const Particle &p);
+    // Records a hit; true when the particle is spent by it
+    bool HitHurtbox(Particle &p);
     // A light mote ends in a flash
     void Burst(Particle &p);
     // Turn the guides toward what they chase and keep their particles on

@@ -1,0 +1,122 @@
+#pragma once
+#include "whas/campaign/campaign.h"
+#include "whas/ui/terrain_brush.h"
+#include <optional>
+#include <raylib.h>
+#include <string>
+#include <vector>
+
+class Simulation;
+class UI;
+
+// The campaign list (play, continue, edit) and the campaign editor. The
+// editor works on one room at a time in the live world, like the map
+// editor: paint its terrain, give it a background, place gates,
+// workbenches, glyph shrines and enemies, and grow the campaign with '+'
+// beside the selected room. Rooms are saved as you move between them.
+class CampaignEditor {
+public:
+  void OpenHub();
+  void CloseHub() { m_hub = false; }
+  bool HubOpen() const { return m_hub; }
+  bool Editing() const { return m_editing; }
+  // Open this campaign in the editor (on the next panel draw)
+  void Edit(const Campaign::CampaignDef &def) { m_editRequest = def; }
+
+  // Mouse in the world, file drops, letting the world settle
+  void Update(Simulation &sim);
+  void DrawBackground() const;
+  void DrawWorld(const UI &ui) const;
+  // Inside the ImGui frame: the list, or the editor's panel
+  void DrawPanel(Simulation &sim, UI &ui);
+
+  struct PlayRequest {
+    Campaign::CampaignDef def;
+    bool newGame = false;
+  };
+  std::optional<PlayRequest> TakePlay() { return std::exchange(m_play, {}); }
+  struct TestRequest {
+    Campaign::CampaignDef def;
+    Campaign::RoomPos room;
+    Vector2 at;
+  };
+  std::optional<TestRequest> TakeTest() { return std::exchange(m_test, {}); }
+  // Back from a test run: put the room being edited back in the world
+  void Resume(Simulation &sim);
+  // Save the room and leave the editor
+  void Close(Simulation &sim);
+
+private:
+  enum class Tool {
+    Paint,
+    Select,
+    Start,
+    Gate,
+    Workbench,
+    Shrine,
+    Npc,
+    Mage,
+    Undead,
+    Flyer,
+    Hazard, // geysers and rockfalls
+    Region, // drawing a condition's region
+  };
+  struct Selection {
+    enum Kind { None, Object, Enemy, Npc, Start } kind = None;
+    int index = -1;
+  };
+
+  void Reload();
+  void Open(Simulation &sim, const Campaign::CampaignDef &def);
+  void LoadRoomIntoWorld(Simulation &sim, Campaign::RoomPos pos);
+  bool StoreRoom(Simulation &sim);
+  void AddRoom(Simulation &sim, int dx, int dy);
+  void DeleteRoom(Simulation &sim);
+  void SetBackground(const std::string &file);
+  Selection HitTest(Vector2 cell) const;
+  void Place(const Simulation &sim, Vector2 cell);
+  void RemoveSelected();
+  Vector2 &SelectedPos();
+  void HandleShortcuts(Simulation &sim);
+
+  void DrawHub();
+  float DrawToolbar(Simulation &sim, float panelWidth);
+  void DrawRoomMap(Simulation &sim);
+  void DrawSelected(Simulation &sim, UI &ui);
+  void DrawNpc(Campaign::NpcDef &npc, UI &ui);
+  void DrawRoomTab(Simulation &sim, UI &ui);
+  void DrawConditions();
+  void DrawCampaignTab(UI &ui);
+
+  bool m_hub = false;
+  bool m_editing = false;
+  std::vector<Campaign::CampaignDef> m_campaigns;
+  char m_newName[33]{};
+  std::string m_confirm; // id waiting for "really?" (delete / new game)
+  bool m_confirmDelete = false;
+
+  Campaign::CampaignDef m_def;
+  Campaign::RoomDef m_room;
+  Texture2D m_background{};
+  char m_name[33]{};
+  char m_bgPath[512]{};
+  std::string m_status;
+
+  Tool m_tool = Tool::Paint;
+  Selection m_selected;
+  Selection m_shown; // what the panel last showed
+  bool m_dragging = false;
+  Vector2 m_dragOffset{0, 0};
+  TerrainBrush m_brush;
+  int m_regionFor = -1; // condition whose region the Region tool draws
+  std::optional<Vector2> m_regionStart;
+  bool m_running = false;
+  float m_accumulator = 0.0f;
+  std::vector<MapDef> m_maps; // 1v1 maps to copy terrain from
+  int m_mapPick = 0;
+  int m_drawFor = -1; // enemy getting the spell being drawn in the editor
+
+  std::optional<PlayRequest> m_play;
+  std::optional<Campaign::CampaignDef> m_editRequest;
+  std::optional<TestRequest> m_test;
+};

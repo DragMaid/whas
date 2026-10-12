@@ -164,7 +164,7 @@ void Simulation::UpdateChunk(int chunkIdx, const ElementContext &base) {
       Cell &c = m_grid.Get(x, y);
       if (c.lastUpdateFrame == ctx.frameIndex)
         continue;
-      if (c.element == Element::AIR)
+      if (c.element == Element::AIR || (c.flags & CELL_HELD))
         continue;
       ElementUpdateRegistry::Update(c.element, x, y, ctx);
     }
@@ -250,6 +250,7 @@ uint64_t Simulation::StateHash() const {
     f.Add(p.remainingDistance);
     f.Add(p.power);
     f.Add(p.owner);
+    f.Add(p.lastHit);
   });
   for (const Guide &g : m_particles.Guides()) {
     f.Add(g.id);
@@ -263,6 +264,12 @@ uint64_t Simulation::StateHash() const {
     f.AddVec(e.direction);
     f.Add(e.emitted);
     f.Add(e.timeRemaining);
+    f.Add(e.holdPhase);
+    f.Add(e.holdTicks);
+    f.Add(e.holdRisen);
+    f.Add(e.holdBlocked);
+    for (int32_t c : e.holdCells)
+      f.Add(c);
   }
   f.Add(m_rigidBodies.StateHash());
   return f.h;
@@ -274,12 +281,12 @@ void Simulation::CastSpell(const Spell &spell, Vector2 origin,
 }
 
 void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
-                           Vector2 aimDirection, int owner) {
+                           Vector2 aimDirection, int owner, bool placed) {
   // A layered spell fires every part at once, each as its own effect
   if (stats.kind == SpellKind::Compound) {
     if (stats.valid)
       for (const SpellStats &part : stats.parts)
-        CastSpell(part, origin, aimDirection, owner);
+        CastSpell(part, origin, aimDirection, owner, placed);
     return;
   }
 
@@ -293,8 +300,18 @@ void Simulation::CastSpell(const SpellStats &stats, Vector2 origin,
   effect.direction = SpellSystem::ResolveDirection(effect.stats, aimDirection);
   effect.owner = owner;
   effect.castId = m_particles.NewCastId();
+  // A column starts where it leaves the caster's body; drawn on a surface,
+  // just off it
+  if (placed) {
+    effect.holdGap = 0.5f;
+  } else {
+    Vector2 d = effect.direction;
+    effect.holdGap = std::min(
+        std::abs(d.x) > 1e-4f ? CASTER_HALF_W / std::abs(d.x) : 1e9f,
+        std::abs(d.y) > 1e-4f ? CASTER_HALF_H / std::abs(d.y) : 1e9f);
+  }
   // Sights set and guidance steer the whole figure along one path
-  if (effect.stats.kind == SpellKind::Element &&
+  if (effect.stats.kind == SpellKind::Element && stats.holdTime <= 0.0f &&
       (stats.steerTime > 0.0f || stats.homeTarget != HomeTarget::None))
     effect.guideId =
         m_particles.CreateGuide(stats, origin, effect.direction, owner);

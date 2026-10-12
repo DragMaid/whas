@@ -13,3 +13,5 @@ data/guest*.json
 data/maps/
 data/replays/
 *.ini
+data/campaigns/*/save.json
+data/campaigns/*/backpack/

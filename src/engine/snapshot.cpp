@@ -8,7 +8,7 @@
 
 namespace {
 
-constexpr uint32_t MAGIC = 0x354E5357; // "WSN5"
+constexpr uint32_t MAGIC = 0x374E5357; // "WSN7"
 constexpr uint16_t MAX_RUN = 0xFFFF;
 
 // Cells are stored field by field ("columns"), each column run-length
@@ -75,7 +75,8 @@ void PutStats(ByteWriter &out, const SpellStats &s) {
   out.Put(static_cast<uint8_t>(s.shape));
   for (float v : {s.temperatureDelta, s.hardnessScale, s.crush, s.restore,
                   s.collectRadius, s.pull, s.flashRadius, s.flashTime,
-                  s.homeTurnRate, s.homeRadius, s.steerTime, s.steerRate})
+                  s.homeTurnRate, s.homeRadius, s.steerTime, s.steerRate,
+                  s.holdTime, s.holdLength, s.holdWidth, s.holdRise})
     out.Put(v);
   out.Put(s.collectMax);
   out.Put(static_cast<uint8_t>(s.homeTarget));
@@ -99,7 +100,8 @@ SpellStats GetStats(ByteReader &in) {
   for (float *v : {&s.temperatureDelta, &s.hardnessScale, &s.crush,
                    &s.restore, &s.collectRadius, &s.pull, &s.flashRadius,
                    &s.flashTime, &s.homeTurnRate, &s.homeRadius,
-                   &s.steerTime, &s.steerRate})
+                   &s.steerTime, &s.steerRate, &s.holdTime, &s.holdLength,
+                   &s.holdWidth, &s.holdRise})
     *v = in.Get<float>();
   s.collectMax = in.Get<int>();
   s.homeTarget = static_cast<HomeTarget>(in.Get<uint8_t>());
@@ -172,6 +174,7 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(p.pathS);
     out.Put(p.pathL);
     out.Put(p.castId);
+    out.Put(p.lastHit);
   }
 
   out.Put(static_cast<uint32_t>(m_activeSpellEffects.size()));
@@ -190,6 +193,15 @@ std::vector<uint8_t> Simulation::SaveSnapshot() const {
     out.Put(e.bonusParticles);
     out.Put(e.guideId);
     out.Put(e.castId);
+    out.Put(e.holdPhase);
+    out.Put(e.holdTicks);
+    out.Put(e.holdTotal);
+    out.Put(e.holdGap);
+    out.Put(e.holdRisen);
+    out.Put(e.holdBlocked);
+    out.Put(static_cast<uint32_t>(e.holdCells.size()));
+    for (int32_t c : e.holdCells)
+      out.Put(c);
   }
 
   out.Put(m_particles.NextCastId());
@@ -289,6 +301,7 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       p.pathS = in.Get<float>();
       p.pathL = in.Get<float>();
       p.castId = in.Get<int>();
+      p.lastHit = in.Get<int>();
     }
 
     uint32_t effects = in.Get<uint32_t>();
@@ -310,6 +323,21 @@ bool Simulation::LoadSnapshot(const std::vector<uint8_t> &data) {
       e.bonusParticles = in.Get<int>();
       e.guideId = in.Get<int>();
       e.castId = in.Get<int>();
+      e.holdPhase = in.Get<uint8_t>();
+      e.holdTicks = in.Get<int>();
+      e.holdTotal = in.Get<int>();
+      e.holdGap = in.Get<float>();
+      e.holdRisen = in.Get<float>();
+      e.holdBlocked = in.Get<uint32_t>();
+      uint32_t held = in.Get<uint32_t>();
+      if (held > GRID_W * GRID_H)
+        return false;
+      e.holdCells.resize(held);
+      for (int32_t &c : e.holdCells) {
+        c = in.Get<int32_t>();
+        if (c < 0 || c >= GRID_W * GRID_H)
+          return false;
+      }
     }
 
     int nextCastId = in.Get<int>();

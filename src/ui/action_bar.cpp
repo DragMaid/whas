@@ -218,7 +218,8 @@ void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
     int ticks = spell && stats.valid ? TurnController::CastTicks(stats) : 0;
     // Greyed out when it won't fit in what's left of this turn
     bool fits = !inMatch || ticks <= state.ticksFree;
-    bool usable = spell && stats.valid && fits;
+    bool dry = state.wet <= 0.0f || stats.HasFlight();
+    bool usable = spell && stats.valid && fits && dry;
     unsigned char alpha = usable ? 255 : 110;
 
     Theme::Plate(dl, p0, p1, hovered, false, selected);
@@ -240,6 +241,12 @@ void UI::DrawHotbar(UIState &state, ImVec2 pos, ImVec2 size) {
         dl->PathFillConvex(Theme::U32(Tone::Ink, 0.72f));
       }
       dl->AddCircle(c, r, Theme::U32(Tone::Oxblood, 0.8f), 32, 1.5f);
+    }
+    // Wet paper: a blue wash that drains as it dries
+    if (!dry) {
+      float h = thumb * state.wet;
+      dl->AddRectFilled({t0.x, t0.y + thumb - h}, {t0.x + thumb, t0.y + thumb},
+                        IM_COL32(60, 130, 210, 110));
     }
 
     // Key badge in the corner
@@ -320,6 +327,7 @@ void UI::DrawMaterials(UIState &state, ImVec2 pos, ImVec2 size) {
       {Element::ROCK, "Rock", {90, 90, 90, 255}},
       {Element::WOOD, "Wood", {120, 78, 40, 255}},
       {Element::GRASS, "Grass", {70, 150, 55, 255}},
+      {Element::ACID, "Acid", {130, 235, 40, 255}},
       {Element::AIR, "Erase", {55, 55, 60, 255}},
   };
   constexpr int count = static_cast<int>(std::size(kMaterials));

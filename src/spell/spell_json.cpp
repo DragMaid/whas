@@ -85,13 +85,15 @@ void Read(const json &j, Spell &spell) {
                          : std::vector<SpellComponent>{};
 }
 
-void MigrateLegacyIds(Spell &spell) {
-  auto migrate = [](std::vector<PlacedGlyph> &glyphs) {
+void MigrateLegacyIds(Spell &spell, int fromFormat) {
+  auto migrate = [fromFormat](std::vector<PlacedGlyph> &glyphs) {
     for (PlacedGlyph &g : glyphs) {
-      if (g.assetId == "wind")
+      if (fromFormat < 2 && g.assetId == "wind")
         g.assetId = "wind_underfoot";
-      else if (g.assetId == "gust")
+      else if (fromFormat < 2 && g.assetId == "gust")
         g.assetId = "wind";
+      else if (fromFormat < 3 && g.assetId == "column")
+        g.assetId = "levitation";
     }
   };
   migrate(spell.glyphs);

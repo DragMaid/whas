@@ -12,6 +12,7 @@ constexpr size_t kCells = static_cast<size_t>(GRID_W) * GRID_H;
 // More of the grid than this changing at once is a reset or a snapshot
 // load, not something to hear
 constexpr size_t kResyncCells = kCells / 4;
+constexpr size_t kBodyHitsPerTick = 3;
 
 size_t Index(SoundProfile p) { return static_cast<size_t>(p); }
 
@@ -33,6 +34,8 @@ SoundProfile ProfileOf(const ParticleNoise &n) {
     return SoundProfile::Break;
   case ParticleNoise::Fizzle:
     return SoundProfile::Fire;
+  case ParticleNoise::BodyHit:
+    return SoundProfile::None; // heard on their own, see HearNoises
   case ParticleNoise::Impact:
     switch (n.element) {
     case Element::FIRE:
@@ -42,7 +45,6 @@ SoundProfile ProfileOf(const ParticleNoise &n) {
     case Element::ICE:
       return SoundProfile::Break; // shards shatter where they land
     case Element::EARTH:
-    case Element::ROCK:
     case Element::SAND:
       return SoundProfile::Earth;
     default:
@@ -238,6 +240,25 @@ void AudioObserver::HearNoises(Simulation &sim, AudioManager &audio) {
   std::vector<ParticleNoise> noises = sim.GetParticleSystem().TakeNoises();
   if (!m_primed || !m_ticked)
     return; // a fresh world's leftovers, or nothing new
+
+  // Rigid bodies striking: the hardest few, each as loud as it hit
+  std::vector<const ParticleNoise *> hits;
+  for (const ParticleNoise &n : noises)
+    if (n.kind == ParticleNoise::BodyHit)
+      hits.push_back(&n);
+  std::sort(hits.begin(), hits.end(),
+            [](auto *a, auto *b) { return a->strength > b->strength; });
+  hits.resize(std::min<size_t>(hits.size(), kBodyHitsPerTick));
+  for (const ParticleNoise *n : hits) {
+    AudioEvent ev;
+    ev.profile = SoundProfile::Earth;
+    ev.element = n->element;
+    ev.gain = 0.35f + 0.65f * n->strength;
+    ev.pan = PanOf(n->pos.x);
+    // Bigger bodies are deeper; ice rings a little higher
+    ev.pitch = (n->element == Element::ICE ? 1.4f : 1.2f) - 0.6f * n->heft;
+    audio.Post(ev);
+  }
 
   std::vector<NoiseBatch> batches;
   for (const ParticleNoise &n : noises) {

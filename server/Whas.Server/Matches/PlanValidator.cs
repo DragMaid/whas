@@ -77,6 +77,8 @@ public static class PlanValidator
                         double len = Math.Sqrt((double)ax * ax + (double)ay * ay) / AimScale;
                         if (Math.Abs(len - 1.0) > AimTolerance)
                             return Result.Fail("aim is not a unit vector");
+                        if (!PlacementOk(cast))
+                            return Result.Fail("placed out of reach");
                         // Casts in one step were queued in the same pause
                         if (stats.HasFlight && ++flights > 1)
                             return Result.Fail("more than one wind underfoot cast per pause");
@@ -163,6 +165,8 @@ public static class PlanValidator
                         double len = Math.Sqrt((double)ax * ax + (double)ay * ay) / AimScale;
                         if (Math.Abs(len - 1.0) > AimTolerance)
                             return Result.Fail("aim is not a unit vector");
+                        if (!PlacementOk(cast))
+                            return Result.Fail("placed out of reach");
                         if (stats.HasFlight && ++flights > 1)
                             return Result.Fail("more than one wind underfoot cast per tick");
                         int ready = used.TryGetValue(id, out int u) ? u : readyAt.GetValueOrDefault(id);
@@ -178,6 +182,21 @@ public static class PlanValidator
                 readyAt[id] = ready;
             return new Result(true, null, casts);
         }
+    }
+
+    // Placed casts (Q): drawn within reach of the caster, in 1/8 cells
+    const int PlaceScale = 8;
+    const double PlaceReach = 48.0 * PlaceScale + 1.0;
+
+    static bool PlacementOk(JsonElement cast)
+    {
+        bool hasX = cast.TryGetProperty("px", out _), hasY = cast.TryGetProperty("py", out _);
+        if (!hasX && !hasY)
+            return true;
+        if (!TryInt(cast, "px", out int px) || !TryInt(cast, "py", out int py) ||
+            px < short.MinValue || px > short.MaxValue || py < short.MinValue || py > short.MaxValue)
+            return false;
+        return Math.Sqrt((double)px * px + (double)py * py) <= PlaceReach;
     }
 
     static bool TryInt(JsonElement e, string name, out int value)

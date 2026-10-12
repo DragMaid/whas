@@ -22,8 +22,9 @@ void Read(const nlohmann::json &j, Spell &spell);
 
 // Spell files carry "format": FORMAT. Format 1 files predate the wind
 // renames: their "wind" (flight) is now "wind_underfoot" and their "gust"
-// is now "wind". The server keeps its own copy in SpellService.
-constexpr int FORMAT = 2;
-void MigrateLegacyIds(Spell &spell);
+// is now "wind". Before format 3 "column" was the thrust sign, now
+// "levitation". The server keeps its own copy in SpellService.
+constexpr int FORMAT = 3;
+void MigrateLegacyIds(Spell &spell, int fromFormat);
 
 } // namespace SpellJson
